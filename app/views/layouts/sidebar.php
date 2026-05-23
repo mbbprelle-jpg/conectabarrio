@@ -1,0 +1,106 @@
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <div class="sidebar-brand-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+        </div>
+        <div class="sidebar-brand-name">ConectaBarrio</div>
+    </div>
+
+    <!-- Perfil de Usuario en Sidebar -->
+    <div class="sidebar-profile">
+        <span class="sidebar-profile-name"><?php echo htmlspecialchars($_SESSION['user_nombre']); ?></span>
+        <span class="sidebar-profile-role">
+            <?php 
+            if ($_SESSION['user_rol'] === 'maestro') echo 'Perfil Maestro';
+            elseif ($_SESSION['user_rol'] === 'admin') echo 'Administrador';
+            else echo 'Socio Vecino';
+            ?>
+        </span>
+    </div>
+
+    <ul class="sidebar-menu">
+        <?php if ($_SESSION['user_rol'] === 'maestro'): ?>
+            <!-- Menú Perfil Maestro -->
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'dashboard') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/maestro/dashboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+                    <span>Dashboard Maestro</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'crear_junta') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/maestro/crear_junta">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                    <span>Nueva Organización</span>
+                </a>
+            </li>
+        <?php elseif ($_SESSION['user_rol'] === 'admin'): ?>
+            <!-- Menú Perfil Admin -->
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'dashboard') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/dashboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+                    <span>Dashboard Financiero</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'socios') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/socios">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <span>Socios y Ajustes</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'finanzas') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/finanzas">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                    <span>Flujo de Caja</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'asistencia') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/asistencia">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    <span>Reuniones y Asistencia</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'municipalidad') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/municipalidad">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                    <span>Envío Municipalidad</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'cierres') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/cierres">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <span>Cierres Mensuales</span>
+                </a>
+            </li>
+        <?php elseif ($_SESSION['user_rol'] === 'socio'): ?>
+            <!-- Menú Perfil Socio -->
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'dashboard') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/socio/dashboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+                    <span>Mi Perfil</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'comprobantes') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/socio/comprobantes">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    <span>Mis Comprobantes</span>
+                </a>
+            </li>
+        <?php endif; ?>
+    </ul>
+
+    <div class="sidebar-footer">
+        <li class="sidebar-menu-item" style="list-style: none;">
+            <a href="<?php echo URLROOT; ?>/auth/logout" class="confirm-action" data-confirm-message="¿Estás seguro de que quieres cerrar tu sesión?" style="color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.15);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                <span>Cerrar Sesión</span>
+            </a>
+        </li>
+    </div>
+</div>

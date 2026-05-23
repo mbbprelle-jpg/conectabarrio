@@ -1,0 +1,1291 @@
+<?php
+class AdminController extends Controller {
+    private $userModel;
+    private $juntaModel;
+    private $cuotaModel;
+    private $transaccionModel;
+    private $reunionModel;
+    private $asistenciaModel;
+    private $cierreModel;
+
+    public function __construct() {
+        $this->userModel = $this->model('User');
+        $this->juntaModel = $this->model('JuntaVecinos');
+        $this->cuotaModel = $this->model('CuotaConfig');
+        $this->transaccionModel = $this->model('Transaccion');
+        $this->reunionModel = $this->model('Reunion');
+        $this->asistenciaModel = $this->model('Asistencia');
+        $this->cierreModel = $this->model('CierreMensual');
+    }
+
+    // =========================================================================
+    // 1. DASHBOARD FINANCIERO & FLUJO DE CAJA VISUAL
+    // =========================================================================
+    public function dashboard() {
+        $juntaId = $_SESSION['user_junta_id'];
+        
+        // Obtener balances
+        $balance = $this->transaccionModel->getBalanceConsolidado($juntaId);
+        
+        // Obtener historial del flujo de caja (para Chart.js)
+        $flujoHistorico = $this->transaccionModel->getFlujoCajaHistorico($juntaId);
+        
+        // Obtener promedio de asistencia de socios
+        $promedioAsistencia = $this->asistenciaModel->getPromedioAsistencia($juntaId);
+
+        // Obtener el total de socios activos
+        $socios = $this->userModel->getSociosByJunta($juntaId);
+        $totalSocios = count($socios);
+
+        $data = [
+            'title' => 'Dashboard Financiero',
+            'header_title' => 'Control de Finanzas y Gestión',
+            'header_subtitle' => 'Monitoree el flujo de caja, ingresos, egresos y participación de la junta',
+            'active_menu' => 'dashboard',
+            'balance' => $balance,
+            'flujo_historico' => $flujoHistorico,
+            'promedio_asistencia' => $promedioAsistencia,
+            'total_socios' => $totalSocios
+        ];
+
+        $this->view('admin/dashboard', $data);
+    }
+
+    // =========================================================================
+    // 2. GESTIÓN DE SOCIOS, RESETEO CLAVE Y AJUSTES DE CUOTA JUNTA
+    // =========================================================================
+
+    // Mostrar listado de socios y configuración de cuotas de la Junta
+    public function socios() {
+        $juntaId = $_SESSION['user_junta_id'];
+
+        // Obtener historial completo de cuotas
+        $cuotasHistorial = $this->cuotaModel->getHistoryByJunta($juntaId);
+
+        // Obtener listado de calles asociadas a la junta
+        $this->db = new Database();
+        $this->db->query("SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        $calles = $this->db->resultSet();
+
+        // Calcular ID Socio correlativo propuesto
+        $this->db->query("SELECT MAX(id_socio) as max_id FROM usuarios WHERE junta_id = :junta_id");
+        $this->db->bind(':junta_id', $juntaId);
+        $row = $this->db->single();
+        $proposedIdSocio = $row && $row->max_id ? (int)$row->max_id + 1 : 1;
+
+        $data = [
+            'title' => 'Gestión de Socios',
+            'header_title' => 'Padrón de Socios y Jurisdicción',
+            'header_subtitle' => 'Administre los vecinos afiliados, controle las calles de la junta y programe ajustes de cuotas',
+            'active_menu' => 'socios',
+            'socios' => $this->userModel->getSociosByJunta($juntaId),
+            'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
+            'cuotas_historial' => $cuotasHistorial,
+            'calles' => $calles,
+            'proposed_id_socio' => $proposedIdSocio,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? ''
+        ];
+
+        unset($_SESSION['success_msg']);
+        unset($_SESSION['error_msg']);
+
+        $this->view('admin/socios', $data);
+    }
+
+    // Inscribir un nuevo Socio en la Junta (POST)
+    public function socio_crear() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+
+            $idSocio = (int)($post['id_socio'] ?? 0);
+
+            $dataSocio = [
+                'junta_id' => $_SESSION['user_junta_id'],
+                'id_socio' => $idSocio,
+                'rut' => trim($post['rut'] ?? ''),
+                'nombres' => trim($post['nombres'] ?? ''),
+                'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
+                'apellido_materno' => trim($post['apellido_materno'] ?? ''),
+                'email' => trim($post['email'] ?? ''),
+                'password' => 'socio123', // Contraseña inicial obligatoria
+                'rol' => 'socio',
+                'telefono' => trim($post['telefono'] ?? ''),
+                'estado' => 1,
+                'calle_id' => $post['calle_id'] ?? null,
+                'numero_casa' => trim($post['numero_casa'] ?? ''),
+                'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d')
+            ];
+
+            // Validar campos obligatorios
+            if ($idSocio <= 0 || empty($dataSocio['rut']) || empty($dataSocio['nombres']) || empty($dataSocio['apellido_paterno']) || empty($dataSocio['apellido_materno']) || empty($dataSocio['email']) || empty($dataSocio['calle_id']) || empty($dataSocio['numero_casa'])) {
+                $_SESSION['error_msg'] = 'Por favor, rellene todos los campos obligatorios (*) y asegúrese de que el ID Socio sea mayor a 0.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+
+            // Validar si el ID Socio ya está registrado en esta junta/organización
+            $this->db = new Database();
+            $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio");
+            $this->db->bind(':junta_id', $dataSocio['junta_id']);
+            $this->db->bind(':id_socio', $idSocio);
+            if ($this->db->single()) {
+                $_SESSION['error_msg'] = 'El ID Socio ' . $idSocio . ' ya está en uso en su organización. Por favor elija otro o use el sugerido.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+
+            // Validar si el RUT ya existe en el sistema
+            if ($this->userModel->findUserByRut($dataSocio['rut'])) {
+                $_SESSION['error_msg'] = 'Ya existe un usuario registrado con ese RUT.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+
+            // Validar si el correo ya existe en el sistema
+            if ($this->userModel->findUserByEmail($dataSocio['email'])) {
+                $_SESSION['error_msg'] = 'Ya existe un usuario registrado con ese Correo Electrónico.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+
+            // Registrar socio
+            if ($this->userModel->register($dataSocio)) {
+                $_SESSION['success_msg'] = 'Socio "' . $dataSocio['nombres'] . ' ' . $dataSocio['apellido_paterno'] . '" inscrito con éxito con ID #' . $idSocio . '.';
+            } else {
+                $_SESSION['error_msg'] = 'Error al registrar al socio en la base de datos.';
+            }
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    // Crear una nueva calle en la jurisdicción de la junta (POST)
+    public function calle_crear() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+            $nombre = trim($post['nombre'] ?? '');
+            $juntaId = $_SESSION['user_junta_id'];
+
+            if (empty($nombre)) {
+                $_SESSION['error_msg'] = 'El nombre de la calle no puede estar vacío.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+
+            $this->db = new Database();
+            // Validar si la calle ya existe en la misma junta
+            $this->db->query("SELECT * FROM calles WHERE junta_id = :junta_id AND nombre = :nombre");
+            $this->db->bind(':junta_id', $juntaId);
+            $this->db->bind(':nombre', $nombre);
+            if ($this->db->single()) {
+                $_SESSION['error_msg'] = 'La calle ya se encuentra registrada en esta Junta.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+
+            // Insertar calle
+            $this->db->query("INSERT INTO calles (junta_id, nombre) VALUES (:junta_id, :nombre)");
+            $this->db->bind(':junta_id', $juntaId);
+            $this->db->bind(':nombre', $nombre);
+
+            if ($this->db->execute()) {
+                $_SESSION['success_msg'] = 'Calle "' . htmlspecialchars($nombre) . '" registrada correctamente en la jurisdicción.';
+            } else {
+                $_SESSION['error_msg'] = 'Error al registrar la calle.';
+            }
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    // Eliminar una calle de la jurisdicción (POST)
+    public function calle_eliminar($id) {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $juntaId = $_SESSION['user_junta_id'];
+
+            $this->db = new Database();
+            // Verificar que la calle pertenece a la junta del administrador logueado
+            $this->db->query("SELECT * FROM calles WHERE id = :id AND junta_id = :junta_id");
+            $this->db->bind(':id', $id);
+            $this->db->bind(':junta_id', $juntaId);
+            $calle = $this->db->single();
+
+            if (!$calle) {
+                $_SESSION['error_msg'] = 'Calle no encontrada o no pertenece a tu jurisdicción.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+
+            // Eliminar la calle (los usuarios asociados quedarán con calle_id = NULL por la restricción ON DELETE SET NULL)
+            $this->db->query("DELETE FROM calles WHERE id = :id");
+            $this->db->bind(':id', $id);
+
+            if ($this->db->execute()) {
+                $_SESSION['success_msg'] = 'Calle "' . htmlspecialchars($calle->nombre) . '" eliminada correctamente.';
+            } else {
+                $_SESSION['error_msg'] = 'Error al eliminar la calle.';
+            }
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    // Resetear contraseña de un socio a la inicial ("socio123") (POST)
+    public function socio_reset_password($id) {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $socio = $this->userModel->getSocioById($id);
+            if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
+                if ($this->userModel->resetPassword($id, 'socio123')) {
+                    $_SESSION['success_msg'] = 'Contraseña del socio "' . $socio->nombre . '" reseteada correctamente a: socio123';
+                } else {
+                    $_SESSION['error_msg'] = 'Error al resetear la contraseña.';
+                }
+            } else {
+                $_SESSION['error_msg'] = 'Socio no encontrado o no pertenece a tu Junta.';
+            }
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    // Dar de baja a un socio (POST)
+    public function socio_eliminar($id) {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $socio = $this->userModel->getSocioById($id);
+            if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
+                if ($this->userModel->delete($id)) {
+                    $_SESSION['success_msg'] = 'Socio "' . $socio->nombre . '" dado de baja correctamente (Estado: Inactivo).';
+                } else {
+                    $_SESSION['error_msg'] = 'Error al dar de baja al socio.';
+                }
+            } else {
+                $_SESSION['error_msg'] = 'Socio no encontrado.';
+            }
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    // Reactivar / Dar de alta a un socio (POST)
+    public function socio_reactivar($id) {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            // Obtener el socio de cualquier estado
+            $socio = $this->userModel->getUserById($id);
+            if ($socio && $socio->junta_id == $_SESSION['user_junta_id'] && $socio->rol === 'socio') {
+                if ($this->userModel->reactivate($id)) {
+                    $_SESSION['success_msg'] = 'Socio "' . $socio->nombre . '" reincorporado y dado de alta con éxito.';
+                } else {
+                    $_SESSION['error_msg'] = 'Error al reactivar al socio.';
+                }
+            } else {
+                $_SESSION['error_msg'] = 'Socio no válido o no pertenece a su Junta.';
+            }
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    // Modificar/Ajustar valor de cuota de la Junta (POST)
+    public function cuota_ajustar() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+
+            $dataConfig = [
+                'junta_id' => $_SESSION['user_junta_id'],
+                'monto' => $post['monto'] ?? '0',
+                'mes_inicio' => $post['mes_inicio'] ?? date('Y-m') // YYYY-MM
+            ];
+
+            if (empty($dataConfig['monto']) || $dataConfig['monto'] < 0 || empty($dataConfig['mes_inicio'])) {
+                $_SESSION['error_msg'] = 'Datos de ajuste de cuota inválidos.';
+                $this->redirect('/admin/socios');
+            }
+
+            if ($this->cuotaModel->createConfig($dataConfig)) {
+                $_SESSION['success_msg'] = 'Ajuste de cuota programado correctamente. El nuevo valor de $' . number_format($dataConfig['monto'], 0, ',', '.') . ' rige a partir de: ' . $dataConfig['mes_inicio'];
+            } else {
+                $_SESSION['error_msg'] = 'Error al registrar el ajuste de cuota.';
+            }
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    // =========================================================================
+    // 3. REGISTRO FINANCIERO Y CONTROL DE TRANSACCIONES
+    // =========================================================================
+    public function finanzas() {
+        $juntaId = $_SESSION['user_junta_id'];
+
+        $data = [
+            'title' => 'Flujo de Caja',
+            'header_title' => 'Registro de Caja (Ingresos y Egresos)',
+            'header_subtitle' => 'Registre recaudación de cuotas, otros ingresos y gastos generales de la junta',
+            'active_menu' => 'finanzas',
+            'socios' => $this->userModel->getSociosByJunta($juntaId),
+            'transacciones' => $this->transaccionModel->getTransaccionesByJunta($juntaId),
+            'balance' => $this->transaccionModel->getBalanceConsolidado($juntaId),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? ''
+        ];
+
+        unset($_SESSION['success_msg']);
+        unset($_SESSION['error_msg']);
+
+        $this->view('admin/finanzas', $data);
+    }
+
+    // Registrar pago de cuota de socio (POST, soporta múltiples meses)
+    public function registrar_pago_cuota() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+
+            $socioId = $post['socio_id'] ?? '';
+            $mesesPagados = $post['mes_pagado'] ?? []; // Array de meses (Formato YYYY-MM)
+            $fechaPago = $post['fecha_pago'] ?? date('Y-m-d');
+            $esCondonado = isset($_POST['es_condonado']) && $_POST['es_condonado'] == '1';
+            $justificacion = trim($_POST['justificacion'] ?? '');
+
+            if (!is_array($mesesPagados)) {
+                $mesesPagados = !empty($mesesPagados) ? [$mesesPagados] : [];
+            }
+
+            if (empty($socioId) || empty($mesesPagados)) {
+                $_SESSION['error_msg'] = 'Debe seleccionar un socio y al menos un mes a procesar.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            // 1. Validar que el socio pertenece a la Junta
+            $socio = $this->userModel->getUserById($socioId);
+            if (!$socio || $socio->junta_id != $_SESSION['user_junta_id'] || $socio->rol !== 'socio') {
+                $_SESSION['error_msg'] = 'Socio no válido.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            if ($esCondonado && empty($justificacion)) {
+                $_SESSION['error_msg'] = 'Debe indicar una justificación/motivo para eximir el pago de las cuotas.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            // 2. Procesar transacciones con integridad transaccional
+            $this->db = new Database();
+            try {
+                $this->db->beginTransaction();
+
+                $countExitosos = 0;
+                $totalMonto = 0;
+
+                foreach ($mesesPagados as $mesPagado) {
+                    $mesPagado = trim($mesPagado);
+                    
+                    // Validar duplicado
+                    if ($this->transaccionModel->checkPagoSocio($socioId, $mesPagado)) {
+                        throw new Exception('El mes ' . $mesPagado . ' ya registra un pago o exención previamente para ' . $socio->nombre . '.');
+                    }
+
+                    if ($esCondonado) {
+                        $montoCuota = 0;
+                        $categoria = 'Cuota Condonada';
+                        $descripcion = $justificacion;
+                    } else {
+                        $categoria = 'Cuota Socio';
+                        $descripcion = 'Pago cuota correspondiente a ' . $mesPagado;
+
+                        // Recuperar el valor de cuota que regía en dicho mes
+                        $quotaConfig = $this->cuotaModel->getCuotaVigente($_SESSION['user_junta_id'], $mesPagado);
+                        $montoCuota = $quotaConfig ? (int)$quotaConfig->monto : 0;
+
+                        if ($montoCuota <= 0) {
+                            throw new Exception('No hay configurado un valor de cuota válido para el mes ' . $mesPagado . '.');
+                        }
+                    }
+
+                    // Registrar Transacción
+                    $dataTransaccion = [
+                        'junta_id' => $_SESSION['user_junta_id'],
+                        'tipo' => 'ingreso',
+                        'categoria' => $categoria,
+                        'monto' => $montoCuota,
+                        'descripcion' => $descripcion,
+                        'fecha' => $fechaPago,
+                        'socio_id' => $socioId,
+                        'mes_pagado' => $mesPagado,
+                        'registrado_por' => $_SESSION['user_id']
+                    ];
+
+                    if (!$this->transaccionModel->createTransaccion($dataTransaccion)) {
+                        throw new Exception('Error al insertar el registro de cuota para ' . $mesPagado . '.');
+                    }
+
+                    $countExitosos++;
+                    $totalMonto += $montoCuota;
+                }
+
+                $this->db->commit();
+
+                if ($esCondonado) {
+                    $_SESSION['success_msg'] = 'Se registraron con éxito ' . $countExitosos . ' condonaciones de cuotas para el socio ' . $socio->nombre . '.';
+                } else {
+                    $_SESSION['success_msg'] = 'Se registraron con éxito ' . $countExitosos . ' cuotas para el socio ' . $socio->nombre . ' por un total de $' . number_format($totalMonto, 0, ',', '.') . ' CLP.';
+                }
+
+            } catch (Exception $e) {
+                $this->db->rollBack();
+                $_SESSION['error_msg'] = 'Operación cancelada: ' . $e->getMessage();
+            }
+        }
+        $this->redirect('/admin/finanzas');
+    }
+
+    // Obtener los meses pendientes, futuros y pagados de un socio (AJAX JSON)
+    public function get_socio_cuotas($socioId) {
+        header('Content-Type: application/json');
+
+        // Validar sesión y rol
+        if (!isset($_SESSION['user_id']) || $_SESSION['user_rol'] !== 'admin') {
+            echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
+            exit;
+        }
+
+        // Obtener socio
+        $socio = $this->userModel->getUserById($socioId);
+        if (!$socio || $socio->junta_id != $_SESSION['user_junta_id'] || $socio->rol !== 'socio') {
+            echo json_encode(['success' => false, 'message' => 'Socio no válido']);
+            exit;
+        }
+
+        // Determinar mes de inicio
+        $startMonth = !empty($socio->fecha_inicio) ? substr($socio->fecha_inicio, 0, 7) : '2026-01';
+        $currentMonthStr = date('Y-m');
+
+        // Generar lista de meses desde inicio hasta el año actual + 1 año
+        $startYear = (int)substr($startMonth, 0, 4);
+        $startMonthNum = (int)substr($startMonth, 5, 2);
+        
+        $endYear = (int)date('Y') + 1;
+        $endMonthNum = (int)date('m');
+        
+        $y = $startYear;
+        $m = $startMonthNum;
+        
+        $meses = [];
+        $db = new Database();
+
+        while ($y < $endYear || ($y == $endYear && $m <= $endMonthNum)) {
+            $mes = sprintf('%04d-%02d', $y, $m);
+            
+            // 1. Obtener la cuota que regía para ese mes
+            $cuotaConfig = $this->cuotaModel->getCuotaVigente($_SESSION['user_junta_id'], $mes);
+            $monto = $cuotaConfig ? (int)$cuotaConfig->monto : 0;
+            
+            // 2. Verificar si está pagada o condonada
+            $db->query("SELECT * FROM transacciones 
+                        WHERE socio_id = :socio_id 
+                        AND categoria IN ('Cuota Socio', 'Cuota Condonada') 
+                        AND mes_pagado = :mes_pagado LIMIT 1");
+            $db->bind(':socio_id', $socioId);
+            $db->bind(':mes_pagado', $mes);
+            $trans = $db->single();
+            
+            $estado = '';
+            $descripcion = '';
+            if ($trans) {
+                if ($trans->categoria === 'Cuota Condonada') {
+                    $estado = 'condonado';
+                    $descripcion = !empty($trans->descripcion) ? $trans->descripcion : 'Exento';
+                } else {
+                    $estado = 'pagado';
+                    $descripcion = 'Pagado el ' . date('d-m-Y', strtotime($trans->fecha));
+                }
+            } else {
+                if ($mes <= $currentMonthStr) {
+                    $estado = 'pendiente';
+                } else {
+                    $estado = 'futuro';
+                }
+            }
+            
+            $meses[] = [
+                'mes' => $mes,
+                'monto' => $monto,
+                'estado' => $estado,
+                'descripcion' => $descripcion
+            ];
+            
+            $m++;
+            if ($m > 12) {
+                $m = 1;
+                $y++;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'socio' => [
+                'id' => $socio->id,
+                'nombre' => $socio->nombre,
+                'fecha_inicio' => $socio->fecha_inicio
+            ],
+            'meses' => $meses
+        ]);
+        exit;
+    }
+
+    // Registrar otros ingresos o egresos (POST)
+    public function registrar_transaccion() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+
+            $tipo = $post['tipo'] ?? ''; // ingreso / egreso
+            $categoria = $post['categoria'] ?? '';
+            $monto = $post['monto'] ?? '';
+            $descripcion = $post['descripcion'] ?? '';
+            $fecha = $post['fecha'] ?? date('Y-m-d');
+            $socioId = !empty($post['socio_id']) ? $post['socio_id'] : null;
+
+            if (empty($tipo) || empty($categoria) || empty($monto) || $monto <= 0) {
+                $_SESSION['error_msg'] = 'Por favor, rellene todos los campos requeridos correctamente.';
+                $this->redirect('/admin/finanzas');
+            }
+
+            // Validar que el socio pertenece a la misma junta si se especificó
+            if ($socioId) {
+                $socio = $this->userModel->getUserById($socioId);
+                if (!$socio || $socio->junta_id != $_SESSION['user_junta_id'] || $socio->rol !== 'socio') {
+                    $_SESSION['error_msg'] = 'El socio seleccionado no es válido para su organización.';
+                    $this->redirect('/admin/finanzas');
+                    return;
+                }
+            }
+
+            $dataTransaccion = [
+                'junta_id' => $_SESSION['user_junta_id'],
+                'tipo' => $tipo,
+                'categoria' => $categoria,
+                'monto' => $monto,
+                'descripcion' => $descripcion,
+                'fecha' => $fecha,
+                'socio_id' => $socioId,
+                'registrado_por' => $_SESSION['user_id']
+            ];
+
+            if ($this->transaccionModel->createTransaccion($dataTransaccion)) {
+                $_SESSION['success_msg'] = 'Movimiento de finanzas registrado exitosamente (' . htmlspecialchars($tipo) . ': $' . number_format($monto, 0, ',', '.') . ').';
+            } else {
+                $_SESSION['error_msg'] = 'Error al registrar la transacción.';
+            }
+        }
+        $this->redirect('/admin/finanzas');
+    }
+
+    // =========================================================================
+    // 4. REUNIONES Y ASISTENCIA
+    // =========================================================================
+    public function asistencia($reunionId = null) {
+        $juntaId = $_SESSION['user_junta_id'];
+
+        $data = [
+            'title' => 'Reuniones y Asistencia',
+            'header_title' => 'Control de Reuniones y Asistencia',
+            'header_subtitle' => 'Programe asambleas y tome lista digitalizada de asistencia de sus vecinos',
+            'active_menu' => 'asistencia',
+            'reuniones' => $this->reunionModel->getReunionesByJunta($juntaId),
+            'reunion_detalle' => null,
+            'asistentes' => [],
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? ''
+        ];
+
+        unset($_SESSION['success_msg']);
+        unset($_SESSION['error_msg']);
+
+        // Cargar lista de asistencia de una reunión si se especifica el ID
+        if ($reunionId) {
+            $reunion = $this->reunionModel->getReunionById($reunionId);
+            if ($reunion && $reunion->junta_id == $juntaId) {
+                $data['reunion_detalle'] = $reunion;
+                $data['asistentes'] = $this->asistenciaModel->getAsistenciaByReunion($reunionId, $juntaId);
+            }
+        }
+
+        $this->view('admin/asistencia', $data);
+    }
+
+    // Crear una nueva Reunión (POST)
+    public function reunion_crear() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+
+            $dataReunion = [
+                'junta_id' => $_SESSION['user_junta_id'],
+                'titulo' => $post['titulo'] ?? '',
+                'descripcion' => $post['descripcion'] ?? '',
+                'fecha_reunion' => $post['fecha_reunion'] ?? '',
+                'estado' => 'programada'
+            ];
+
+            if (empty($dataReunion['titulo']) || empty($dataReunion['fecha_reunion'])) {
+                $_SESSION['error_msg'] = 'Debe indicar el título y la fecha de la reunión.';
+                $this->redirect('/admin/asistencia');
+            }
+
+            if ($this->reunionModel->createReunion($dataReunion)) {
+                $_SESSION['success_msg'] = 'Asamblea/Reunión programada exitosamente.';
+            } else {
+                $_SESSION['error_msg'] = 'Error al programar la reunión.';
+            }
+        }
+        $this->redirect('/admin/asistencia');
+    }
+
+    // Registrar asistencia masiva para una reunión (POST)
+    public function asistencia_guardar($reunionId) {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $juntaId = $_SESSION['user_junta_id'];
+            
+            // Validar que la reunión existe y pertenece a la Junta
+            $reunion = $this->reunionModel->getReunionById($reunionId);
+            if (!$reunion || $reunion->junta_id != $juntaId) {
+                $_SESSION['error_msg'] = 'Acción inválida.';
+                $this->redirect('/admin/asistencia');
+            }
+
+            // Lista de socios presentes desde el formulario checkboxes (viene array socio_ids)
+            $sociosAsistentes = $_POST['asistencia'] ?? []; // Array de IDs de socios presentes
+            
+            // Obtener todos los socios activos de la Junta
+            $sociosTodos = $this->userModel->getSociosByJunta($juntaId);
+
+            // Iniciar Transacción para guardar de forma segura
+            $db = new Database();
+            try {
+                $db->beginTransaction();
+
+                foreach ($sociosTodos as $socio) {
+                    // Determinar si asistió (1) o no (0)
+                    $asistio = in_array($socio->id, $sociosAsistentes) ? 1 : 0;
+                    $this->asistenciaModel->saveAsistencia($reunionId, $socio->id, $asistio);
+                }
+
+                // Cambiar el estado de la reunión a 'realizada'
+                $this->reunionModel->updateEstado($reunionId, 'realizada');
+
+                $db->commit();
+                $_SESSION['success_msg'] = 'Asistencias de la asamblea guardadas y digitalizadas correctamente.';
+            } catch (Exception $e) {
+                $db->rollBack();
+                $_SESSION['error_msg'] = 'Error al guardar asistencias: ' . $e->getMessage();
+            }
+        }
+        $this->redirect('/admin/asistencia/' . $reunionId);
+    }
+
+    // =========================================================================
+    // 5. DIGITALIZACIÓN Y TRANSMISIÓN DIRECTA A LA MUNICIPALIDAD
+    // =========================================================================
+    public function municipalidad() {
+        $juntaId = $_SESSION['user_junta_id'];
+        
+        // 1. Obtener datos de la Junta
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        
+        // 2. Consolidar el padrón de socios
+        $socios = $this->userModel->getSociosByJunta($juntaId);
+        $padronSocios = [];
+        foreach ($socios as $socio) {
+            $padronSocios[] = [
+                'rut' => $socio->rut,
+                'nombre' => $socio->nombre,
+                'email' => $socio->email,
+                'telefono' => $socio->telefono,
+                'estado' => $socio->estado == 1 ? 'Activo' : 'Inactivo'
+            ];
+        }
+
+        // 3. Consolidar balance financiero
+        $balance = $this->transaccionModel->getBalanceConsolidado($juntaId);
+        
+        // 4. Consolidar asistencia
+        $promedioAsistencia = $this->asistenciaModel->getPromedioAsistencia($juntaId);
+        
+        // Estructura del paquete de datos digitalizado (JSON)
+        $paqueteDigitalizado = [
+            'conectabarrio_version' => '1.0',
+            'fecha_consolidado' => date('Y-m-d H:i:s'),
+            'junta_vecinos' => [
+                'id' => $junta->id,
+                'rut' => $junta->rut_junta,
+                'nombre' => $junta->nombre,
+                'comuna' => $junta->comuna,
+                'direccion' => $junta->direccion
+            ],
+            'resumen_estadistico' => [
+                'total_socios_activos' => count($padronSocios),
+                'promedio_asistencia_asambleas' => $promedioAsistencia . '%',
+                'balance_financiero' => [
+                    'total_ingresos' => $balance['ingresos'],
+                    'total_egresos' => $balance['egresos'],
+                    'superavit_neto' => $balance['neto']
+                ]
+            ],
+            'padron_socios' => $padronSocios
+        ];
+
+        // Obtener historial de reportes ya enviados
+        $this->db = new Database();
+        $this->db->query("SELECT r.*, u.nombre as admin_nombre 
+                         FROM reportes_municipalidad r 
+                         LEFT JOIN usuarios u ON r.enviado_por = u.id 
+                         WHERE r.junta_id = :junta_id 
+                         ORDER BY r.fecha_envio DESC");
+        $this->db->bind(':junta_id', $juntaId);
+        $reportesHistorial = $this->db->resultSet();
+
+        $data = [
+            'title' => 'Transmisión Municipal',
+            'header_title' => 'Conexión Directa con Municipalidad',
+            'header_subtitle' => 'Digitalice toda la información de la junta y envíela al portal municipal en un solo clic',
+            'active_menu' => 'municipalidad',
+            'junta' => $junta,
+            'paquete_json' => $paqueteDigitalizado,
+            'reportes' => $reportesHistorial,
+            'ultimo_certificado' => !empty($reportesHistorial) ? $reportesHistorial[0] : null,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? ''
+        ];
+
+        unset($_SESSION['success_msg']);
+        unset($_SESSION['error_msg']);
+
+        $this->view('admin/municipalidad', $data);
+    }
+
+    // Procesar almacenamiento de reporte enviado (POST de confirmación de simulación)
+    public function municipalidad_guardar_envio() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+            $juntaId = $_SESSION['user_junta_id'];
+            $tipoReporte = $post['tipo_reporte'] ?? 'Consolidado General';
+            $datosJson = $post['datos_json'] ?? '{}';
+
+            $this->db = new Database();
+            $this->db->query("INSERT INTO reportes_municipalidad (junta_id, tipo_reporte, datos_json, enviado_por) 
+                             VALUES (:junta_id, :tipo_reporte, :datos_json, :enviado_por)");
+            $this->db->bind(':junta_id', $juntaId);
+            $this->db->bind(':tipo_reporte', $tipoReporte);
+            $this->db->bind(':datos_json', $datosJson);
+            $this->db->bind(':enviado_por', $_SESSION['user_id']);
+
+            if ($this->db->execute()) {
+                $_SESSION['success_msg'] = 'Información enviada exitosamente. Se ha generado un Certificado de Recepción Municipal digital.';
+            } else {
+                $_SESSION['error_msg'] = 'Error al registrar el reporte municipalizado.';
+            }
+        }
+        $this->redirect('/admin/municipalidad');
+    }
+
+    // Visualizar recibo de pago para imprimir
+    public function comprobante($id) {
+        $pago = $this->transaccionModel->getPagoById($id);
+
+        if (!$pago || $pago->junta_id != $_SESSION['user_junta_id']) {
+            die('Comprobante no válido o no pertenece a su Junta de Vecinos.');
+        }
+
+        $data = [
+            'title' => 'Comprobante de Pago Folio #' . $pago->id,
+            'pago' => $pago
+        ];
+
+        // Cargar vista de comprobante limpio (sin sidebar de dashboard)
+        $this->view('admin/comprobante_detalle', $data);
+    }
+
+    // =========================================================================
+    // 6. CIERRES FINANCIEROS MENSUALES Y ENVÍO DE BALANCE
+    // =========================================================================
+    public function cierres() {
+        $juntaId = $_SESSION['user_junta_id'];
+        
+        $cierres = $this->cierreModel->getCierresByJunta($juntaId);
+        $mesesDisponibles = $this->cierreModel->getMesesDisponiblesParaCerrar($juntaId);
+        
+        // Obtener el balance del mes seleccionado o el primer mes disponible
+        $mesSeleccionado = $_GET['mes'] ?? ($mesesDisponibles[0] ?? date('Y-m', strtotime('-1 month')));
+        $resumenMes = $this->cierreModel->getResumenFinancieroMes($juntaId, $mesSeleccionado);
+        
+        // Cargar saldos contables dinámicos
+        $saldoAnterior = $this->cierreModel->getSaldoAnterior($juntaId, $mesSeleccionado);
+        $resumenMes['saldo_anterior'] = $saldoAnterior;
+        $resumenMes['saldo_final'] = $saldoAnterior + $resumenMes['saldo_neto'];
+        $resumenMes['transacciones'] = $this->cierreModel->getTransaccionesDetalleMes($juntaId, $mesSeleccionado);
+        
+        $esPrimerCierre = $this->cierreModel->esPrimerCierre($juntaId);
+        $mesInicio = $this->cierreModel->getMesInicioJunta($juntaId);
+        $mesPrevioSinCerrar = $this->cierreModel->tieneMesPrevioSinCerrar($juntaId, $mesSeleccionado);
+        $esFuturoOMesEnCurso = ($mesSeleccionado >= date('Y-m'));
+
+        $data = [
+            'title' => 'Cierres Mensuales',
+            'header_title' => 'Cierres Financieros Mensuales',
+            'header_subtitle' => 'Realice el balance mensual de caja y notifique de forma transparente a todos sus socios vía correo',
+            'active_menu' => 'cierres',
+            'cierres' => $cierres,
+            'meses_disponibles' => $mesesDisponibles,
+            'mes_seleccionado' => $mesSeleccionado,
+            'resumen_mes' => $resumenMes,
+            'es_primer_cierre' => $esPrimerCierre,
+            'mes_inicio' => $mesInicio,
+            'mes_previo_sin_cerrar' => $mesPrevioSinCerrar,
+            'es_futuro_o_mes_en_curso' => $esFuturoOMesEnCurso,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? ''
+        ];
+        
+        unset($_SESSION['success_msg']);
+        unset($_SESSION['error_msg']);
+        
+        $this->view('admin/cierres', $data);
+    }
+
+    // Guardar el cierre mensual de un mes (POST)
+    public function cerrar_mes() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+            $juntaId = $_SESSION['user_junta_id'];
+            $mes = $post['mes'] ?? '';
+            $comentario = $post['comentario'] ?? '';
+            
+            if (empty($mes)) {
+                $_SESSION['error_msg'] = 'Debe especificar el mes a cerrar.';
+                $this->redirect('/admin/cierres');
+            }
+            
+            // Validar que no sea el mes en curso ni futuro
+            if ($mes >= date('Y-m')) {
+                $_SESSION['error_msg'] = 'No está permitido realizar el cierre contable del mes en curso o futuro.';
+                $this->redirect('/admin/cierres');
+            }
+            
+            // Validar que no esté cerrado
+            if ($this->cierreModel->checkCierreExist($juntaId, $mes)) {
+                $_SESSION['error_msg'] = 'El mes ' . $mes . ' ya se encuentra cerrado.';
+                $this->redirect('/admin/cierres');
+            }
+            
+            // Validar secuencia cronológica
+            $mesPrevioSinCerrar = $this->cierreModel->tieneMesPrevioSinCerrar($juntaId, $mes);
+            if ($mesPrevioSinCerrar) {
+                $_SESSION['error_msg'] = 'No se puede realizar el cierre del mes ' . $mes . ' porque el mes anterior ' . $mesPrevioSinCerrar . ' no está cerrado.';
+                $this->redirect('/admin/cierres');
+            }
+            
+            // Obtener el resumen del mes
+            $resumen = $this->cierreModel->getResumenFinancieroMes($juntaId, $mes);
+            
+            // Si es el primer cierre, permitir saldo inicial manual
+            $esPrimerCierre = $this->cierreModel->esPrimerCierre($juntaId);
+            if ($esPrimerCierre) {
+                $saldoAnterior = isset($post['saldo_anterior_manual']) ? (int)$post['saldo_anterior_manual'] : 0;
+            } else {
+                $saldoAnterior = $this->cierreModel->getSaldoAnterior($juntaId, $mes);
+            }
+            
+            $saldoFinal = $saldoAnterior + $resumen['saldo_neto'];
+            
+            $dataCierre = [
+                'junta_id' => $juntaId,
+                'mes' => $mes,
+                'ingresos' => $resumen['ingresos'],
+                'egresos' => $resumen['egresos'],
+                'saldo_anterior' => $saldoAnterior,
+                'saldo_final' => $saldoFinal,
+                'saldo_neto' => $resumen['saldo_neto'],
+                'cerrado_por' => $_SESSION['user_id'],
+                'comentario' => $comentario
+            ];
+            
+            if ($this->cierreModel->createCierre($dataCierre)) {
+                $_SESSION['success_msg'] = 'Cierre financiero del mes ' . $mes . ' guardado exitosamente.';
+            } else {
+                $_SESSION['error_msg'] = 'Error al registrar el cierre mensual en la base de datos.';
+            }
+        }
+        $this->redirect('/admin/cierres');
+    }
+
+    // Enviar balance mensual por correo a todos los socios (POST)
+    public function enviar_balance_email($id) {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $cierre = $this->cierreModel->getCierreById($id);
+            if (!$cierre || $cierre->junta_id != $_SESSION['user_junta_id']) {
+                $_SESSION['error_msg'] = 'Cierre de mes no válido o no tiene permisos.';
+                $this->redirect('/admin/cierres');
+            }
+            
+            $juntaId = $_SESSION['user_junta_id'];
+            $socios = $this->userModel->getSociosByJunta($juntaId);
+            
+            if (empty($socios)) {
+                $_SESSION['error_msg'] = 'No hay socios activos inscritos en la junta para enviar correos.';
+                $this->redirect('/admin/cierres');
+            }
+            
+            $resumen = $this->cierreModel->getResumenFinancieroMes($juntaId, $cierre->mes);
+            $transacciones = $this->cierreModel->getTransaccionesDetalleMes($juntaId, $cierre->mes);
+            
+            // Formatear mes en texto
+            $parts = explode('-', $cierre->mes);
+            $mesesNombres = [
+                '01' => 'Enero', '02' => 'Febrero', '03' => 'Marzo', '04' => 'Abril',
+                '05' => 'Mayo', '06' => 'Junio', '07' => 'Julio', '08' => 'Agosto',
+                '09' => 'Septiembre', '10' => 'Octubre', '11' => 'Noviembre', '12' => 'Diciembre'
+            ];
+            $mesNombre = ($mesesNombres[$parts[1]] ?? 'Mes') . ' ' . $parts[0];
+            $juntaNombre = htmlspecialchars($cierre->junta_nombre);
+            
+            // Generar el cuerpo HTML premium a través de nuestro generador unificado
+            $emailHtml = $this->generar_html_boletin($cierre, $resumen, $transacciones, $mesNombre);
+            
+            // Guardar copia local del correo enviado como respaldo visual en scratch/
+            $respaldoPath = "c:/xampp/htdocs/CONECTABARRIO/scratch/email_prev_{$id}.html";
+            file_put_contents($respaldoPath, $emailHtml);
+            
+            // Enviar el correo real a todos los socios utilizando la función mail() de PHP
+            $countEnviados = 0;
+            $subject = "=?UTF-8?B?" . base64_encode("Balance Financiero Mensual - {$mesNombre} - {$juntaNombre}") . "?=";
+            
+            $headers = "MIME-Version: 1.0\r\n";
+            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+            $headers .= "From: ConectaBarrio <contacto@conectatubarrio.cl>\r\n";
+            $headers .= "Reply-To: contacto@conectatubarrio.cl\r\n";
+            $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+            
+            foreach ($socios as $socio) {
+                if (!empty($socio->email) && filter_var($socio->email, FILTER_VALIDATE_EMAIL)) {
+                    // Reemplazar dinámicamente un saludo al socio
+                    $socioEmailHtml = str_replace(
+                        "Balance Financiero Mensual</h2>", 
+                        "Balance Financiero Mensual</h2><p style='color: #ffffff; font-size: 14px; text-align: center; margin-top: 10px;'>Estimado(a) vecino(a) <strong>" . htmlspecialchars($socio->nombre) . "</strong>,</p>", 
+                        $emailHtml
+                    );
+                    
+                    // Disparar PHP mail()
+                    @mail($socio->email, $subject, $socioEmailHtml, $headers);
+                    $countEnviados++;
+                }
+            }
+            
+            // Actualizar base de datos
+            $this->cierreModel->updateEnviadoCorreo($id);
+            
+            $_SESSION['success_msg'] = 'Balance de ' . $mesNombre . ' enviado con éxito a ' . $countEnviados . ' socios activos de la organización. Se ha generado un respaldo visual en su carpeta de trabajo.';
+        }
+        $this->redirect('/admin/cierres');
+    }
+
+    // Visualizar el boletín de balance mensual de caja directo en el navegador (GET)
+    public function visualizar_boletin($id) {
+        // Validar sesión y rol administrativo
+        if (!isset($_SESSION['user_id']) || $_SESSION['user_rol'] !== 'admin') {
+            header('location: ' . URLROOT . '/auth/login');
+            exit;
+        }
+        
+        $cierre = $this->cierreModel->getCierreById($id);
+        if (!$cierre || $cierre->junta_id != $_SESSION['user_junta_id']) {
+            die('Cierre de mes no válido o no tiene permisos de visualización.');
+        }
+        
+        $juntaId = $_SESSION['user_junta_id'];
+        $resumen = $this->cierreModel->getResumenFinancieroMes($juntaId, $cierre->mes);
+        $transacciones = $this->cierreModel->getTransaccionesDetalleMes($juntaId, $cierre->mes);
+        
+        // Formatear mes en texto
+        $parts = explode('-', $cierre->mes);
+        $mesesNombres = [
+            '01' => 'Enero', '02' => 'Febrero', '03' => 'Marzo', '04' => 'Abril',
+            '05' => 'Mayo', '06' => 'Junio', '07' => 'Julio', '08' => 'Agosto',
+            '09' => 'Septiembre', '10' => 'Octubre', '11' => 'Noviembre', '12' => 'Diciembre'
+        ];
+        $mesNombre = ($mesesNombres[$parts[1]] ?? 'Mes') . ' ' . $parts[0];
+        
+        // Generar HTML contable premium
+        $emailHtml = $this->generar_html_boletin($cierre, $resumen, $transacciones, $mesNombre);
+        
+        // Forzar codificación UTF-8 impecable
+        header('Content-Type: text/html; charset=UTF-8');
+        echo $emailHtml;
+        exit;
+    }
+
+    // Método de asistencia para construir la plantilla contable HTML interactiva responsiva del boletín
+    private function generar_html_boletin($cierre, $resumen, $transacciones, $mesNombre) {
+        $juntaNombre = htmlspecialchars($cierre->junta_nombre);
+        $adminNombre = htmlspecialchars($cierre->admin_nombre);
+        $comentario = !empty($cierre->comentario) ? htmlspecialchars($cierre->comentario) : 'Sin comentarios adicionales.';
+
+        // Formatear montos consolidados de caja
+        $saldoAnteriorVal = (int)($cierre->saldo_anterior ?? 0);
+        $ingresosVal = (int)($cierre->ingresos ?? 0);
+        $egresosVal = (int)($cierre->egresos ?? 0);
+        $saldoFinalVal = (int)($cierre->saldo_final ?? 0);
+
+        $saldoAnteriorFmt = '$' . number_format($saldoAnteriorVal, 0, ',', '.');
+        $ingresosFmt = '$' . number_format($ingresosVal, 0, ',', '.');
+        $egresosFmt = '$' . number_format($egresosVal, 0, ',', '.');
+        $saldoFinalFmt = '$' . number_format($saldoFinalVal, 0, ',', '.');
+        $saldoFinalColor = $saldoFinalVal >= 0 ? '#10b981' : '#ef4444';
+
+        // 1. Tabla de Ingresos del Mes (detallado con sumatoria)
+        $tablaIngresosHtml = '';
+        $totalIngresosCalculado = 0;
+        foreach ($transacciones as $t) {
+            if ($t->tipo === 'ingreso') {
+                $fechaFmt = date('d-m-Y', strtotime($t->fecha));
+                $socioNombre = !empty($t->socio_nombre) ? htmlspecialchars($t->socio_nombre) : 'N/A';
+                $categoria = htmlspecialchars($t->categoria);
+                $descripcion = htmlspecialchars($t->descripcion);
+                $montoVal = (int)$t->monto;
+                $totalIngresosCalculado += $montoVal;
+                $montoFmt = '$' . number_format($montoVal, 0, ',', '.');
+                
+                $tablaIngresosHtml .= "
+                <tr style='border-bottom: 1px solid rgba(255,255,255,0.06);'>
+                    <td style='padding: 8px 10px; font-size: 13px; color: #e4e4e7;'>{$fechaFmt}</td>
+                    <td style='padding: 8px 10px; font-size: 13px; color: #e4e4e7;'>{$socioNombre}</td>
+                    <td style='padding: 8px 10px; font-size: 13px; color: #a1a1aa;'>{$categoria}</td>
+                    <td style='padding: 8px 10px; font-size: 13px; color: #a1a1aa;'>{$descripcion}</td>
+                    <td style='padding: 8px 10px; font-size: 13px; font-weight: bold; text-align: right; color: #10b981;'>+{$montoFmt}</td>
+                </tr>";
+            }
+        }
+        if (empty($tablaIngresosHtml)) {
+            $tablaIngresosHtml = "<tr><td colspan='5' style='text-align: center; padding: 15px; color: #a1a1aa; font-size: 13px;'>No se registraron ingresos en este periodo.</td></tr>";
+        }
+        $totalIngresosFmt = '$' . number_format($totalIngresosCalculado, 0, ',', '.');
+
+        // 2. Tabla de Egresos del Mes (detallado con sumatoria)
+        $tablaEgresosHtml = '';
+        $totalEgresosCalculado = 0;
+        foreach ($transacciones as $t) {
+            if ($t->tipo === 'egreso') {
+                $fechaFmt = date('d-m-Y', strtotime($t->fecha));
+                $categoria = htmlspecialchars($t->categoria);
+                $descripcion = htmlspecialchars($t->descripcion);
+                $montoVal = (int)$t->monto;
+                $totalEgresosCalculado += $montoVal;
+                $montoFmt = '$' . number_format($montoVal, 0, ',', '.');
+                
+                $tablaEgresosHtml .= "
+                <tr style='border-bottom: 1px solid rgba(255,255,255,0.06);'>
+                    <td style='padding: 8px 10px; font-size: 13px; color: #e4e4e7;'>{$fechaFmt}</td>
+                    <td style='padding: 8px 10px; font-size: 13px; color: #a1a1aa;'>{$categoria}</td>
+                    <td style='padding: 8px 10px; font-size: 13px; color: #a1a1aa;'>{$descripcion}</td>
+                    <td style='padding: 8px 10px; font-size: 13px; font-weight: bold; text-align: right; color: #ef4444;'>-{$montoFmt}</td>
+                </tr>";
+            }
+        }
+        if (empty($tablaEgresosHtml)) {
+            $tablaEgresosHtml = "<tr><td colspan='4' style='text-align: center; padding: 15px; color: #a1a1aa; font-size: 13px;'>No se registraron egresos en este periodo.</td></tr>";
+        }
+        $totalEgresosFmt = '$' . number_format($totalEgresosCalculado, 0, ',', '.');
+
+        // 3. Tabla de Desglose de Egresos por Categoría
+        $tablaCategoriasHtml = '';
+        if (!empty($resumen['desglose'])) {
+            foreach ($resumen['desglose'] as $d) {
+                if ($d->tipo === 'egreso') {
+                    $montoFmt = '$' . number_format($d->total_monto, 0, ',', '.');
+                    $categoria = htmlspecialchars($d->categoria);
+                    
+                    $tablaCategoriasHtml .= "
+                    <tr style='border-bottom: 1px solid rgba(255,255,255,0.06);'>
+                        <td style='padding: 8px 10px; font-size: 13px; color: #ffffff;'>{$categoria}</td>
+                        <td style='padding: 8px 10px; font-size: 13px; color: #a1a1aa; text-align: center;'>{$d->cantidad}</td>
+                        <td style='padding: 8px 10px; font-size: 13px; font-weight: bold; text-align: right; color: #ef4444;'>-{$montoFmt}</td>
+                    </tr>";
+                }
+            }
+        }
+        if (empty($tablaCategoriasHtml)) {
+            $tablaCategoriasHtml = "<tr><td colspan='3' style='text-align: center; padding: 15px; color: #a1a1aa; font-size: 13px;'>No se registraron categorías de egresos.</td></tr>";
+        }
+
+        // Armar el documento completo del boletín con UTF-8
+        $html = "
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset='UTF-8'>
+            <title>Balance Financiero Mensual - ConectaBarrio</title>
+        </head>
+        <body style='margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f8fafc; -webkit-font-smoothing: antialiased;'>
+            <table width='100%' border='0' cellspacing='0' cellpadding='0' style='background-color: #0f172a; padding: 30px 15px;'>
+                <tr>
+                    <td align='center'>
+                        <!-- Contenedor Principal con estilo premium glassmorphism dark -->
+                        <table width='650' border='0' cellspacing='0' cellpadding='0' style='background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.04); overflow: hidden; padding: 25px;'>
+                            
+                            <!-- Encabezado -->
+                            <tr>
+                                <td align='center' style='border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 20px;'>
+                                    <div style='color: #06b6d4; font-size: 24px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;'>ConectaBarrio</div>
+                                    <div style='color: #a1a1aa; font-size: 12px; margin-top: 4px;'>Tu Comunidad, más conectada y eficiente</div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Título -->
+                            <tr>
+                                <td style='padding-top: 25px;'>
+                                    <h2 style='color: #ffffff; font-size: 20px; font-weight: 700; margin: 0; text-align: center;'>Balance Financiero Mensual</h2>
+                                    <p style='color: #06b6d4; font-size: 16px; font-weight: 600; margin: 5px 0 0 0; text-align: center;'>{$juntaNombre}</p>
+                                    <p style='color: #a1a1aa; font-size: 14px; margin: 5px 0 20px 0; text-align: center;'>Periodo cerrado: <strong>{$mesNombre}</strong></p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Tarjetas de Balance de Caja -->
+                            <tr>
+                                <td>
+                                    <table width='100%' border='0' cellspacing='6' cellpadding='0' style='margin-bottom: 15px;'>
+                                        <tr>
+                                            <!-- Saldo Anterior -->
+                                            <td width='25%' style='background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px; text-align: center;'>
+                                                <div style='color: #a1a1aa; font-size: 10px; text-transform: uppercase; font-weight: bold;'>Saldo Anterior</div>
+                                                <div style='color: #ffffff; font-size: 15px; font-weight: bold; margin-top: 5px;'>{$saldoAnteriorFmt}</div>
+                                            </td>
+                                            <!-- Ingresos -->
+                                            <td width='25%' style='background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 12px; text-align: center;'>
+                                                <div style='color: #a1a1aa; font-size: 10px; text-transform: uppercase; font-weight: bold;'>Ingresos</div>
+                                                <div style='color: #10b981; font-size: 15px; font-weight: bold; margin-top: 5px;'>+{$ingresosFmt}</div>
+                                            </td>
+                                            <!-- Egresos -->
+                                            <td width='25%' style='background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 12px; text-align: center;'>
+                                                <div style='color: #a1a1aa; font-size: 10px; text-transform: uppercase; font-weight: bold;'>Egresos</div>
+                                                <div style='color: #ef4444; font-size: 15px; font-weight: bold; margin-top: 5px;'>-{$egresosFmt}</div>
+                                            </td>
+                                            <!-- Saldo Final -->
+                                            <td width='25%' style='background: rgba(6, 182, 212, 0.05); border: 1px solid rgba(6, 182, 212, 0.15); border-radius: 8px; padding: 12px; text-align: center;'>
+                                                <div style='color: #a1a1aa; font-size: 10px; text-transform: uppercase; font-weight: bold;'>Saldo Final</div>
+                                                <div style='color: {$saldoFinalColor}; font-size: 15px; font-weight: bold; margin-top: 5px;'>{$saldoFinalFmt}</div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Comentarios de Administración -->
+                            <tr>
+                                <td style='padding-top: 5px;'>
+                                    <div style='background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px;'>
+                                        <div style='color: #06b6d4; font-size: 13px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;'>Mensaje de la Directiva:</div>
+                                        <div style='color: #e4e4e7; font-size: 14px; line-height: 1.5; font-style: italic;'>\"{$comentario}\"</div>
+                                        <div style='color: #a1a1aa; font-size: 11px; margin-top: 10px; text-align: right;'>Cerrado por: <strong>{$adminNombre}</strong></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- TABLA 1: DETALLE DE INGRESOS DEL MES -->
+                            <tr>
+                                <td style='padding-top: 25px;'>
+                                    <h3 style='color: #ffffff; font-size: 14px; font-weight: 700; margin: 0 0 10px 0; border-left: 3px solid #10b981; padding-left: 8px;'>1. Detalle de Ingresos del Mes</h3>
+                                    <table width='100%' border='0' cellspacing='0' cellpadding='0' style='border-collapse: collapse; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden;'>
+                                        <thead>
+                                            <tr style='background: rgba(16, 185, 129, 0.04); border-bottom: 1px solid rgba(255,255,255,0.1);'>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Fecha</th>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Socio</th>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Categoría</th>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Descripción</th>
+                                                <th align='right' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Monto</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {$tablaIngresosHtml}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr style='background: rgba(16, 185, 129, 0.08); border-top: 1.5px solid #10b981;'>
+                                                <td colspan='4' align='right' style='padding: 10px; font-size: 12px; font-weight: bold; color: #ffffff;'>Total Ingresos:</td>
+                                                <td align='right' style='padding: 10px; font-size: 13px; font-weight: bold; color: #10b981;'>{$totalIngresosFmt}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- TABLA 2: DETALLE DE EGRESOS DEL MES -->
+                            <tr>
+                                <td style='padding-top: 25px;'>
+                                    <h3 style='color: #ffffff; font-size: 14px; font-weight: 700; margin: 0 0 10px 0; border-left: 3px solid #ef4444; padding-left: 8px;'>2. Detalle de Egresos del Mes</h3>
+                                    <table width='100%' border='0' cellspacing='0' cellpadding='0' style='border-collapse: collapse; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden;'>
+                                        <thead>
+                                            <tr style='background: rgba(239, 68, 68, 0.04); border-bottom: 1px solid rgba(255,255,255,0.1);'>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Fecha</th>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Categoría</th>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Descripción</th>
+                                                <th align='right' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Monto</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {$tablaEgresosHtml}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr style='background: rgba(239, 68, 68, 0.08); border-top: 1.5px solid #ef4444;'>
+                                                <td colspan='3' align='right' style='padding: 10px; font-size: 12px; font-weight: bold; color: #ffffff;'>Total Egresos:</td>
+                                                <td align='right' style='padding: 10px; font-size: 13px; font-weight: bold; color: #ef4444;'>-{$totalEgresosFmt}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- TABLA 3: DESGLOSE DE EGRESOS POR CATEGORÍA -->
+                            <tr>
+                                <td style='padding-top: 25px;'>
+                                    <h3 style='color: #ffffff; font-size: 14px; font-weight: 700; margin: 0 0 10px 0; border-left: 3px solid #06b6d4; padding-left: 8px;'>3. Resumen de Gastos por Categoría</h3>
+                                    <table width='100%' border='0' cellspacing='0' cellpadding='0' style='border-collapse: collapse; background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden;'>
+                                        <thead>
+                                            <tr style='background: rgba(6, 182, 212, 0.04); border-bottom: 1px solid rgba(255,255,255,0.1);'>
+                                                <th align='left' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase;'>Concepto / Categoría</th>
+                                                <th align='center' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase; width: 80px;'>Movimientos</th>
+                                                <th align='right' style='padding: 8px 10px; font-size: 11px; color: #a1a1aa; text-transform: uppercase; width: 150px;'>Monto Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {$tablaCategoriasHtml}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr style='background: rgba(6, 182, 212, 0.08); border-top: 1.5px solid #06b6d4;'>
+                                                <td align='right' colspan='2' style='padding: 10px; font-size: 12px; font-weight: bold; color: #ffffff;'>Total Consolidado Egresos:</td>
+                                                <td align='right' style='padding: 10px; font-size: 13px; font-weight: bold; color: #ef4444;'>-{$totalEgresosFmt}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Mensaje de transparencia -->
+                            <tr>
+                                <td style='padding-top: 25px; text-align: center;'>
+                                    <div style='font-size: 13px; color: #a1a1aa; line-height: 1.5;'>
+                                        Este balance mensual ha sido validado bajo control de auditoría interna de la Junta de Vecinos y transmitido de manera transparente a la Municipalidad a través de ConectaBarrio.
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Firma de Soporte e Info de Implementación -->
+                            <tr>
+                                <td align='center' style='border-top: 1px solid rgba(255,255,255,0.08); margin-top: 30px; padding-top: 20px; color: #a1a1aa; font-size: 12px; line-height: 1.6; text-align: center;'>
+                                    Si deseas saber cómo implementar <strong>ConectaBarrio</strong> puedes escribirnos al WhatsApp <a href='https://wa.me/56950001071' style='color: #06b6d4; text-decoration: none; font-weight: bold;'>+56950001071</a> o bien enviarnos un correo a <a href='mailto:contacto@conectatubarrio.cl' style='color: #06b6d4; text-decoration: none; font-weight: bold;'>contacto@conectatubarrio.cl</a>
+                                    <div style='margin-top: 15px; font-size: 10px; color: #71717a;'>ConectaBarrio &copy; 2026. Todos los derechos reservados.</div>
+                                </td>
+                            </tr>
+                            
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>";
+
+        return $html;
+    }
+}

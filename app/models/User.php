@@ -1,0 +1,142 @@
+<?php
+class User extends Model {
+    
+    // Buscar usuario por correo electrónico
+    public function findUserByEmail($email) {
+        $this->db->query("SELECT * FROM usuarios WHERE email = :email");
+        $this->db->bind(':email', $email);
+        return $this->db->single();
+    }
+
+    // Buscar usuario por RUT (ID Legal de Chile)
+    public function findUserByRut($rut) {
+        $this->db->query("SELECT * FROM usuarios WHERE rut = :rut");
+        $this->db->bind(':rut', $rut);
+        return $this->db->single();
+    }
+
+    // Iniciar Sesión (Validar RUT/Email y Contraseña)
+    public function login($rutOrEmail, $password) {
+        // Permitir ingresar con RUT o Email
+        if (filter_var($rutOrEmail, FILTER_VALIDATE_EMAIL)) {
+            $row = $this->findUserByEmail($rutOrEmail);
+        } else {
+            $row = $this->findUserByRut($rutOrEmail);
+        }
+
+        if (!$row) {
+            return false; // Usuario no existe
+        }
+
+        // Verificar contraseña cifrada
+        if (password_verify($password, $row->password)) {
+            // Verificar si el usuario está activo
+            if ($row->estado == 1) {
+                return $row;
+            }
+        }
+        
+        return false;
+    }
+
+    // Crear un nuevo Socio o Administrador
+    public function register($data) {
+        $this->db->query("INSERT INTO usuarios (junta_id, id_socio, rut, nombres, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio) VALUES (:junta_id, :id_socio, :rut, :nombres, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio)");
+        
+        // Cifrar la contraseña
+        $hashed_password = password_hash($data['password'], PASSWORD_BCRYPT);
+        
+        // Vincular parámetros
+        $this->db->bind(':junta_id', $data['junta_id']);
+        $this->db->bind(':id_socio', isset($data['id_socio']) && !empty($data['id_socio']) ? $data['id_socio'] : null);
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombres', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':password', $hashed_password);
+        $this->db->bind(':rol', $data['rol']);
+        $this->db->bind(':telefono', $data['telefono']);
+        $this->db->bind(':estado', isset($data['estado']) ? $data['estado'] : 1);
+        $this->db->bind(':calle_id', isset($data['calle_id']) && !empty($data['calle_id']) ? $data['calle_id'] : null);
+        $this->db->bind(':numero_casa', isset($data['numero_casa']) && !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':fecha_inicio', isset($data['fecha_inicio']) && !empty($data['fecha_inicio']) ? $data['fecha_inicio'] : date('Y-m-d'));
+
+        // Ejecutar
+        if ($this->db->execute()) {
+            return $this->db->lastInsertId();
+        }
+        return false;
+    }
+
+    // Actualizar datos del Socio
+    public function update($data) {
+        $this->db->query("UPDATE usuarios SET rut = :rut, nombres = :nombres, apellido_paterno = :apellido_paterno, apellido_materno = :apellido_materno, email = :email, telefono = :telefono, calle_id = :calle_id, numero_casa = :numero_casa WHERE id = :id");
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombres', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':telefono', $data['telefono']);
+        $this->db->bind(':calle_id', isset($data['calle_id']) && !empty($data['calle_id']) ? $data['calle_id'] : null);
+        $this->db->bind(':numero_casa', isset($data['numero_casa']) && !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':id', $data['id']);
+
+        return $this->db->execute();
+    }
+
+    // Cambiar / Resetear contraseña
+    public function resetPassword($userId, $newPassword) {
+        $this->db->query("UPDATE usuarios SET password = :password WHERE id = :id");
+        
+        $hashed_password = password_hash($newPassword, PASSWORD_BCRYPT);
+        
+        $this->db->bind(':password', $hashed_password);
+        $this->db->bind(':id', $userId);
+
+        return $this->db->execute();
+    }
+
+    // Obtener socios asociados a una Junta de Vecinos
+    public function getSociosByJunta($juntaId) {
+        $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1 ORDER BY nombre ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
+    // Obtener un socio específico por su ID
+    public function getSocioById($socioId) {
+        $this->db->query("SELECT u.*, c.nombre as calle_nombre, j.nombre as junta_nombre FROM usuarios u LEFT JOIN calles c ON u.calle_id = c.id LEFT JOIN juntas_vecinos j ON u.junta_id = j.id WHERE u.id = :id AND u.rol = 'socio'");
+        $this->db->bind(':id', $socioId);
+        return $this->db->single();
+    }
+
+    // Obtener perfil completo por ID (Cualquier rol)
+    public function getUserById($id) {
+        $this->db->query("SELECT u.*, j.nombre as junta_nombre FROM usuarios u LEFT JOIN juntas_vecinos j ON u.junta_id = j.id WHERE u.id = :id");
+        $this->db->bind(':id', $id);
+        return $this->db->single();
+    }
+
+    // Eliminar o desactivar usuario
+    // Eliminar o desactivar usuario (Baja Lógica)
+    public function delete($id) {
+        $this->db->query("UPDATE usuarios SET estado = 0 WHERE id = :id");
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
+
+    // Reactivar un socio dado de baja
+    public function reactivate($id) {
+        $this->db->query("UPDATE usuarios SET estado = 1 WHERE id = :id");
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
+
+    // Obtener socios inactivos (de baja) de una Junta
+    public function getSociosInactivosByJunta($juntaId) {
+        $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 0 ORDER BY nombre ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+}
