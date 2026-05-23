@@ -128,4 +128,34 @@ class AuthController extends Controller {
                 $this->redirect('/auth/logout');
         }
     }
+
+    // Acción temporal segura para ejecutar la migración de base de datos desde el navegador
+    public function migrar_planes() {
+        if (($_GET['key'] ?? '') !== 'migrar123') {
+            die('Llave de seguridad incorrecta. Acceso denegado.');
+        }
+
+        try {
+            echo "<h2>Iniciando migración para el modelo de planes comerciales...</h2>";
+            $db = new Database();
+
+            // 1. Agregar columnas a la tabla juntas_vecinos
+            echo "Modificando tabla 'juntas_vecinos' para agregar 'plan' y 'precio_anual'...<br>";
+            $db->query("ALTER TABLE juntas_vecinos 
+                        ADD COLUMN plan ENUM('basico', 'mediano', 'premium') NOT NULL DEFAULT 'basico' AFTER mes_inicio,
+                        ADD COLUMN precio_anual INT NOT NULL DEFAULT 0 AFTER plan");
+            $db->execute();
+            echo "✓ Columnas agregadas con éxito.<br>";
+
+            // 2. Configurar la junta semilla (ID: 1) como Premium por defecto con precio de oferta ($9.990 * 12 = $119.880)
+            echo "Actualizando junta semilla (ID: 1) a Plan Premium...<br>";
+            $db->query("UPDATE juntas_vecinos SET plan = 'premium', precio_anual = 119880 WHERE id = 1");
+            $db->execute();
+            echo "✓ Junta semilla configurada con éxito.<br>";
+
+            echo "<h3>🎉 ¡MIGRACIÓN DE PLANES Y PRECIOS COMPLETADA CON ÉXITO!</h3>";
+        } catch (Exception $e) {
+            echo "<h3 style='color:red;'>❌ Error durante la migración: " . $e->getMessage() . "</h3>";
+        }
+    }
 }
