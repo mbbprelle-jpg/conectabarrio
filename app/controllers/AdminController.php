@@ -99,6 +99,20 @@ class AdminController extends Controller {
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
 
+            // Validar límites de socios según el Plan Comercial
+            $plan = $_SESSION['user_junta_plan'] ?? 'basico';
+            $juntaId = $_SESSION['user_junta_id'];
+            $maxSocios = ($plan === 'basico') ? 50 : (($plan === 'mediano') ? 200 : PHP_INT_MAX);
+            
+            if ($maxSocios !== PHP_INT_MAX) {
+                $actualSocios = $this->userModel->getSociosCountByJunta($juntaId);
+                if ($actualSocios >= $maxSocios) {
+                    $_SESSION['error_msg'] = 'Límite de socios alcanzado. Su Plan ' . ucfirst($plan) . ' solo permite registrar hasta ' . $maxSocios . ' socios activos. Por favor contacte al Administrador Global para ascender de Plan.';
+                    $this->redirect('/admin/socios');
+                    return;
+                }
+            }
+
             $idSocio = (int)($post['id_socio'] ?? 0);
 
             $dataSocio = [
@@ -580,6 +594,18 @@ class AdminController extends Controller {
     // 4. REUNIONES Y ASISTENCIA
     // =========================================================================
     public function asistencia($reunionId = null) {
+        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
+            $data = [
+                'title' => 'Mejora Requerida',
+                'header_title' => 'Módulo de Asistencia Bloqueado',
+                'header_subtitle' => 'Se requiere subir de plan para acceder a esta característica',
+                'active_menu' => 'asistencia',
+                'required_plan' => 'Mediano'
+            ];
+            $this->view('admin/upgrade_required', $data);
+            return;
+        }
+
         $juntaId = $_SESSION['user_junta_id'];
 
         $data = [
@@ -611,6 +637,12 @@ class AdminController extends Controller {
 
     // Crear una nueva Reunión (POST)
     public function reunion_crear() {
+        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
+            $_SESSION['error_msg'] = 'El módulo de Reuniones y Asistencia no está habilitado en su Plan Básico.';
+            $this->redirect('/admin/dashboard');
+            return;
+        }
+
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
 
@@ -638,6 +670,12 @@ class AdminController extends Controller {
 
     // Registrar asistencia masiva para una reunión (POST)
     public function asistencia_guardar($reunionId) {
+        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
+            $_SESSION['error_msg'] = 'El módulo de Reuniones y Asistencia no está habilitado en su Plan Básico.';
+            $this->redirect('/admin/dashboard');
+            return;
+        }
+
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $juntaId = $_SESSION['user_junta_id'];
             
@@ -682,6 +720,18 @@ class AdminController extends Controller {
     // 5. DIGITALIZACIÓN Y TRANSMISIÓN DIRECTA A LA MUNICIPALIDAD
     // =========================================================================
     public function municipalidad() {
+        if (($_SESSION['user_junta_plan'] ?? 'basico') !== 'premium') {
+            $data = [
+                'title' => 'Mejora Requerida',
+                'header_title' => 'Conexión Municipal Bloqueada',
+                'header_subtitle' => 'Se requiere subir de plan para acceder a esta característica',
+                'active_menu' => 'municipalidad',
+                'required_plan' => 'Premium'
+            ];
+            $this->view('admin/upgrade_required', $data);
+            return;
+        }
+
         $juntaId = $_SESSION['user_junta_id'];
         
         // 1. Obtener datos de la Junta
@@ -760,6 +810,12 @@ class AdminController extends Controller {
 
     // Procesar almacenamiento de reporte enviado (POST de confirmación de simulación)
     public function municipalidad_guardar_envio() {
+        if (($_SESSION['user_junta_plan'] ?? 'basico') !== 'premium') {
+            $_SESSION['error_msg'] = 'La Transmisión Municipal no está habilitada en su Plan actual.';
+            $this->redirect('/admin/dashboard');
+            return;
+        }
+
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
             $juntaId = $_SESSION['user_junta_id'];
@@ -915,6 +971,12 @@ class AdminController extends Controller {
 
     // Enviar balance mensual por correo a todos los socios (POST)
     public function enviar_balance_email($id) {
+        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
+            $_SESSION['error_msg'] = 'El envío de balances vía email no está habilitado en su Plan Básico.';
+            $this->redirect('/admin/cierres');
+            return;
+        }
+
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $cierre = $this->cierreModel->getCierreById($id);
             if (!$cierre || $cierre->junta_id != $_SESSION['user_junta_id']) {

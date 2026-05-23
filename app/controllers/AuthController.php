@@ -77,6 +77,8 @@ class AuthController extends Controller {
             if ($junta) {
                 $_SESSION['user_junta_nombre'] = $junta->nombre;
                 $_SESSION['user_junta_comuna'] = $junta->comuna;
+                $_SESSION['user_junta_plan'] = $junta->plan ?? 'basico';
+                $_SESSION['user_junta_precio_anual'] = $junta->precio_anual ?? 0;
             } else {
                 $_SESSION['user_junta_nombre'] = 'Junta Sin Nombre';
             }

@@ -408,12 +408,19 @@
                                         </a>
 
                                         <!-- Botón Enviar Balance por Correo -->
-                                        <form action="<?php echo URLROOT; ?>/admin/enviar_balance_email/<?php echo $c->id; ?>" method="POST" class="confirm-action" data-confirm-message="¿Está seguro de que desea enviar este balance mensual vía correo electrónico a TODOS los socios activos de su comunidad?">
-                                            <button type="submit" class="btn <?php echo $c->enviado_correo ? 'btn-secondary' : 'btn-primary'; ?> btn-sm" style="width: 100%; font-size: 0.72rem; padding: 0.35rem 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem;">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                                                <?php echo $c->enviado_correo ? 'Reenviar Balance' : 'Enviar Balance'; ?>
+                                        <?php if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico'): ?>
+                                            <button type="button" class="btn btn-secondary btn-sm" style="width: 100%; font-size: 0.72rem; padding: 0.35rem 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem; opacity: 0.6; cursor: not-allowed;" title="Disponible en Plan Mediano y Premium">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                                                Email Bloqueado 🔒
                                             </button>
-                                        </form>
+                                        <?php else: ?>
+                                            <form action="<?php echo URLROOT; ?>/admin/enviar_balance_email/<?php echo $c->id; ?>" method="POST" class="confirm-action" data-confirm-message="¿Está seguro de que desea enviar este balance mensual vía correo electrónico a TODOS los socios activos de su comunidad?">
+                                                <button type="submit" class="btn <?php echo $c->enviado_correo ? 'btn-secondary' : 'btn-primary'; ?> btn-sm" style="width: 100%; font-size: 0.72rem; padding: 0.35rem 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.3rem;">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                                                    <?php echo $c->enviado_correo ? 'Reenviar Balance' : 'Enviar Balance'; ?>
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
                                     </div>
                                     
                                     <?php if ($c->enviado_correo): ?>

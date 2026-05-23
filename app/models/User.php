@@ -139,4 +139,12 @@ class User extends Model {
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->resultSet();
     }
+
+    // Obtener la cantidad de socios activos en una Junta de Vecinos
+    public function getSociosCountByJunta($juntaId) {
+        $this->db->query("SELECT COUNT(*) as total FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1");
+        $this->db->bind(':junta_id', $juntaId);
+        $res = $this->db->single();
+        return $res ? (int)$res->total : 0;
+    }
 }

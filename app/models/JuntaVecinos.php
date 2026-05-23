@@ -38,6 +38,15 @@ class JuntaVecinos extends Model {
         return false;
     }
 
+    // Actualizar plan comercial y precio anual de una organización
+    public function updatePlanAndPrice($id, $plan, $precioAnual) {
+        $this->db->query("UPDATE juntas_vecinos SET plan = :plan, precio_anual = :precio_anual WHERE id = :id");
+        $this->db->bind(':plan', $plan);
+        $this->db->bind(':precio_anual', $precioAnual);
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
+
     // Obtener estadísticas globales para Perfil Maestro
     public function getStatsGlobal() {
         $stats = [];

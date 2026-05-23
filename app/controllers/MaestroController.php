@@ -52,6 +52,8 @@ class MaestroController extends Controller {
             'admin_email' => '',
             'admin_telefono' => '',
             'junta_mes_inicio' => date('Y-m'),
+            'junta_plan' => 'basico',
+            'junta_precio_anual' => 59880,
             'cuota_inicial' => '5000',
             'cuota_mes_inicio' => date('Y-m'),
             'error' => ''
@@ -73,6 +75,8 @@ class MaestroController extends Controller {
             $data['admin_email'] = $post['admin_email'] ?? '';
             $data['admin_telefono'] = $post['admin_telefono'] ?? '';
             $data['junta_mes_inicio'] = $post['junta_mes_inicio'] ?? date('Y-m');
+            $data['junta_plan'] = $post['junta_plan'] ?? 'basico';
+            $data['junta_precio_anual'] = isset($post['junta_precio_anual']) ? (int)$post['junta_precio_anual'] : 59880;
             $data['cuota_inicial'] = $post['cuota_inicial'] ?? '0';
             $data['cuota_mes_inicio'] = $post['cuota_mes_inicio'] ?? date('Y-m');
 
@@ -101,13 +105,15 @@ class MaestroController extends Controller {
                 $db->beginTransaction();
 
                 // 1. Crear Junta de Vecinos/Organización
-                $this->juntaModel->db->query("INSERT INTO juntas_vecinos (nombre, tipo, rut_junta, direccion, comuna, mes_inicio) VALUES (:nombre, :tipo, :rut_junta, :direccion, :comuna, :mes_inicio)");
+                $this->juntaModel->db->query("INSERT INTO juntas_vecinos (nombre, tipo, rut_junta, direccion, comuna, mes_inicio, plan, precio_anual) VALUES (:nombre, :tipo, :rut_junta, :direccion, :comuna, :mes_inicio, :plan, :precio_anual)");
                 $this->juntaModel->db->bind(':nombre', $data['junta_nombre']);
                 $this->juntaModel->db->bind(':tipo', $data['junta_tipo']);
                 $this->juntaModel->db->bind(':rut_junta', $data['junta_rut']);
                 $this->juntaModel->db->bind(':direccion', $data['junta_direccion']);
                 $this->juntaModel->db->bind(':comuna', $data['junta_comuna']);
                 $this->juntaModel->db->bind(':mes_inicio', $data['junta_mes_inicio']);
+                $this->juntaModel->db->bind(':plan', $data['junta_plan']);
+                $this->juntaModel->db->bind(':precio_anual', $data['junta_precio_anual']);
                 $this->juntaModel->db->execute();
                 $juntaId = $this->juntaModel->db->lastInsertId();
 
@@ -152,5 +158,26 @@ class MaestroController extends Controller {
         }
 
         $this->view('maestro/crear_junta', $data);
+    }
+
+    // Actualizar Plan y Precio de una Organización (POST)
+    public function actualizar_plan() {
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+            $juntaId = isset($post['junta_id']) ? (int)$post['junta_id'] : 0;
+            $plan = $post['plan'] ?? 'basico';
+            $precioAnual = isset($post['precio_anual']) ? (int)$post['precio_anual'] : 0;
+
+            if ($juntaId > 0 && in_array($plan, ['basico', 'mediano', 'premium'])) {
+                if ($this->juntaModel->updatePlanAndPrice($juntaId, $plan, $precioAnual)) {
+                    $_SESSION['success_msg'] = 'Plan y precio de la organización actualizados exitosamente.';
+                } else {
+                    $_SESSION['error_msg'] = 'Error al actualizar el plan en la base de datos.';
+                }
+            } else {
+                $_SESSION['error_msg'] = 'Datos de actualización no válidos.';
+            }
+        }
+        $this->redirect('/maestro/dashboard');
     }
 }

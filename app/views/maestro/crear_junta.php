@@ -69,6 +69,23 @@
                 </small>
             </div>
 
+            <div class="form-group" style="background: rgba(6,182,212,0.03); border: 1px solid rgba(6,182,212,0.1); padding: 1rem; border-radius: var(--radius-sm);">
+                <label for="junta_plan" class="form-label" style="color: var(--primary); font-weight: bold;">Plan Comercial *</label>
+                <select name="junta_plan" id="junta_plan" class="form-control" style="background: var(--bg-main);" required>
+                    <option value="basico" <?php echo ($data['junta_plan'] ?? 'basico') === 'basico' ? 'selected' : ''; ?>>Plan Básico - $4.990/mes (Oferta, antes $14.990) - Máx 50 socios</option>
+                    <option value="mediano" <?php echo ($data['junta_plan'] ?? '') === 'mediano' ? 'selected' : ''; ?>>Plan Mediano - $7.990/mes (Oferta, antes $19.990) - Máx 200 socios + Reuniones</option>
+                    <option value="premium" <?php echo ($data['junta_plan'] ?? '') === 'premium' ? 'selected' : ''; ?>>Plan Premium - $9.990/mes (Oferta, antes $24.990) - Ilimitado + Envíos</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="junta_precio_anual" class="form-label">Precio Anual Fijo ($) *</label>
+                <input type="number" name="junta_precio_anual" id="junta_precio_anual" class="form-control" value="<?php echo htmlspecialchars($data['junta_precio_anual'] ?? '59880'); ?>" min="0" required>
+                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem;">
+                    Se autocalcula según el plan seleccionado ($Monto/mes * 12), pero puedes editarlo libremente para pactar precios especiales.
+                </small>
+            </div>
+
             <div class="grid-2col" style="margin-bottom: 0;">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="cuota_inicial" class="form-label">Cuota Mensual Inicial ($) *</label>
@@ -130,5 +147,25 @@
 
     </div>
 </form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const planSelect = document.getElementById('junta_plan');
+    const precioInput = document.getElementById('junta_precio_anual');
+    
+    if (planSelect && precioInput) {
+        planSelect.addEventListener('change', function() {
+            const val = this.value;
+            if (val === 'basico') {
+                precioInput.value = 59880; // $4.990 * 12
+            } else if (val === 'mediano') {
+                precioInput.value = 95880; // $7.990 * 12
+            } else if (val === 'premium') {
+                precioInput.value = 119880; // $9.990 * 12
+            }
+        });
+    }
+});
+</script>
 
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>
