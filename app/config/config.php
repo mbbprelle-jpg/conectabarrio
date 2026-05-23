@@ -11,8 +11,14 @@ define('DB_NAME', getenv('DB_NAME') ?: 'conectabarrio');
 // Ruta de la aplicación (Directorio interno)
 define('APPROOT', dirname(dirname(__FILE__)));
 
-// URL de la aplicación (Prioriza variable de entorno URLROOT, cae en /CONECTABARRIO por defecto)
-define('URLROOT', getenv('URLROOT') !== false ? getenv('URLROOT') : '/CONECTABARRIO');
+// URL de la aplicación (Auto-detecta si está en local XAMPP o producción, limpia comillas de entorno)
+$resolvedUrl = '';
+if (strpos($_SERVER['REQUEST_URI'] ?? '', '/CONECTABARRIO') === 0 || strpos($_SERVER['SCRIPT_NAME'] ?? '', '/CONECTABARRIO') === 0) {
+    $resolvedUrl = '/CONECTABARRIO';
+} else if (getenv('URLROOT') !== false) {
+    $resolvedUrl = trim(getenv('URLROOT'), '"\' ');
+}
+define('URLROOT', $resolvedUrl);
 
 // Nombre del sitio
 define('SITENAME', 'CONECTABARRIO');
