@@ -20,6 +20,11 @@
         <div class="metric-info">
             <span class="metric-label">Organizaciones</span>
             <span class="metric-value"><?php echo htmlspecialchars($data['stats']['total_juntas']); ?></span>
+            <div style="font-size: 0.72rem; color: rgba(255,255,255,0.7); display: flex; gap: 0.6rem; margin-top: 0.35rem; font-weight: 500; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.35rem;">
+                <span>JV: <strong><?php echo $data['stats']['juntas_de_vecinos']; ?></strong></span>
+                <span>Comité: <strong><?php echo $data['stats']['comites']; ?></strong></span>
+                <span>Org: <strong><?php echo $data['stats']['organizaciones']; ?></strong></span>
+            </div>
         </div>
     </div>
 

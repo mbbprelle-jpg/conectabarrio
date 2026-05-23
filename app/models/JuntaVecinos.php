@@ -54,6 +54,24 @@ class JuntaVecinos extends Model {
         $this->db->query("SELECT COUNT(*) as total FROM usuarios WHERE rol = 'admin'");
         $stats['total_admins'] = $this->db->single()->total;
 
+        // Desglose por Tipo de Organización
+        $this->db->query("SELECT tipo, COUNT(*) as total FROM juntas_vecinos GROUP BY tipo");
+        $res = $this->db->resultSet();
+        $stats['juntas_de_vecinos'] = 0;
+        $stats['comites'] = 0;
+        $stats['organizaciones'] = 0;
+
+        foreach ($res as $row) {
+            $tipo = $row->tipo ?? '';
+            if ($tipo === 'Junta de Vecinos') {
+                $stats['juntas_de_vecinos'] = (int)$row->total;
+            } elseif ($tipo === 'Comité') {
+                $stats['comites'] = (int)$row->total;
+            } elseif ($tipo === 'Organización') {
+                $stats['organizaciones'] = (int)$row->total;
+            }
+        }
+
         return $stats;
     }
 }
