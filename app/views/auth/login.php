@@ -228,10 +228,6 @@
         
         <div style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
             Desarrollado para Juntas de Vecinos y Municipalidades en Chile.
-            <br>
-            <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(99, 102, 241, 0.08); border-radius: 6px; border: 1px solid rgba(99, 102, 241, 0.15);">
-                <strong style="color: var(--primary);">Acceso Maestro:</strong> <br>maestro@conectabarrio.cl / maestro123
-            </div>
         </div>
     </div>
 </div>
