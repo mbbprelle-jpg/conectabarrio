@@ -23,7 +23,8 @@ define('SITENAME', 'CONECTABARRIO');
 
 // Configuración de Seguridad de Sesiones
 ini_set('session.cookie_httponly', 1);
-if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+if ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || 
+    (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')) {
     ini_set('session.cookie_secure', 1);
 }
 // Establecer tiempo de vida máximo de sesión
