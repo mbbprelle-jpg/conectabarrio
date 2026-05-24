@@ -80,24 +80,13 @@ class MaestroController extends Controller {
             $data['cuota_inicial'] = $post['cuota_inicial'] ?? '0';
             $data['cuota_mes_inicio'] = $post['cuota_mes_inicio'] ?? date('Y-m');
 
-            // Validar RUTs y duplicados
+            // Validar RUT de la organización (único)
             if ($this->juntaModel->getJuntaByRut($data['junta_rut'])) {
                 $data['error'] = 'Ya existe una Organización con ese RUT.';
                 $this->view('maestro/crear_junta', $data);
                 return;
             }
-
-            if ($this->userModel->findUserByRut($data['admin_rut'])) {
-                $data['error'] = 'Ya existe un usuario administrador con ese RUT.';
-                $this->view('maestro/crear_junta', $data);
-                return;
-            }
-
-            if ($this->userModel->findUserByEmail($data['admin_email'])) {
-                $data['error'] = 'Ya existe un usuario con ese Correo Electrónico.';
-                $this->view('maestro/crear_junta', $data);
-                return;
-            }
+            // NOT checking admin RUT/Email here – we will reuse an existing admin if it exists
 
             // Iniciar Transacción de Base de Datos para asegurar atomicidad
             $db = new Database();
@@ -124,23 +113,35 @@ class MaestroController extends Controller {
                 $this->cuotaModel->db->bind(':mes_inicio', $data['cuota_mes_inicio']);
                 $this->cuotaModel->db->execute();
 
-                // 3. Crear Usuario Administrador de esa Junta (Contraseña por defecto es el RUT sin puntos ni guión o "admin123")
-                // Proponemos la contraseña "admin123" por simplicidad, informada al crearse.
-                $adminPass = 'admin123';
-                $hashedPass = password_hash($adminPass, PASSWORD_BCRYPT);
-
-                $this->userModel->db->query("INSERT INTO usuarios (junta_id, rut, nombres, apellido_paterno, apellido_materno, email, password, rol, telefono, estado) VALUES (:junta_id, :rut, :nombres, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado)");
-                $this->userModel->db->bind(':junta_id', $juntaId);
-                $this->userModel->db->bind(':rut', $data['admin_rut']);
-                $this->userModel->db->bind(':nombres', $data['admin_nombres']);
-                $this->userModel->db->bind(':apellido_paterno', $data['admin_apellido_paterno']);
-                $this->userModel->db->bind(':apellido_materno', $data['admin_apellido_materno']);
-                $this->userModel->db->bind(':email', $data['admin_email']);
-                $this->userModel->db->bind(':password', $hashedPass);
-                $this->userModel->db->bind(':rol', 'admin');
-                $this->userModel->db->bind(':telefono', $data['admin_telefono']);
-                $this->userModel->db->bind(':estado', 1);
-                $this->userModel->db->execute();
+                // 3. Asociar o crear Usuario Administrador de esa Junta
+                // Intentamos reusar un admin existente (por RUT o Email). Si no existe, lo creamos.
+                $existingAdmin = $this->userModel->findUserByRut($data['admin_rut']);
+                if (!$existingAdmin) {
+                    $existingAdmin = $this->userModel->findUserByEmail($data['admin_email']);
+                }
+                if ($existingAdmin) {
+                    // Actualizar su junta_id y asegurar rol admin
+                    $this->userModel->db->query("UPDATE usuarios SET junta_id = :junta_id, rol = 'admin' WHERE id = :id");
+                    $this->userModel->db->bind(':junta_id', $juntaId);
+                    $this->userModel->db->bind(':id', $existingAdmin->id);
+                    $this->userModel->db->execute();
+                } else {
+                    // Crear nuevo admin con contraseña por defecto "admin123"
+                    $adminPass = 'admin123';
+                    $hashedPass = password_hash($adminPass, PASSWORD_BCRYPT);
+                    $this->userModel->db->query("INSERT INTO usuarios (junta_id, rut, nombres, apellido_paterno, apellido_materno, email, password, rol, telefono, estado) VALUES (:junta_id, :rut, :nombres, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado)");
+                    $this->userModel->db->bind(':junta_id', $juntaId);
+                    $this->userModel->db->bind(':rut', $data['admin_rut']);
+                    $this->userModel->db->bind(':nombres', $data['admin_nombres']);
+                    $this->userModel->db->bind(':apellido_paterno', $data['admin_apellido_paterno']);
+                    $this->userModel->db->bind(':apellido_materno', $data['admin_apellido_materno']);
+                    $this->userModel->db->bind(':email', $data['admin_email']);
+                    $this->userModel->db->bind(':password', $hashedPass);
+                    $this->userModel->db->bind(':rol', 'admin');
+                    $this->userModel->db->bind(':telefono', $data['admin_telefono']);
+                    $this->userModel->db->bind(':estado', 1);
+                    $this->userModel->db->execute();
+                }
 
                 // Confirmar transacción
                 $db->commit();
