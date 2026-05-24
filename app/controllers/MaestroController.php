@@ -129,10 +129,10 @@ class MaestroController extends Controller {
                     // Crear nuevo admin con contraseña por defecto "admin123"
                     $adminPass = 'admin123';
                     $hashedPass = password_hash($adminPass, PASSWORD_BCRYPT);
-                    $this->userModel->db->query("INSERT INTO usuarios (junta_id, rut, nombres, apellido_paterno, apellido_materno, email, password, rol, telefono, estado) VALUES (:junta_id, :rut, :nombres, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado)");
+                    $this->userModel->db->query("INSERT INTO usuarios (junta_id, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado) VALUES (:junta_id, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado)");
                     $this->userModel->db->bind(':junta_id', $juntaId);
                     $this->userModel->db->bind(':rut', $data['admin_rut']);
-                    $this->userModel->db->bind(':nombres', $data['admin_nombres']);
+                    $this->userModel->db->bind(':nombre', $data['admin_nombres']);
                     $this->userModel->db->bind(':apellido_paterno', $data['admin_apellido_paterno']);
                     $this->userModel->db->bind(':apellido_materno', $data['admin_apellido_materno']);
                     $this->userModel->db->bind(':email', $data['admin_email']);

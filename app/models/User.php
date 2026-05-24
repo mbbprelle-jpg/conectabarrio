@@ -41,7 +41,7 @@ class User extends Model {
 
     // Crear un nuevo Socio o Administrador
     public function register($data) {
-        $this->db->query("INSERT INTO usuarios (junta_id, id_socio, rut, nombres, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio) VALUES (:junta_id, :id_socio, :rut, :nombres, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio)");
+        $this->db->query("INSERT INTO usuarios (junta_id, id_socio, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio) VALUES (:junta_id, :id_socio, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio)");
         
         // Cifrar la contraseña
         $hashed_password = password_hash($data['password'], PASSWORD_BCRYPT);
@@ -50,7 +50,7 @@ class User extends Model {
         $this->db->bind(':junta_id', $data['junta_id']);
         $this->db->bind(':id_socio', isset($data['id_socio']) && !empty($data['id_socio']) ? $data['id_socio'] : null);
         $this->db->bind(':rut', $data['rut']);
-        $this->db->bind(':nombres', $data['nombres']);
+        $this->db->bind(':nombre', $data['nombres']);
         $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
         $this->db->bind(':apellido_materno', $data['apellido_materno']);
         $this->db->bind(':email', $data['email']);
@@ -71,9 +71,9 @@ class User extends Model {
 
     // Actualizar datos del Socio
     public function update($data) {
-        $this->db->query("UPDATE usuarios SET rut = :rut, nombres = :nombres, apellido_paterno = :apellido_paterno, apellido_materno = :apellido_materno, email = :email, telefono = :telefono, calle_id = :calle_id, numero_casa = :numero_casa WHERE id = :id");
+        $this->db->query("UPDATE usuarios SET rut = :rut, nombre = :nombre, apellido_paterno = :apellido_paterno, apellido_materno = :apellido_materno, email = :email, telefono = :telefono, calle_id = :calle_id, numero_casa = :numero_casa WHERE id = :id");
         $this->db->bind(':rut', $data['rut']);
-        $this->db->bind(':nombres', $data['nombres']);
+        $this->db->bind(':nombre', $data['nombres']);
         $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
         $this->db->bind(':apellido_materno', $data['apellido_materno']);
         $this->db->bind(':email', $data['email']);
