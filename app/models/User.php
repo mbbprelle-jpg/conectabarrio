@@ -147,4 +147,75 @@ class User extends Model {
         $res = $this->db->single();
         return $res ? (int)$res->total : 0;
     }
+    /**
+    * Generate a random password (12 characters) for temporary use.
+    */
+    public function generateRandomPassword(int $length = 12): string {
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*?';
+        $pwd = '';
+        $max = strlen($chars) - 1;
+        for ($i = 0; $i < $length; $i++) {
+            $pwd .= $chars[random_int(0, $max)];
+        }
+        return $pwd;
+    }
+
+    /**
+     * Create a pending user entry linked to an invitation.
+     */
+    public function createPending(array $data, int $invitationId) {
+        $this->db->query("INSERT INTO usuarios (junta_id, id_socio, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio, status, invitation_id) VALUES (:junta_id, :id_socio, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio, 'pending', :invitation_id)");
+        $hashed = password_hash($data['password'], PASSWORD_BCRYPT);
+        $this->db->bind(':junta_id', $data['junta_id']);
+        $this->db->bind(':id_socio', $data['id_socio'] ?? null);
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombre', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':password', $hashed);
+        $this->db->bind(':rol', $data['rol']);
+        $this->db->bind(':telefono', $data['telefono']);
+        $this->db->bind(':estado', $data['estado'] ?? 1);
+        $this->db->bind(':calle_id', $data['calle_id'] ?? null);
+        $this->db->bind(':numero_casa', $data['numero_casa'] ?? null);
+        $this->db->bind(':fecha_inicio', $data['fecha_inicio'] ?? date('Y-m-d'));
+        $this->db->bind(':invitation_id', $invitationId);
+        $this->db->execute();
+    }
+
+    /**
+     * Approve a pending user, assign optional custom id_socio, set active status and send email.
+     */
+    public function approvePending(int $userId, ?string $customIdSocio = null) {
+        // Generate temporary password
+        $tempPwd = $this->generateRandomPassword();
+        $hashed = password_hash($tempPwd, PASSWORD_BCRYPT);
+        // Determine id_socio
+        if ($customIdSocio) {
+            $idSocio = $customIdSocio;
+        } else {
+            $this->db->query("SELECT MAX(id_socio) as max_id FROM usuarios");
+            $row = $this->db->single();
+            $idSocio = $row ? $row->max_id + 1 : 1;
+        }
+        // Update user record
+        $this->db->query("UPDATE usuarios SET password = :pwd, status = 'active', id_socio = :id_socio WHERE id = :id");
+        $this->db->bind(':pwd', $hashed);
+        $this->db->bind(':id_socio', $idSocio);
+        $this->db->bind(':id', $userId);
+        $this->db->execute();
+        // Return temporary password for emailing
+        return $tempPwd;
+    }
+
+    /**
+     * Reject a pending registration.
+     */
+    public function rejectPending(int $userId) {
+        $this->db->query("DELETE FROM usuarios WHERE id = :id");
+        $this->db->bind(':id', $userId);
+        return $this->db->execute();
+    }
 }
+
