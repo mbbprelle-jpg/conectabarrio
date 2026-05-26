@@ -3,14 +3,17 @@ FROM php:8.3-apache
 # 1. Habilitar el módulo rewrite de Apache para soportar las URLs amigables
 RUN a2enmod rewrite
 
-# 2. Instalar pdo, pdo_mysql y mysqli (necesarios para tu base de datos MariaDB de ConectaBarrio)
+# 2. Instalar utilidades necesarias para Composer y extensiones de BD
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git unzip \
+    && rm -rf /var/lib/apt/lists/*
 RUN docker-php-ext-install pdo pdo_mysql mysqli
 
 # 3. Composer (PHPMailer y futuras dependencias)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # 4. Configurar Apache para que apunte a la carpeta /public (esencial para seguridad y enrutamiento MVC)
-ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
