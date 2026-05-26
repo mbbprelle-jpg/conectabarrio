@@ -1009,8 +1009,15 @@ class AdminController extends Controller {
             $emailHtml = $this->generar_html_boletin($cierre, $resumen, $transacciones, $mesNombre);
             
             // Guardar copia local del correo enviado como respaldo visual en scratch/
-            $respaldoPath = "c:/xampp/htdocs/CONECTABARRIO/scratch/email_prev_{$id}.html";
-            file_put_contents($respaldoPath, $emailHtml);
+            // (en producción Linux no existe la ruta de XAMPP; usamos la carpeta del proyecto)
+            $scratchDir = dirname(APPROOT) . DIRECTORY_SEPARATOR . 'scratch';
+            if (!is_dir($scratchDir)) {
+                @mkdir($scratchDir, 0775, true);
+            }
+            if (is_dir($scratchDir) && is_writable($scratchDir)) {
+                $respaldoPath = $scratchDir . DIRECTORY_SEPARATOR . "email_prev_{$id}.html";
+                @file_put_contents($respaldoPath, $emailHtml);
+            }
             
             if (!Mailer::isConfigured()) {
                 $_SESSION['error_msg'] = 'Correo no configurado. Defina SMTP_HOST, SMTP_USER y SMTP_PASS (Brevo) en las variables de entorno de Coolify.';
