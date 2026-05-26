@@ -1,4 +1,9 @@
 <?php
+$autoload = __DIR__ . '/../vendor/autoload.php';
+if (file_exists($autoload)) {
+    require_once $autoload;
+}
+
 // Cargar la configuración global
 require_once __DIR__ . '/../app/config/config.php';
 

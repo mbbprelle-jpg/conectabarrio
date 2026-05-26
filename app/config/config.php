@@ -21,6 +21,15 @@ define('URLROOT', $resolvedUrl);
 // Nombre del sitio
 define('SITENAME', 'CONECTABARRIO');
 
+// SMTP Brevo (PHPMailer) — Coolify: SMTP_HOST, SMTP_USER, SMTP_PASS, etc.
+define('SMTP_HOST', getenv('SMTP_HOST') ?: '');
+define('SMTP_PORT', (int) (getenv('SMTP_PORT') ?: 587));
+define('SMTP_USER', getenv('SMTP_USER') ?: '');
+define('SMTP_PASS', getenv('SMTP_PASS') !== false ? getenv('SMTP_PASS') : '');
+define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: 'contacto@conectatubarrio.cl');
+define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'ConectaBarrio');
+define('SMTP_ENCRYPTION', strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls'));
+
 // Configuración de Seguridad de Sesiones
 ini_set('session.cookie_httponly', 1);
 if ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || 

@@ -1012,35 +1012,42 @@ class AdminController extends Controller {
             $respaldoPath = "c:/xampp/htdocs/CONECTABARRIO/scratch/email_prev_{$id}.html";
             file_put_contents($respaldoPath, $emailHtml);
             
-            // Enviar el correo real a todos los socios utilizando la función mail() de PHP
+            if (!Mailer::isConfigured()) {
+                $_SESSION['error_msg'] = 'Correo no configurado. Defina SMTP_HOST, SMTP_USER y SMTP_PASS (Brevo) en las variables de entorno de Coolify.';
+                $this->redirect('/admin/cierres');
+                return;
+            }
+
             $countEnviados = 0;
-            $subject = "=?UTF-8?B?" . base64_encode("Balance Financiero Mensual - {$mesNombre} - {$juntaNombre}") . "?=";
-            
-            $headers = "MIME-Version: 1.0\r\n";
-            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-            $headers .= "From: ConectaBarrio <contacto@conectatubarrio.cl>\r\n";
-            $headers .= "Reply-To: contacto@conectatubarrio.cl\r\n";
-            $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
-            
+            $erroresEnvio = 0;
+            $subject = "Balance Financiero Mensual - {$mesNombre} - {$juntaNombre}";
+            $replyTo = SMTP_FROM_EMAIL;
+
             foreach ($socios as $socio) {
                 if (!empty($socio->email) && filter_var($socio->email, FILTER_VALIDATE_EMAIL)) {
-                    // Reemplazar dinámicamente un saludo al socio
                     $socioEmailHtml = str_replace(
-                        "Balance Financiero Mensual</h2>", 
-                        "Balance Financiero Mensual</h2><p style='color: #ffffff; font-size: 14px; text-align: center; margin-top: 10px;'>Estimado(a) vecino(a) <strong>" . htmlspecialchars($socio->nombre) . "</strong>,</p>", 
+                        "Balance Financiero Mensual</h2>",
+                        "Balance Financiero Mensual</h2><p style='color: #ffffff; font-size: 14px; text-align: center; margin-top: 10px;'>Estimado(a) vecino(a) <strong>" . htmlspecialchars($socio->nombre) . "</strong>,</p>",
                         $emailHtml
                     );
-                    
-                    // Disparar PHP mail()
-                    @mail($socio->email, $subject, $socioEmailHtml, $headers);
-                    $countEnviados++;
+
+                    $result = Mailer::send($socio->email, $subject, $socioEmailHtml, $replyTo);
+                    if ($result['ok']) {
+                        $countEnviados++;
+                    } else {
+                        $erroresEnvio++;
+                    }
                 }
             }
             
             // Actualizar base de datos
             $this->cierreModel->updateEnviadoCorreo($id);
             
-            $_SESSION['success_msg'] = 'Balance de ' . $mesNombre . ' enviado con éxito a ' . $countEnviados . ' socios activos de la organización. Se ha generado un respaldo visual en su carpeta de trabajo.';
+            $msg = 'Balance de ' . $mesNombre . ' enviado a ' . $countEnviados . ' socios.';
+            if ($erroresEnvio > 0) {
+                $msg .= ' No se pudieron enviar ' . $erroresEnvio . ' correos (revise SMTP y logs).';
+            }
+            $_SESSION['success_msg'] = $msg;
         }
         $this->redirect('/admin/cierres');
     }

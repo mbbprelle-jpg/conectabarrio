@@ -1,3 +1,10 @@
+# Secretos locales (SMTP Brevo, etc.)
+.env
+
+# Dependencias PHP (generar con: composer install)
+/vendor/
+composer.phar
+
 # Carpeta temporal y scripts de prueba
 scratch/
 

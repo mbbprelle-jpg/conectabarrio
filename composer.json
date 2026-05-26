@@ -1,0 +1,13 @@
+{
+    "name": "conectabarrio/app",
+    "description": "ConectaBarrio - gestión de juntas de vecinos",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "phpmailer/phpmailer": "^6.9"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
