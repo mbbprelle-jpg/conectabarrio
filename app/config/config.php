@@ -21,14 +21,23 @@ define('URLROOT', $resolvedUrl);
 // Nombre del sitio
 define('SITENAME', 'CONECTABARRIO');
 
-// SMTP Brevo (PHPMailer) — Coolify: SMTP_HOST, SMTP_USER, SMTP_PASS, etc.
-define('SMTP_HOST', getenv('SMTP_HOST') ?: '');
-define('SMTP_PORT', (int) (getenv('SMTP_PORT') ?: 587));
-define('SMTP_USER', getenv('SMTP_USER') ?: '');
-define('SMTP_PASS', getenv('SMTP_PASS') !== false ? getenv('SMTP_PASS') : '');
-define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: 'contacto@conectatubarrio.cl');
-define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'ConectaBarrio');
-define('SMTP_ENCRYPTION', strtolower(getenv('SMTP_ENCRYPTION') ?: 'tls'));
+// SMTP Brevo (PHPMailer) — trim para evitar espacios ocultos al copiar/pegar secretos.
+$smtpHost = trim((string) (getenv('SMTP_HOST') ?: ''));
+$smtpPortRaw = trim((string) (getenv('SMTP_PORT') ?: '587'));
+$smtpUser = trim((string) (getenv('SMTP_USER') ?: ''));
+$smtpPassEnv = getenv('SMTP_PASS');
+$smtpPass = trim((string) ($smtpPassEnv !== false ? $smtpPassEnv : ''));
+$smtpFromEmail = trim((string) (getenv('SMTP_FROM_EMAIL') ?: 'contacto@conectatubarrio.cl'));
+$smtpFromName = trim((string) (getenv('SMTP_FROM_NAME') ?: 'ConectaBarrio'));
+$smtpEncryption = strtolower(trim((string) (getenv('SMTP_ENCRYPTION') ?: 'tls')));
+
+define('SMTP_HOST', $smtpHost);
+define('SMTP_PORT', (int) ($smtpPortRaw !== '' ? $smtpPortRaw : '587'));
+define('SMTP_USER', $smtpUser);
+define('SMTP_PASS', $smtpPass);
+define('SMTP_FROM_EMAIL', $smtpFromEmail);
+define('SMTP_FROM_NAME', $smtpFromName);
+define('SMTP_ENCRYPTION', $smtpEncryption);
 
 // Configuración de Seguridad de Sesiones
 ini_set('session.cookie_httponly', 1);
