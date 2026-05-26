@@ -54,6 +54,11 @@ class AdminController extends Controller {
             return;
         }
 
+        $fromDomain = '';
+        if (strpos(SMTP_FROM_EMAIL, '@') !== false) {
+            $fromDomain = strtolower(substr(SMTP_FROM_EMAIL, strrpos(SMTP_FROM_EMAIL, '@') + 1));
+        }
+
         $data = [
             'title' => 'Correo de Prueba',
             'header_title' => 'Correo de Prueba (Brevo)',
@@ -62,7 +67,14 @@ class AdminController extends Controller {
             'default_to' => 'mbbprelle@gmail.com',
             'csrf_token' => $this->generateCsrfToken(),
             'success' => $_SESSION['success_msg'] ?? '',
-            'error' => $_SESSION['error_msg'] ?? ''
+            'error' => $_SESSION['error_msg'] ?? '',
+            'smtp_from' => SMTP_FROM_EMAIL,
+            'smtp_host' => SMTP_HOST,
+            'smtp_port' => SMTP_PORT,
+            'smtp_user' => SMTP_USER,
+            'smtp_encryption' => SMTP_ENCRYPTION,
+            'smtp_configured' => Mailer::isConfigured(),
+            'from_domain' => $fromDomain,
         ];
 
         unset($_SESSION['success_msg'], $_SESSION['error_msg']);

@@ -27,7 +27,7 @@ $smtpPortRaw = trim((string) (getenv('SMTP_PORT') ?: '587'));
 $smtpUser = trim((string) (getenv('SMTP_USER') ?: ''));
 $smtpPassEnv = getenv('SMTP_PASS');
 $smtpPass = trim((string) ($smtpPassEnv !== false ? $smtpPassEnv : ''));
-$smtpFromEmail = trim((string) (getenv('SMTP_FROM_EMAIL') ?: 'contacto@conectatubarrio.cl'));
+$smtpFromEmail = trim((string) (getenv('SMTP_FROM_EMAIL') ?: 'contacto@conectabarrio.cl'));
 $smtpFromName = trim((string) (getenv('SMTP_FROM_NAME') ?: 'ConectaBarrio'));
 $smtpEncryption = strtolower(trim((string) (getenv('SMTP_ENCRYPTION') ?: 'tls')));
 
