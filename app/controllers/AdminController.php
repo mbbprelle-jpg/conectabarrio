@@ -18,6 +18,57 @@ class AdminController extends Controller {
         $this->cierreModel = $this->model('CierreMensual');
     }
 
+    // Enviar correo de prueba (GET muestra formulario, POST envía)
+    public function email_prueba() {
+        if (!isset($_SESSION['user_id']) || ($_SESSION['user_rol'] ?? '') !== 'admin') {
+            header('location: ' . URLROOT . '/auth/login');
+            exit;
+        }
+
+        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $post = $this->sanitizePost();
+            $this->verifyCsrfToken($post['csrf_token'] ?? '');
+
+            $to = trim($post['to'] ?? 'mbbprelle@gmail.com');
+            if ($to === '') {
+                $to = 'mbbprelle@gmail.com';
+            }
+
+            if (!Mailer::isConfigured()) {
+                $_SESSION['error_msg'] = 'SMTP no configurado (Brevo). Defina SMTP_HOST, SMTP_USER y SMTP_PASS en Coolify.';
+                $this->redirect('/admin/email_prueba');
+                return;
+            }
+
+            $subject = 'Prueba de correo - ConectaBarrio (Brevo)';
+            $html = "<h2>Correo de prueba</h2><p>Si recibiste esto, el envío SMTP está funcionando.</p>";
+            $result = Mailer::send($to, $subject, $html, SMTP_FROM_EMAIL);
+
+            if ($result['ok']) {
+                $_SESSION['success_msg'] = 'Correo de prueba enviado a ' . $to . '. Revise también Transactional Logs en Brevo.';
+            } else {
+                $_SESSION['error_msg'] = 'No se pudo enviar el correo: ' . ($result['error'] ?? 'Error desconocido');
+            }
+
+            $this->redirect('/admin/email_prueba');
+            return;
+        }
+
+        $data = [
+            'title' => 'Correo de Prueba',
+            'header_title' => 'Correo de Prueba (Brevo)',
+            'header_subtitle' => 'Envío directo usando PHPMailer + SMTP relay de Brevo',
+            'active_menu' => 'dashboard',
+            'default_to' => 'mbbprelle@gmail.com',
+            'csrf_token' => $this->generateCsrfToken(),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? ''
+        ];
+
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/email_prueba', $data);
+    }
+
     // =========================================================================
     // 1. DASHBOARD FINANCIERO & FLUJO DE CAJA VISUAL
     // =========================================================================
