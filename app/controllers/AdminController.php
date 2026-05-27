@@ -7,6 +7,7 @@ class AdminController extends Controller {
     private $reunionModel;
     private $asistenciaModel;
     private $cierreModel;
+    private $db;
 
     public function __construct() {
         $this->userModel = $this->model('User');
@@ -16,6 +17,7 @@ class AdminController extends Controller {
         $this->reunionModel = $this->model('Reunion');
         $this->asistenciaModel = $this->model('Asistencia');
         $this->cierreModel = $this->model('CierreMensual');
+        $this->db = new Database();
     }
 
     // Enviar correo de prueba (GET muestra formulario, POST envía)
@@ -126,7 +128,6 @@ class AdminController extends Controller {
         $cuotasHistorial = $this->cuotaModel->getHistoryByJunta($juntaId);
 
         // Obtener listado de calles asociadas a la junta
-        $this->db = new Database();
         $this->db->query("SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC");
         $this->db->bind(':junta_id', $juntaId);
         $calles = $this->db->resultSet();
@@ -203,7 +204,6 @@ class AdminController extends Controller {
             }
 
             // Validar si el ID Socio ya está registrado en esta junta/organización
-            $this->db = new Database();
             $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio");
             $this->db->bind(':junta_id', $dataSocio['junta_id']);
             $this->db->bind(':id_socio', $idSocio);
@@ -250,7 +250,6 @@ class AdminController extends Controller {
                 return;
             }
 
-            $this->db = new Database();
             // Validar si la calle ya existe en la misma junta
             $this->db->query("SELECT * FROM calles WHERE junta_id = :junta_id AND nombre = :nombre");
             $this->db->bind(':junta_id', $juntaId);
@@ -280,7 +279,6 @@ class AdminController extends Controller {
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $juntaId = $_SESSION['user_junta_id'];
 
-            $this->db = new Database();
             // Verificar que la calle pertenece a la junta del administrador logueado
             $this->db->query("SELECT * FROM calles WHERE id = :id AND junta_id = :junta_id");
             $this->db->bind(':id', $id);
@@ -443,7 +441,6 @@ class AdminController extends Controller {
             }
 
             // 2. Procesar transacciones con integridad transaccional
-            $this->db = new Database();
             try {
                 $this->db->beginTransaction();
 
@@ -843,7 +840,6 @@ class AdminController extends Controller {
         ];
 
         // Obtener historial de reportes ya enviados
-        $this->db = new Database();
         $this->db->query("SELECT r.*, u.nombre as admin_nombre 
                          FROM reportes_municipalidad r 
                          LEFT JOIN usuarios u ON r.enviado_por = u.id 
@@ -885,7 +881,6 @@ class AdminController extends Controller {
             $tipoReporte = $post['tipo_reporte'] ?? 'Consolidado General';
             $datosJson = $post['datos_json'] ?? '{}';
 
-            $this->db = new Database();
             $this->db->query("INSERT INTO reportes_municipalidad (junta_id, tipo_reporte, datos_json, enviado_por) 
                              VALUES (:junta_id, :tipo_reporte, :datos_json, :enviado_por)");
             $this->db->bind(':junta_id', $juntaId);

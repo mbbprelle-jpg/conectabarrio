@@ -12,22 +12,39 @@ CREATE TABLE IF NOT EXISTS juntas_vecinos (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 2. Tabla de Usuarios (Maestros, Admins, Socios)
+-- 2. Tabla de Calles (jurisdicción por junta)
+CREATE TABLE IF NOT EXISTS calles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    junta_id INT NOT NULL,
+    nombre VARCHAR(150) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_calle_junta (junta_id, nombre),
+    FOREIGN KEY (junta_id) REFERENCES juntas_vecinos(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- 3. Tabla de Usuarios (Maestros, Admins, Socios)
 CREATE TABLE IF NOT EXISTS usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     junta_id INT NULL,
+    id_socio INT NULL,
     rut VARCHAR(12) NOT NULL UNIQUE,
     nombre VARCHAR(100) NOT NULL,
+    apellido_paterno VARCHAR(100) NULL,
+    apellido_materno VARCHAR(100) NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     rol ENUM('maestro', 'admin', 'socio') NOT NULL,
     telefono VARCHAR(20) NULL,
+    calle_id INT NULL,
+    numero_casa VARCHAR(20) NULL,
+    fecha_inicio DATE NULL,
     estado TINYINT(1) DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (junta_id) REFERENCES juntas_vecinos(id) ON DELETE SET NULL
+    FOREIGN KEY (junta_id) REFERENCES juntas_vecinos(id) ON DELETE SET NULL,
+    FOREIGN KEY (calle_id) REFERENCES calles(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- 3. Tabla de Configuración de Cuotas (Valores históricos y vigencia)
+-- 4. Tabla de Configuración de Cuotas (Valores históricos y vigencia)
 CREATE TABLE IF NOT EXISTS configuracion_cuotas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     junta_id INT NOT NULL,
@@ -37,7 +54,7 @@ CREATE TABLE IF NOT EXISTS configuracion_cuotas (
     FOREIGN KEY (junta_id) REFERENCES juntas_vecinos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4. Tabla de Transacciones (Manejo unificado de Caja: Cuotas, Ingresos Generales y Egresos)
+-- 5. Tabla de Transacciones (Manejo unificado de Caja: Cuotas, Ingresos Generales y Egresos)
 CREATE TABLE IF NOT EXISTS transacciones (
     id INT AUTO_INCREMENT PRIMARY KEY,
     junta_id INT NOT NULL,
@@ -56,7 +73,7 @@ CREATE TABLE IF NOT EXISTS transacciones (
     FOREIGN KEY (registrado_por) REFERENCES usuarios(id)
 ) ENGINE=InnoDB;
 
--- 5. Tabla de Reuniones
+-- 6. Tabla de Reuniones
 CREATE TABLE IF NOT EXISTS reuniones (
     id INT AUTO_INCREMENT PRIMARY KEY,
     junta_id INT NOT NULL,
@@ -68,7 +85,7 @@ CREATE TABLE IF NOT EXISTS reuniones (
     FOREIGN KEY (junta_id) REFERENCES juntas_vecinos(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 6. Tabla de Asistencias a Reuniones
+-- 7. Tabla de Asistencias a Reuniones
 CREATE TABLE IF NOT EXISTS asistencia (
     id INT AUTO_INCREMENT PRIMARY KEY,
     reunion_id INT NOT NULL,
@@ -80,7 +97,7 @@ CREATE TABLE IF NOT EXISTS asistencia (
     FOREIGN KEY (socio_id) REFERENCES usuarios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 7. Tabla de Reportes Enviados a la Municipalidad
+-- 8. Tabla de Reportes Enviados a la Municipalidad
 CREATE TABLE IF NOT EXISTS reportes_municipalidad (
     id INT AUTO_INCREMENT PRIMARY KEY,
     junta_id INT NOT NULL,
