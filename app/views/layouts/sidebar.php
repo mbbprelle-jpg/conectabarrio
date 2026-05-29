@@ -63,12 +63,6 @@
                     <span>Reuniones y Asistencia</span>
                 </a>
             </li>
-            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'municipalidad') ? 'active' : ''; ?>">
-                <a href="<?php echo URLROOT; ?>/admin/municipalidad">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-                    <span>Envío Municipalidad</span>
-                </a>
-            </li>
             <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'cierres') ? 'active' : ''; ?>">
                 <a href="<?php echo URLROOT; ?>/admin/cierres">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
