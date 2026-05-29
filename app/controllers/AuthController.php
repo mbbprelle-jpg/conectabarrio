@@ -69,6 +69,7 @@ class AuthController extends Controller {
         $_SESSION['user_email'] = $user->email;
         $_SESSION['user_rol'] = $user->rol;
         $_SESSION['user_junta_id'] = $user->junta_id;
+        $_SESSION['must_change'] = $user->must_change ?? false;
         
         // Obtener el nombre de la Junta de Vecinos si tiene una
         if ($user->junta_id) {
@@ -113,7 +114,13 @@ class AuthController extends Controller {
     }
 
     // Redirección centralizada por rol
+    // Redirigir según el rol del usuario
     private function redirectByRole($role) {
+        // Si el usuario debe cambiar la contraseña, redirigir al formulario de cambio
+        if (isset($_SESSION['must_change']) && $_SESSION['must_change']) {
+            $this->redirect('/auth/resetPassword');
+            exit;
+        }
         switch ($role) {
             case 'maestro':
                 $this->redirect('/maestro/dashboard');
@@ -128,4 +135,67 @@ class AuthController extends Controller {
                 $this->redirect('/auth/logout');
         }
     }
+
+    // Mostrar formulario de recuperación de contraseña
+    public function recover() {
+        // Si se envía el formulario (POST)
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $email = trim($_POST['email'] ?? '');
+            if (empty($email)) {
+                $data = ['title' => 'Recuperar Contraseña', 'error' => 'Ingrese su correo electrónico.'];
+                $this->view('auth/recover', $data);
+                return;
+            }
+            // Verificar si el email existe
+            $user = $this->userModel->findUserByEmail($email);
+            if (!$user) {
+                $data = ['title' => 'Recuperar Contraseña', 'error' => 'Correo no encontrado.'];
+                $this->view('auth/recover', $data);
+                return;
+            }
+            // Generar contraseña temporal
+            $tempPass = bin2hex(random_bytes(4)); // 8 caracteres hex
+            $hash = password_hash($tempPass, PASSWORD_DEFAULT);
+            // Guardar temp hash y flag en DB
+            $this->userModel->setTempPassword($user->id, $hash);
+            // Enviar email (usa configuración existente)
+            $subject = 'Recuperación de contraseña - ConectaBarrio';
+            $message = "Hola {$user->nombre},\n\nSu contraseña temporal es: {$tempPass}\nPor favor ingrese al portal y cambie su contraseña inmediatamente.\n\nSaludos,\nEquipo ConectaBarrio";
+            mail($email, $subject, $message);
+            $data = ['title' => 'Recuperar Contraseña', 'success' => 'Se ha enviado una contraseña temporal a su correo.'];
+            $this->view('auth/recover', $data);
+            return;
+        }
+        // Mostrar formulario
+        $data = ['title' => 'Recuperar Contraseña'];
+        $this->view('auth/recover', $data);
+    }
+
+    // Mostrar formulario para cambiar contraseña temporal
+    public function resetPassword() {
+        // Verificar que el usuario esté logueado y deba cambiar
+        if (!isset($_SESSION['user_id']) || empty($_SESSION['must_change'])) {
+            $this->redirect('/auth/login');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $newPass = trim($_POST['new_password'] ?? '');
+            $confirm = trim($_POST['confirm_password'] ?? '');
+            if (empty($newPass) || $newPass !== $confirm) {
+                $data = ['title' => 'Cambiar Contraseña', 'error' => 'Las contraseñas no coinciden o están vacías.'];
+                $this->view('auth/reset_password', $data);
+                return;
+            }
+            // Guardar nueva contraseña y quitar flag
+            $hash = password_hash($newPass, PASSWORD_DEFAULT);
+            $this->userModel->resetPassword($_SESSION['user_id'], $hash);
+            unset($_SESSION['must_change']);
+            $data = ['title' => 'Cambiar Contraseña', 'success' => 'Contraseña actualizada correctamente.'];
+            $this->view('auth/reset_password', $data);
+            return;
+        }
+        $data = ['title' => 'Cambiar Contraseña'];
+        $this->view('auth/reset_password', $data);
+    }
+
 }

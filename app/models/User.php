@@ -85,17 +85,23 @@ class User extends Model {
         return $this->db->execute();
     }
 
-    // Cambiar / Resetear contraseña
-    public function resetPassword($userId, $newPassword) {
-        $this->db->query("UPDATE usuarios SET password = :password WHERE id = :id");
-        
-        $hashed_password = password_hash($newPassword, PASSWORD_BCRYPT);
-        
-        $this->db->bind(':password', $hashed_password);
+    // Establecer contraseña temporal y marcar para cambio obligatorio
+    public function setTempPassword($userId, $hash) {
+        $this->db->query("UPDATE usuarios SET password = :pwd, must_change = 1 WHERE id = :id");
+        $this->db->bind(':pwd', $hash);
         $this->db->bind(':id', $userId);
-
         return $this->db->execute();
     }
+
+    // Cambiar contraseña definitiva y quitar flag de cambio obligatorio
+    public function resetPassword($userId, $newPassword) {
+        $this->db->query("UPDATE usuarios SET password = :pwd, must_change = 0 WHERE id = :id");
+        $hashed = password_hash($newPassword, PASSWORD_BCRYPT);
+        $this->db->bind(':pwd', $hashed);
+        $this->db->bind(':id', $userId);
+        return $this->db->execute();
+    }
+
 
     // Obtener socios asociados a una Junta de Vecinos
     public function getSociosByJunta($juntaId) {

@@ -166,7 +166,7 @@
 <!-- Modal de Autenticación (Glassmorphism Premium) -->
 <div class="auth-modal-overlay <?php echo !empty($data['error']) ? 'active' : ''; ?>" id="authModalOverlay">
     <div class="auth-modal">
-        <!-- Botón de Cerrar -->
+        <!-- Botón de Cerrar (solo X) -->
         <button class="modal-close" id="modalCloseBtn">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
@@ -221,6 +221,11 @@
                        required>
             </div>
 
+            <!-- Enlace de recuperación de contraseña -->
+            <div class="text-center" style="margin-top:0.5rem;">
+                <a href="<?php echo URLROOT; ?>/auth/recover" class="link-underline link-primary" style="font-size:0.85rem;">¿Olvidó su contraseña?</a>
+            </div>
+
             <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 0.85rem;">
                 Ingresar al Portal
             </button>
@@ -241,6 +246,28 @@
         card.style.setProperty('--x', `${x}px`);
         card.style.setProperty('--y', `${y}px`);
     }
+
+    // Cerrar modal solo con botón X o tecla ESC
+    const modalOverlay = document.getElementById('authModalOverlay');
+    const closeBtn = document.getElementById('modalCloseBtn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modalOverlay.classList.remove('active');
+        });
+    }
+    // Evitar cierre al hacer click fuera del modal (no hacemos nada)
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+            // No cerrar, simplemente consumir el evento
+            e.stopPropagation();
+        }
+    });
+    // Cerrar con ESC
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
+            modalOverlay.classList.remove('active');
+        }
+    });
 
     // Cambiar opacidad de la Navbar al hacer Scroll
     window.addEventListener('scroll', function() {
