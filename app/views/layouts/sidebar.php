@@ -37,7 +37,13 @@
                     <span>Nueva Organización</span>
                 </a>
             </li>
-        <?php elseif ($_SESSION['user_rol'] === 'admin'): ?>
+                    <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'payments') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/maestro/payments">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" ry="2"></rect><line x1="3" y1="11" x2="21" y2="11"></line></svg>
+                    <span>Gestión de Pagos</span>
+                </a>
+            </li>
+            <?php elseif ($_SESSION['user_rol'] === 'admin'): ?>
             <!-- Menú Perfil Admin -->
             <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'dashboard') ? 'active' : ''; ?>">
                 <a href="<?php echo URLROOT; ?>/admin/dashboard">
