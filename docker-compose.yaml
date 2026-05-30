@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: conectabarrio_web
+    ports:
+      # Mapeamos el puerto interno 80 del contenedor a un puerto libre del host (8080)
+      - "8080:80"
+    environment:
+      # Cargamos variables de entorno desde .env (o .env.example para desarrollo)
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - DB_NAME=${DB_NAME}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME}
+      - SMTP_ENCRYPTION=${SMTP_ENCRYPTION}
+    volumes:
+      # Montamos el código fuente para que los cambios locales se reflejen (opcional en producción)
+      - .:/var/www/html
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
