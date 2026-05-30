@@ -1,10 +1,16 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    
-    # Detener la reescritura si es un archivo o directorio físico que ya existe
+
+    # Excluir archivos y directorios reales (CSS, JS, imágenes, fuentes)
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Detener la reescritura si es un archivo o directorio físico que ya no existe
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    
+
     # Redirigir el resto al front controller
     RewriteRule ^(.*)$ index.php?url=$1 [QSA,L]
 </IfModule>
