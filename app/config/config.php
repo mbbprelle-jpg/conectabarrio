@@ -16,7 +16,7 @@ $resolvedUrl = '';
 if (strpos($_SERVER['REQUEST_URI'] ?? '', '/CONECTABARRIO') === 0 || strpos($_SERVER['SCRIPT_NAME'] ?? '', '/CONECTABARRIO') === 0) {
     $resolvedUrl = '/CONECTABARRIO';
 }
-<?php define('URLROOT', 'https://conectabarrio.cl'); ?>
+define('URLROOT', 'https://conectabarrio.cl');
 
 // Nombre del sitio
 define('SITENAME', 'CONECTABARRIO');
