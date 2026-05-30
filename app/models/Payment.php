@@ -49,13 +49,46 @@ class Payment extends Model {
 
     // Resumen de pagos (al día vs vencidos)
     public function summarizeByOrg($orgId) {
-        $this->db->query("SELECT COUNT(*) as total, SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count FROM payments WHERE org_id = :org_id");
+        $this->db->query("SELECT
+            SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count,
+            SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue_count
+            FROM payments WHERE org_id = :org_id");
         $this->db->bind(':org_id', $orgId);
         $res = $this->db->single();
-        $paid = $res ? (int)$res->paid_count : 0;
-        $total = $res ? (int)$res->total : 0;
-        $overdue = $total - $paid;
-        return ['paid' => $paid, 'overdue' => $overdue];
+        return [
+            'paid' => $res ? (int)$res->paid_count : 0,
+            'overdue' => $res ? (int)$res->overdue_count : 0
+        ];
+    }
+
+    // Todos los pagos con nombre de organización (vista Maestro)
+    public function getAllWithOrg() {
+        $this->db->query("SELECT p.*, j.nombre AS org_nombre
+            FROM payments p
+            INNER JOIN juntas_vecinos j ON j.id = p.org_id
+            ORDER BY p.due_date DESC");
+        return $this->db->resultSet();
+    }
+
+    public function getById($id) {
+        $this->db->query("SELECT p.*, j.nombre AS org_nombre
+            FROM payments p
+            INNER JOIN juntas_vecinos j ON j.id = p.org_id
+            WHERE p.id = :id");
+        $this->db->bind(':id', $id);
+        return $this->db->single();
+    }
+
+    public function summarizeGlobal() {
+        $this->db->query("SELECT
+            SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_count,
+            SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue_count
+            FROM payments");
+        $res = $this->db->single();
+        return [
+            'paid' => $res ? (int)$res->paid_count : 0,
+            'overdue' => $res ? (int)$res->overdue_count : 0
+        ];
     }
 }
 ?>
