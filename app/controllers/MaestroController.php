@@ -1,11 +1,13 @@
 <?php
 class MaestroController extends Controller {
     private $juntaModel;
+    private $paymentModel;
     private $userModel;
     private $cuotaModel;
 
     public function __construct() {
         $this->juntaModel = $this->model('JuntaVecinos');
+        $this->paymentModel = $this->model('Payment');
         $this->userModel = $this->model('User');
         $this->cuotaModel = $this->model('CuotaConfig');
     }
@@ -181,4 +183,64 @@ class MaestroController extends Controller {
         }
         $this->redirect('/maestro/dashboard');
     }
+    // ==================== Payments UI ====================
+    public function payments() {
+        $data = [
+            'title' => 'Gestión de Pagos',
+            'header_title' => 'Pagos',
+            'header_subtitle' => 'Control de pagos de la organización',
+            'active_menu' => 'payments'
+        ];
+        $this->view('maestro/payments', $data);
+    }
+
+    public function paymentsData() {
+        header('Content-Type: application/json');
+        $orgId = $_SESSION['user_junta_id'] ?? 0;
+        $summary = $this->paymentModel->summarizeByOrg($orgId);
+        $payments = $this->paymentModel->getAllByOrg($orgId);
+        echo json_encode(['summary' => $summary, 'payments' => $payments]);
+    }
+
+    public function payment($id = null) {
+        $method = $_SERVER['REQUEST_METHOD'];
+        header('Content-Type: application/json');
+        $orgId = $_SESSION['user_junta_id'] ?? 0;
+        if ($method === 'GET' && $id) {
+            // Obtener pago específico
+            $payments = $this->paymentModel->getAllByOrg($orgId);
+            foreach ($payments as $p) {
+                if ((int)$p['id'] === (int)$id) {
+                    echo json_encode($p);
+                    return;
+                }
+            }
+            http_response_code(404);
+            echo json_encode(['error' => 'Pago no encontrado']);
+            return;
+        }
+        $payload = json_decode(file_get_contents('php://input'), true);
+        if ($method === 'POST') {
+            $payload['org_id'] = $orgId;
+            $ok = $this->paymentModel->create($payload);
+            http_response_code($ok ? 201 : 400);
+            echo json_encode(['ok' => $ok]);
+            return;
+        }
+        if ($method === 'PUT' && $id) {
+            $ok = $this->paymentModel->update($id, $payload);
+            http_response_code($ok ? 200 : 400);
+            echo json_encode(['ok' => $ok]);
+            return;
+        }
+        if ($method === 'DELETE' && $id) {
+            $ok = $this->paymentModel->delete($id);
+            http_response_code($ok ? 200 : 400);
+            echo json_encode(['ok' => $ok]);
+            return;
+        }
+        http_response_code(405);
+        echo json_encode(['error' => 'Método no permitido']);
+    }
+
 }

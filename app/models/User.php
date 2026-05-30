@@ -93,6 +93,15 @@ class User extends Model {
         return $this->db->execute();
     }
 
+    // Asignar o revocar rol admin
+    public function setAdmin($userId, $isAdmin) {
+        $role = $isAdmin ? 'admin' : 'socio';
+        $this->db->query("UPDATE usuarios SET rol = :rol WHERE id = :id");
+        $this->db->bind(':rol', $role);
+        $this->db->bind(':id', $userId);
+        return $this->db->execute();
+    }
+
     // Cambiar contraseña definitiva y quitar flag de cambio obligatorio
     public function resetPassword($userId, $newPassword) {
         $this->db->query("UPDATE usuarios SET password = :pwd, must_change = 0 WHERE id = :id");
