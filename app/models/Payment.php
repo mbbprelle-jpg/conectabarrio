@@ -1,5 +1,19 @@
 <?php
 class Payment extends Model {
+    private static $hasMesPeriodo = null;
+
+    private function hasMesPeriodoColumn() {
+        if (self::$hasMesPeriodo === null) {
+            try {
+                $this->db->query('SELECT mes_periodo FROM payments LIMIT 1');
+                $this->db->execute();
+                self::$hasMesPeriodo = true;
+            } catch (Exception $e) {
+                self::$hasMesPeriodo = false;
+            }
+        }
+        return self::$hasMesPeriodo;
+    }
 
     public static function monthlyAmountForOrg($junta) {
         if (!empty($junta->precio_anual) && (int)$junta->precio_anual > 0) {
@@ -11,13 +25,22 @@ class Payment extends Model {
     }
 
     public function getByOrgMonth($orgId, $mes) {
-        $this->db->query("SELECT * FROM payments
-            WHERE org_id = :org_id
-            AND (mes_periodo = :mes OR DATE_FORMAT(due_date, '%Y-%m') = :mes2)
-            LIMIT 1");
+        if ($this->hasMesPeriodoColumn()) {
+            $this->db->query("SELECT * FROM payments
+                WHERE org_id = :org_id
+                AND (mes_periodo = :mes OR DATE_FORMAT(due_date, '%Y-%m') = :mes2)
+                LIMIT 1");
+        } else {
+            $this->db->query("SELECT * FROM payments
+                WHERE org_id = :org_id
+                AND DATE_FORMAT(due_date, '%Y-%m') = :mes
+                LIMIT 1");
+        }
         $this->db->bind(':org_id', $orgId);
         $this->db->bind(':mes', $mes);
-        $this->db->bind(':mes2', $mes);
+        if ($this->hasMesPeriodoColumn()) {
+            $this->db->bind(':mes2', $mes);
+        }
         return $this->db->single();
     }
 
@@ -28,6 +51,8 @@ class Payment extends Model {
 
     public function registerMonths($orgId, array $meses, $fechaPago, $monthlyAmount) {
         $registered = 0;
+        $useMesPeriodo = $this->hasMesPeriodoColumn();
+
         foreach ($meses as $mes) {
             $mes = trim($mes);
             if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
@@ -41,19 +66,32 @@ class Payment extends Model {
             $dueDate = date('Y-m-t', strtotime($mes . '-01'));
 
             if ($existing) {
-                $this->db->query("UPDATE payments
-                    SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid', mes_periodo = :mes_periodo
-                    WHERE id = :id");
+                if ($useMesPeriodo) {
+                    $this->db->query("UPDATE payments
+                        SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid', mes_periodo = :mes_periodo
+                        WHERE id = :id");
+                    $this->db->bind(':mes_periodo', $mes);
+                } else {
+                    $this->db->query("UPDATE payments
+                        SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid'
+                        WHERE id = :id");
+                }
                 $this->db->bind(':amount', $monthlyAmount);
                 $this->db->bind(':due_date', $dueDate);
                 $this->db->bind(':paid_at', $fechaPago);
-                $this->db->bind(':mes_periodo', $mes);
                 $this->db->bind(':id', $existing->id);
-            } else {
+            } elseif ($useMesPeriodo) {
                 $this->db->query("INSERT INTO payments (org_id, mes_periodo, amount, due_date, paid_at, status)
                     VALUES (:org_id, :mes_periodo, :amount, :due_date, :paid_at, 'paid')");
                 $this->db->bind(':org_id', $orgId);
                 $this->db->bind(':mes_periodo', $mes);
+                $this->db->bind(':amount', $monthlyAmount);
+                $this->db->bind(':due_date', $dueDate);
+                $this->db->bind(':paid_at', $fechaPago);
+            } else {
+                $this->db->query("INSERT INTO payments (org_id, amount, due_date, paid_at, status)
+                    VALUES (:org_id, :amount, :due_date, :paid_at, 'paid')");
+                $this->db->bind(':org_id', $orgId);
                 $this->db->bind(':amount', $monthlyAmount);
                 $this->db->bind(':due_date', $dueDate);
                 $this->db->bind(':paid_at', $fechaPago);
@@ -67,10 +105,14 @@ class Payment extends Model {
     }
 
     public function getAllWithOrg() {
+        $orderExpr = $this->hasMesPeriodoColumn()
+            ? "COALESCE(p.mes_periodo, DATE_FORMAT(p.due_date, '%Y-%m'))"
+            : "DATE_FORMAT(p.due_date, '%Y-%m')";
+
         $this->db->query("SELECT p.*, j.nombre AS org_nombre
             FROM payments p
             INNER JOIN juntas_vecinos j ON j.id = p.org_id
-            ORDER BY COALESCE(p.mes_periodo, DATE_FORMAT(p.due_date, '%Y-%m')) DESC, p.id DESC");
+            ORDER BY {$orderExpr} DESC, p.id DESC");
         return $this->db->resultSet();
     }
 
@@ -88,4 +130,3 @@ class Payment extends Model {
         ];
     }
 }
-?>

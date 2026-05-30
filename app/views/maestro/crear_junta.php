@@ -65,7 +65,7 @@
                 <label for="junta_mes_inicio" class="form-label">Mes de Inicio de Actividades *</label>
                 <input type="month" name="junta_mes_inicio" id="junta_mes_inicio" class="form-control" value="<?php echo htmlspecialchars($data['junta_mes_inicio'] ?? date('Y-m')); ?>" required>
                 <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem;">
-                    Define desde qué mes se iniciarán las gestiones de cobro de cuotas y cierres financieros de esta organización.
+                    Desde qué mes la organización gestionará cuotas de socios, cierres mensuales y actividades internas.
                 </small>
             </div>
 
@@ -83,6 +83,14 @@
                 <input type="number" name="junta_precio_anual" id="junta_precio_anual" class="form-control" value="<?php echo htmlspecialchars($data['junta_precio_anual'] ?? '59880'); ?>" min="0" required>
                 <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem;">
                     Se autocalcula según el plan seleccionado ($Monto/mes * 12), pero puedes editarlo libremente para pactar precios especiales.
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="junta_suscripcion_mes_inicio" class="form-label">Mes de Inicio de Suscripción ConectaBarrio *</label>
+                <input type="month" name="junta_suscripcion_mes_inicio" id="junta_suscripcion_mes_inicio" class="form-control" value="<?php echo htmlspecialchars($data['junta_suscripcion_mes_inicio'] ?? date('Y-m')); ?>" required>
+                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem;">
+                    Desde qué mes esta organización debe pagar la suscripción del plan comercial a ConectaBarrio.
                 </small>
             </div>
 

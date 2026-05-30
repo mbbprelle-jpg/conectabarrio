@@ -54,6 +54,7 @@ class MaestroController extends Controller {
             'admin_email' => '',
             'admin_telefono' => '',
             'junta_mes_inicio' => date('Y-m'),
+            'junta_suscripcion_mes_inicio' => date('Y-m'),
             'junta_plan' => 'basico',
             'junta_precio_anual' => 59880,
             'cuota_inicial' => '5000',
@@ -77,6 +78,7 @@ class MaestroController extends Controller {
             $data['admin_email'] = $post['admin_email'] ?? '';
             $data['admin_telefono'] = $post['admin_telefono'] ?? '';
             $data['junta_mes_inicio'] = $post['junta_mes_inicio'] ?? date('Y-m');
+            $data['junta_suscripcion_mes_inicio'] = $post['junta_suscripcion_mes_inicio'] ?? date('Y-m');
             $data['junta_plan'] = $post['junta_plan'] ?? 'basico';
             $data['junta_precio_anual'] = isset($post['junta_precio_anual']) ? (int)$post['junta_precio_anual'] : 59880;
             $data['cuota_inicial'] = $post['cuota_inicial'] ?? '0';
@@ -96,7 +98,7 @@ class MaestroController extends Controller {
                 $db->beginTransaction();
 
                 // 1. Crear Junta de Vecinos/Organización
-                $this->juntaModel->db->query("INSERT INTO juntas_vecinos (nombre, tipo, rut_junta, direccion, comuna, mes_inicio, plan, precio_anual) VALUES (:nombre, :tipo, :rut_junta, :direccion, :comuna, :mes_inicio, :plan, :precio_anual)");
+                $this->juntaModel->db->query("INSERT INTO juntas_vecinos (nombre, tipo, rut_junta, direccion, comuna, mes_inicio, plan, precio_anual, mes_inicio_suscripcion) VALUES (:nombre, :tipo, :rut_junta, :direccion, :comuna, :mes_inicio, :plan, :precio_anual, :mes_inicio_suscripcion)");
                 $this->juntaModel->db->bind(':nombre', $data['junta_nombre']);
                 $this->juntaModel->db->bind(':tipo', $data['junta_tipo']);
                 $this->juntaModel->db->bind(':rut_junta', $data['junta_rut']);
@@ -105,6 +107,7 @@ class MaestroController extends Controller {
                 $this->juntaModel->db->bind(':mes_inicio', $data['junta_mes_inicio']);
                 $this->juntaModel->db->bind(':plan', $data['junta_plan']);
                 $this->juntaModel->db->bind(':precio_anual', $data['junta_precio_anual']);
+                $this->juntaModel->db->bind(':mes_inicio_suscripcion', $data['junta_suscripcion_mes_inicio']);
                 $this->juntaModel->db->execute();
                 $juntaId = $this->juntaModel->db->lastInsertId();
 
@@ -198,71 +201,96 @@ class MaestroController extends Controller {
     }
 
     public function get_org_pagos($orgId = null) {
-        header('Content-Type: application/json');
-        $orgId = (int)$orgId;
-        $junta = $this->juntaModel->getJuntaById($orgId);
-        if (!$junta) {
-            echo json_encode(['success' => false, 'message' => 'Organización no encontrada']);
-            return;
-        }
+        header('Content-Type: application/json; charset=UTF-8');
 
-        $startMonth = !empty($junta->mes_inicio) ? $junta->mes_inicio : substr($junta->created_at ?? date('Y-m-d'), 0, 7);
-        $currentMonthStr = date('Y-m');
-        $monthlyAmount = Payment::monthlyAmountForOrg($junta);
+        try {
+            $orgId = (int)$orgId;
+            if ($orgId <= 0) {
+                echo json_encode(['success' => false, 'message' => 'ID de organización inválido']);
+                return;
+            }
 
-        $startYear = (int)substr($startMonth, 0, 4);
-        $startMonthNum = (int)substr($startMonth, 5, 2);
-        $endYear = (int)date('Y') + 1;
-        $endMonthNum = (int)date('m');
+            $junta = $this->juntaModel->getJuntaById($orgId);
+            if (!$junta) {
+                echo json_encode(['success' => false, 'message' => 'Organización no encontrada']);
+                return;
+            }
 
-        $y = $startYear;
-        $m = $startMonthNum;
-        $meses = [];
+            $startMonth = $this->resolveSubscriptionStartMonth($junta);
+            $currentMonthStr = date('Y-m');
+            $monthlyAmount = Payment::monthlyAmountForOrg($junta);
 
-        while ($y < $endYear || ($y == $endYear && $m <= $endMonthNum)) {
-            $mes = sprintf('%04d-%02d', $y, $m);
-            $record = $this->paymentModel->getByOrgMonth($orgId, $mes);
+            $startYear = (int)substr($startMonth, 0, 4);
+            $startMonthNum = (int)substr($startMonth, 5, 2);
+            $endYear = (int)date('Y') + 1;
+            $endMonthNum = (int)date('m');
 
-            if ($record && $record->status === 'paid') {
-                $estado = 'pagado';
-                $descripcion = 'Pagado el ' . date('d-m-Y', strtotime($record->paid_at ?? $record->due_date));
-                $monto = (int)$record->amount;
-            } else {
-                $monto = $monthlyAmount;
-                if ($mes <= $currentMonthStr) {
-                    $estado = 'pendiente';
-                    $descripcion = '';
+            $y = $startYear;
+            $m = $startMonthNum;
+            $meses = [];
+
+            while ($y < $endYear || ($y == $endYear && $m <= $endMonthNum)) {
+                $mes = sprintf('%04d-%02d', $y, $m);
+                $record = $this->paymentModel->getByOrgMonth($orgId, $mes);
+
+                if ($record && $record->status === 'paid') {
+                    $estado = 'pagado';
+                    $descripcion = 'Pagado el ' . date('d-m-Y', strtotime($record->paid_at ?? $record->due_date));
+                    $monto = (int)$record->amount;
                 } else {
-                    $estado = 'futuro';
+                    $monto = $monthlyAmount;
+                    $estado = ($mes <= $currentMonthStr) ? 'pendiente' : 'futuro';
                     $descripcion = '';
+                }
+
+                $meses[] = [
+                    'mes' => $mes,
+                    'monto' => $monto,
+                    'estado' => $estado,
+                    'descripcion' => $descripcion
+                ];
+
+                $m++;
+                if ($m > 12) {
+                    $m = 1;
+                    $y++;
                 }
             }
 
-            $meses[] = [
-                'mes' => $mes,
-                'monto' => $monto,
-                'estado' => $estado,
-                'descripcion' => $descripcion
-            ];
+            echo json_encode([
+                'success' => true,
+                'org' => [
+                    'id' => (int)$junta->id,
+                    'nombre' => $junta->nombre,
+                    'plan' => $junta->plan ?? 'basico',
+                    'mes_inicio_suscripcion' => $startMonth,
+                    'monto_mensual' => $monthlyAmount
+                ],
+                'meses' => $meses
+            ], JSON_UNESCAPED_UNICODE);
+        } catch (Exception $e) {
+            http_response_code(500);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Error al cargar meses: ' . $e->getMessage()
+            ], JSON_UNESCAPED_UNICODE);
+        }
+    }
 
-            $m++;
-            if ($m > 12) {
-                $m = 1;
-                $y++;
+    private function resolveSubscriptionStartMonth($junta) {
+        if (!empty($junta->mes_inicio_suscripcion)) {
+            $candidate = substr((string)$junta->mes_inicio_suscripcion, 0, 7);
+            if (preg_match('/^\d{4}-\d{2}$/', $candidate)) {
+                return $candidate;
             }
         }
-
-        echo json_encode([
-            'success' => true,
-            'org' => [
-                'id' => $junta->id,
-                'nombre' => $junta->nombre,
-                'plan' => $junta->plan ?? 'basico',
-                'mes_inicio' => $startMonth,
-                'monto_mensual' => $monthlyAmount
-            ],
-            'meses' => $meses
-        ]);
+        if (!empty($junta->created_at)) {
+            $candidate = substr((string)$junta->created_at, 0, 7);
+            if (preg_match('/^\d{4}-\d{2}$/', $candidate)) {
+                return $candidate;
+            }
+        }
+        return date('Y-m');
     }
 
     public function registrar_pago_org() {

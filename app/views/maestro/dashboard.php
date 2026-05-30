@@ -443,15 +443,26 @@ document.addEventListener('DOMContentLoaded', function() {
         pagoQuickActions.style.display = 'none';
         pagoMontoAlert.style.display = 'none';
 
-        fetch('<?php echo URLROOT; ?>/maestro/get_org_pagos/' + orgId)
-            .then(r => r.json())
-            .then(data => {
-                if (!data.success) {
-                    pagoMesesContainer.innerHTML = '<p style="color: var(--danger); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Error al cargar meses</p>';
-                    return;
+        fetch('<?php echo URLROOT; ?>/maestro/get_org_pagos/' + orgId, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(async r => {
+                const raw = await r.text();
+                let data;
+                try {
+                    data = JSON.parse(raw);
+                } catch (e) {
+                    throw new Error('Respuesta inválida del servidor (HTTP ' + r.status + ')');
                 }
+                if (!r.ok || !data.success) {
+                    throw new Error(data.message || ('Error HTTP ' + r.status));
+                }
+                return data;
+            })
+            .then(data => {
 
-                pagoPlanInfo.textContent = 'Plan ' + data.org.plan + ' · $' + data.org.monto_mensual.toLocaleString('es-CL') + ' / mes · Desde ' + data.org.mes_inicio;
+                pagoPlanInfo.textContent = 'Plan ' + data.org.plan + ' · $' + data.org.monto_mensual.toLocaleString('es-CL') + ' / mes · Suscripción desde ' + data.org.mes_inicio_suscripcion;
                 pagoMesesContainer.innerHTML = '';
 
                 const pendingGrid = document.createElement('div');
@@ -488,8 +499,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     pagoQuickActions.style.display = 'flex';
                 }
             })
-            .catch(() => {
-                pagoMesesContainer.innerHTML = '<p style="color: var(--danger); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Error de conexión</p>';
+            .catch(err => {
+                pagoMesesContainer.innerHTML = '<p style="color: var(--danger); text-align: center; font-size: 0.85rem; margin: 1rem 0;">' + (err.message || 'Error de conexión') + '</p>';
             });
     }
 
