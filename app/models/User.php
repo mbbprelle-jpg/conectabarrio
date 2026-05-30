@@ -112,6 +112,22 @@ class User extends Model {
     }
 
 
+    // Obtener administradores activos de una organización
+    public function getAdminsByJunta($juntaId) {
+        $this->db->query("SELECT DISTINCT u.* FROM usuarios u
+            INNER JOIN usuario_membresias m ON m.usuario_id = u.id
+            WHERE m.junta_id = :junta_id AND m.rol = 'admin' AND m.estado = 1 AND u.estado = 1
+            ORDER BY u.nombre ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        $admins = $this->db->resultSet();
+        if (!empty($admins)) {
+            return $admins;
+        }
+        $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'admin' AND estado = 1 ORDER BY nombre ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
     // Obtener socios asociados a una Junta de Vecinos
     public function getSociosByJunta($juntaId) {
         $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1 ORDER BY nombre ASC");

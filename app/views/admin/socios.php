@@ -1,4 +1,9 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
+<?php
+require_once APPROOT . '/core/AuthContext.php';
+$isFullAdmin = AuthContext::isFullAdmin();
+$membresiasMap = $data['membresias_map'] ?? [];
+?>
 
 <!-- Mensajes Flash de Éxito / Error -->
 <?php if (!empty($data['success'])): ?>
@@ -40,6 +45,7 @@
                             <th>Nombre Completo</th>
                             <th>RUT</th>
                             <th>Contacto / Email</th>
+                            <?php if ($isFullAdmin): ?><th>Cargo / Permisos</th><?php endif; ?>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -61,6 +67,36 @@
                                         Socio desde: <?php echo date('d-m-Y', strtotime($socio->fecha_inicio)); ?>
                                     </div>
                                 </td>
+                                <?php if ($isFullAdmin):
+                                    $mem = $membresiasMap[$socio->id] ?? null;
+                                    $cargo = $mem->cargo ?? '';
+                                    $permSocios = !empty($mem->permiso_gestion_socios) || !empty($mem->permiso_todos);
+                                    $permPagos = !empty($mem->permiso_registro_pagos) || !empty($mem->permiso_todos);
+                                ?>
+                                <td>
+                                    <?php if ($cargo): ?>
+                                        <span class="badge badge-info" style="margin-bottom: 0.25rem; display: inline-block;"><?php echo htmlspecialchars($cargo); ?></span><br>
+                                    <?php endif; ?>
+                                    <small style="color: var(--text-muted); font-size: 0.72rem;">
+                                        <?php if ($permSocios): ?>Socios<?php endif; ?>
+                                        <?php if ($permSocios && $permPagos): ?> · <?php endif; ?>
+                                        <?php if ($permPagos): ?>Pagos<?php endif; ?>
+                                        <?php if (!$cargo && !$permSocios && !$permPagos): ?>Sin delegación<?php endif; ?>
+                                    </small>
+                                    <div style="margin-top: 0.35rem;">
+                                        <button type="button" class="btn btn-secondary btn-sm btn-delegar-socio"
+                                                data-id="<?php echo (int)$socio->id; ?>"
+                                                data-nombre="<?php echo htmlspecialchars($socio->nombre); ?>"
+                                                data-cargo="<?php echo htmlspecialchars($cargo); ?>"
+                                                data-perm-socios="<?php echo $permSocios ? '1' : '0'; ?>"
+                                                data-perm-pagos="<?php echo $permPagos ? '1' : '0'; ?>"
+                                                data-perm-todos="<?php echo !empty($mem->permiso_todos) ? '1' : '0'; ?>"
+                                                style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">
+                                            Delegar
+                                        </button>
+                                    </div>
+                                </td>
+                                <?php endif; ?>
                                 <td>
                                     <div style="display: flex; gap: 0.5rem;">
                                         
@@ -334,5 +370,77 @@
     </div>
 
 </div>
+
+<?php if ($isFullAdmin): ?>
+<div id="delegacionModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 480px;">
+        <button type="button" id="closeDelegacionModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.25rem;">Delegar cargo y permisos</h3>
+        <p id="delegacion_socio_nombre" style="color: var(--primary); font-weight: 600; margin-bottom: 1.25rem;"></p>
+        <form action="<?php echo URLROOT; ?>/admin/socio_delegacion" method="POST">
+            <input type="hidden" name="usuario_id" id="delegacion_usuario_id">
+            <div class="form-group">
+                <label class="form-label">Cargo en la directiva</label>
+                <select name="cargo" id="delegacion_cargo" class="form-control">
+                    <option value="">Sin cargo</option>
+                    <option value="SECRETARIO">Secretario</option>
+                    <option value="TESORERO">Tesorero</option>
+                    <option value="DIRECTOR">Director</option>
+                </select>
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <label class="form-label">Permisos delegados</label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                    <input type="checkbox" name="permiso_gestion_socios" id="delegacion_perm_socios" value="1">
+                    Gestionar socios (incorporar, editar padrón)
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                    <input type="checkbox" name="permiso_registro_pagos" id="delegacion_perm_pagos" value="1">
+                    Registrar pagos y movimientos de caja
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                    <input type="checkbox" name="permiso_todos" id="delegacion_perm_todos" value="1">
+                    Todos los permisos (director)
+                </label>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
+                Los permisos solo aplican si usted los otorga explícitamente. El secretario y tesorero pueden recibir permisos acordes a su cargo.
+            </p>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" id="cancelDelegacionModal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('delegacionModal');
+    const open = m => { if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; } };
+    const close = m => { if (m) { m.style.display = 'none'; document.body.style.overflow = ''; } };
+    document.querySelectorAll('.btn-delegar-socio').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('delegacion_usuario_id').value = this.dataset.id;
+            document.getElementById('delegacion_socio_nombre').textContent = this.dataset.nombre;
+            document.getElementById('delegacion_cargo').value = this.dataset.cargo || '';
+            document.getElementById('delegacion_perm_socios').checked = this.dataset.permSocios === '1';
+            document.getElementById('delegacion_perm_pagos').checked = this.dataset.permPagos === '1';
+            document.getElementById('delegacion_perm_todos').checked = this.dataset.permTodos === '1';
+            open(modal);
+        });
+    });
+    document.getElementById('closeDelegacionModal')?.addEventListener('click', () => close(modal));
+    document.getElementById('cancelDelegacionModal')?.addEventListener('click', () => close(modal));
+    modal?.addEventListener('click', e => { if (e.target === modal) close(modal); });
+    document.getElementById('delegacion_cargo')?.addEventListener('change', function() {
+        if (this.value === 'SECRETARIO') document.getElementById('delegacion_perm_socios').checked = true;
+        if (this.value === 'TESORERO') document.getElementById('delegacion_perm_pagos').checked = true;
+        if (this.value === 'DIRECTOR') document.getElementById('delegacion_perm_todos').checked = true;
+    });
+});
+</script>
+<?php endif; ?>
 
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>

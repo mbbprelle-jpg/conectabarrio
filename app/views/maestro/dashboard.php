@@ -152,6 +152,13 @@
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                                         Configurar Plan
                                     </button>
+                                    <button class="btn btn-secondary btn-sm btn-gestionar-equipo"
+                                            data-id="<?php echo $junta->id; ?>"
+                                            data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>"
+                                            style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                        Equipo
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -278,6 +285,46 @@
     </div>
 </div>
 
+<!-- Modal Gestionar Equipo -->
+<div id="equipoModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 640px;">
+        <button id="closeEquipoModalBtn" type="button" style="position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+            <h3 style="font-family: var(--font-heading); color: var(--text-main); font-size: 1.35rem; margin-bottom: 0.25rem;">Gestionar Equipo</h3>
+            <p id="equipo_modal_org_nombre" style="color: var(--primary); font-weight: bold; font-size: 0.95rem; margin: 0;">Organización</p>
+        </div>
+        <div id="equipo_list_container" style="max-height: 240px; overflow-y: auto; margin-bottom: 1.5rem;">
+            <p style="color: var(--text-muted); text-align: center;">Cargando equipo...</p>
+        </div>
+        <hr style="border-color: var(--border-color); margin: 1.25rem 0;">
+        <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem;">Agregar administrador</h4>
+        <form action="<?php echo URLROOT; ?>/maestro/agregar_admin" method="POST">
+            <input type="hidden" name="org_id" id="equipo_modal_org_id">
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Nombre *</label>
+                    <input type="text" name="nombre" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">RUT *</label>
+                    <input type="text" name="rut" class="form-control" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Correo electrónico *</label>
+                <input type="email" name="email" class="form-control" required>
+                <small style="color: var(--text-muted); font-size: 0.72rem;">Si ya existe en el sistema, se vinculará como admin. Clave inicial: admin123</small>
+            </div>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" id="cancelEquipoBtn" class="btn btn-secondary">Cerrar</button>
+                <button type="submit" class="btn btn-primary">Agregar Admin</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <style>
 .glass-modal-overlay {
     display: none; 
@@ -380,10 +427,13 @@
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('planModal');
     const pagoModal = document.getElementById('pagoModal');
+    const equipoModal = document.getElementById('equipoModal');
     const closeBtn = document.getElementById('closePlanModalBtn');
     const cancelBtn = document.getElementById('cancelPlanBtn');
     const closePagoBtn = document.getElementById('closePagoModalBtn');
     const cancelPagoBtn = document.getElementById('cancelPagoBtn');
+    const closeEquipoBtn = document.getElementById('closeEquipoModalBtn');
+    const cancelEquipoBtn = document.getElementById('cancelEquipoBtn');
     const form = document.getElementById('formActualizarPlan');
     const formPago = document.getElementById('formRegistrarPago');
 
@@ -400,6 +450,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const pagoQuickActions = document.getElementById('pago_quick_actions');
     const pagoMontoAlert = document.getElementById('pago_monto_alert');
     const pagoMontoVisual = document.getElementById('pago_monto_visual');
+    const equipoOrgId = document.getElementById('equipo_modal_org_id');
+    const equipoOrgNombre = document.getElementById('equipo_modal_org_nombre');
+    const equipoListContainer = document.getElementById('equipo_list_container');
+    const URLROOT_JS = '<?php echo URLROOT; ?>';
 
     function openModal(targetModal) {
         targetModal.style.display = 'flex';
@@ -600,12 +654,65 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    function renderEquipoList(orgId, equipo) {
+        if (!equipo.length) {
+            equipoListContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem;">No hay miembros registrados.</p>';
+            return;
+        }
+        equipoListContainer.innerHTML = equipo.map(m => {
+            const nombre = `${m.nombre || ''} ${m.apellido_paterno || ''}`.trim();
+            const rolBadge = m.rol === 'admin' ? 'badge-info' : 'badge-secondary';
+            const rolLabel = m.rol === 'admin' ? 'Administrador' : 'Socio';
+            const cargo = m.cargo ? `<span class="badge badge-warning" style="margin-left:0.35rem;font-size:0.65rem;">${m.cargo}</span>` : '';
+            const otherRol = m.rol === 'admin' ? 'socio' : 'admin';
+            const otherLabel = m.rol === 'admin' ? 'Pasar a Socio' : 'Hacer Admin';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);margin-bottom:0.5rem;gap:0.5rem;flex-wrap:wrap;">
+                <div>
+                    <strong style="font-size:0.85rem;">${nombre}</strong>
+                    <div style="font-size:0.72rem;color:var(--text-muted);">${m.email || ''}</div>
+                    <span class="badge ${rolBadge}" style="margin-top:0.25rem;">${rolLabel}</span>${cargo}
+                </div>
+                <form action="${URLROOT_JS}/maestro/cambiar_rol_miembro" method="POST" style="margin:0;" onsubmit="return confirm('¿Cambiar rol de ${nombre} a ${otherLabel}?');">
+                    <input type="hidden" name="org_id" value="${orgId}">
+                    <input type="hidden" name="user_id" value="${m.id}">
+                    <input type="hidden" name="rol" value="${otherRol}">
+                    <button type="submit" class="btn btn-secondary btn-sm" style="font-size:0.72rem;padding:0.25rem 0.5rem;">${otherLabel}</button>
+                </form>
+            </div>`;
+        }).join('');
+    }
+
+    function loadEquipo(orgId) {
+        equipoListContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center;">Cargando equipo...</p>';
+        fetch(`${URLROOT_JS}/maestro/get_equipo_org/${orgId}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) throw new Error(data.message || 'Error al cargar equipo');
+                renderEquipoList(orgId, data.equipo || []);
+            })
+            .catch(err => {
+                equipoListContainer.innerHTML = `<p style="color: var(--danger); text-align: center; font-size: 0.85rem;">${err.message || 'Error de conexión'}</p>`;
+            });
+    }
+
+    document.querySelectorAll('.btn-gestionar-equipo').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const orgId = this.getAttribute('data-id');
+            equipoOrgId.value = orgId;
+            equipoOrgNombre.textContent = this.getAttribute('data-nombre');
+            loadEquipo(orgId);
+            openModal(equipoModal);
+        });
+    });
+
     if (closeBtn) closeBtn.addEventListener('click', () => closeModal(modal));
     if (cancelBtn) cancelBtn.addEventListener('click', () => closeModal(modal));
     if (closePagoBtn) closePagoBtn.addEventListener('click', () => closeModal(pagoModal));
     if (cancelPagoBtn) cancelPagoBtn.addEventListener('click', () => closeModal(pagoModal));
+    if (closeEquipoBtn) closeEquipoBtn.addEventListener('click', () => closeModal(equipoModal));
+    if (cancelEquipoBtn) cancelEquipoBtn.addEventListener('click', () => closeModal(equipoModal));
 
-    [modal, pagoModal].forEach(m => {
+    [modal, pagoModal, equipoModal].forEach(m => {
         if (m) m.addEventListener('click', e => { if (e.target === m) closeModal(m); });
     });
 

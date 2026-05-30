@@ -66,7 +66,7 @@ class Router {
 
         // Rutas públicas que no requieren login
         $publicRoutes = [
-            'AuthController' => ['login', 'logout', 'authenticate', 'recover']
+            'AuthController' => ['login', 'logout', 'authenticate', 'recover', 'select_context', 'set_context']
         ];
 
         // Si la ruta no es pública y el usuario no está logueado, forzar login
@@ -88,7 +88,15 @@ class Router {
                 $this->unauthorized();
             }
             if ($controllerClass === 'AdminController' && $userRole !== 'admin') {
-                $this->unauthorized();
+                if ($userRole === 'socio') {
+                    require_once APPROOT . '/core/AuthContext.php';
+                    $allowed = AuthContext::adminMethodsForSocioDelegado();
+                    if (!in_array($method, $allowed, true)) {
+                        $this->unauthorized();
+                    }
+                } else {
+                    $this->unauthorized();
+                }
             }
             if ($controllerClass === 'SocioController' && $userRole !== 'socio') {
                 $this->unauthorized();

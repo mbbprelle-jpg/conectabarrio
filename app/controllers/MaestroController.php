@@ -4,12 +4,14 @@ class MaestroController extends Controller {
     private $paymentModel;
     private $userModel;
     private $cuotaModel;
+    private $membresiaModel;
 
     public function __construct() {
         $this->juntaModel = $this->model('JuntaVecinos');
         $this->paymentModel = $this->model('Payment');
         $this->userModel = $this->model('User');
         $this->cuotaModel = $this->model('CuotaConfig');
+        $this->membresiaModel = $this->model('Membresia');
     }
 
     // Cargar Dashboard Maestro
@@ -125,11 +127,11 @@ class MaestroController extends Controller {
                     $existingAdmin = $this->userModel->findUserByEmail($data['admin_email']);
                 }
                 if ($existingAdmin) {
-                    // Actualizar su junta_id y asegurar rol admin
                     $this->userModel->db->query("UPDATE usuarios SET junta_id = :junta_id, rol = 'admin' WHERE id = :id");
                     $this->userModel->db->bind(':junta_id', $juntaId);
                     $this->userModel->db->bind(':id', $existingAdmin->id);
                     $this->userModel->db->execute();
+                    $this->membresiaModel->upsert($existingAdmin->id, $juntaId, 'admin');
                 } else {
                     // Crear nuevo admin con contraseña por defecto "admin123"
                     $adminPass = 'admin123';
@@ -146,6 +148,8 @@ class MaestroController extends Controller {
                     $this->userModel->db->bind(':telefono', $data['admin_telefono']);
                     $this->userModel->db->bind(':estado', 1);
                     $this->userModel->db->execute();
+                    $newAdminId = $this->userModel->db->lastInsertId();
+                    $this->membresiaModel->upsert($newAdminId, $juntaId, 'admin');
                 }
 
                 // Confirmar transacción
@@ -358,11 +362,95 @@ class MaestroController extends Controller {
 
         if ($result['registered'] > 0) {
             $metodoLabel = Payment::metodoPagoLabels()[$metodoPago];
-            $_SESSION['success_msg'] = 'Se registraron ' . $result['registered'] . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($result['total'], 0, ',', '.') . ' CLP (' . $metodoLabel . ').';
+            $mailResult = PaymentReceiptMail::sendToOrgAdmins($junta, $mesAmounts, $fechaPago, $metodoPago, $metodoLabel);
+            $msg = 'Se registraron ' . $result['registered'] . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($result['total'], 0, ',', '.') . ' CLP (' . $metodoLabel . ').';
+            if ($mailResult['ok']) {
+                $msg .= ' Comprobante enviado a ' . $mailResult['sent'] . ' administrador(es).';
+            } elseif (Mailer::isConfigured()) {
+                $msg .= ' No se pudo enviar el comprobante por correo.';
+            }
+            $_SESSION['success_msg'] = $msg;
         } else {
             $_SESSION['error_msg'] = 'No se registraron pagos. Los meses seleccionados ya estaban pagados.';
         }
 
+        $this->redirect('/maestro/dashboard');
+    }
+
+    public function get_equipo_org($orgId = null) {
+        header('Content-Type: application/json; charset=UTF-8');
+        $orgId = (int)$orgId;
+        $junta = $this->juntaModel->getJuntaById($orgId);
+        if (!$junta) {
+            echo json_encode(['success' => false, 'message' => 'Organización no encontrada']);
+            return;
+        }
+        echo json_encode(['success' => true, 'equipo' => $this->membresiaModel->getEquipoByJunta($orgId)], JSON_UNESCAPED_UNICODE);
+    }
+
+    public function cambiar_rol_miembro() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $orgId = (int)($post['org_id'] ?? 0);
+        $userId = (int)($post['user_id'] ?? 0);
+        $nuevoRol = $post['rol'] ?? '';
+        if ($orgId <= 0 || $userId <= 0 || !in_array($nuevoRol, ['admin', 'socio'], true)) {
+            $_SESSION['error_msg'] = 'Datos inválidos para cambiar rol.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $this->userModel->db->query('UPDATE usuarios SET rol = :rol, junta_id = :junta_id WHERE id = :id');
+        $this->userModel->db->bind(':rol', $nuevoRol);
+        $this->userModel->db->bind(':junta_id', $orgId);
+        $this->userModel->db->bind(':id', $userId);
+        $this->userModel->db->execute();
+        $this->membresiaModel->upsert($userId, $orgId, $nuevoRol);
+        $_SESSION['success_msg'] = 'Rol actualizado correctamente.';
+        $this->redirect('/maestro/dashboard');
+    }
+
+    public function agregar_admin() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $orgId = (int)($post['org_id'] ?? 0);
+        $email = trim($post['email'] ?? '');
+        $nombre = trim($post['nombre'] ?? '');
+        $rut = trim($post['rut'] ?? '');
+        if ($orgId <= 0 || $email === '' || $nombre === '' || $rut === '') {
+            $_SESSION['error_msg'] = 'Complete nombre, RUT y correo del administrador.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $existing = $this->userModel->findUserByEmail($email);
+        if ($existing) {
+            $this->userModel->db->query("UPDATE usuarios SET junta_id = :junta_id, rol = 'admin', nombre = :nombre WHERE id = :id");
+            $this->userModel->db->bind(':junta_id', $orgId);
+            $this->userModel->db->bind(':nombre', $nombre);
+            $this->userModel->db->bind(':id', $existing->id);
+            $this->userModel->db->execute();
+            $this->membresiaModel->upsert($existing->id, $orgId, 'admin');
+        } else {
+            if ($this->userModel->findUserByRut($rut)) {
+                $_SESSION['error_msg'] = 'El RUT ya está registrado en el sistema.';
+                $this->redirect('/maestro/dashboard');
+                return;
+            }
+            $this->userModel->db->query("INSERT INTO usuarios (junta_id, rut, nombre, email, password, rol, estado) VALUES (:junta_id, :rut, :nombre, :email, :password, 'admin', 1)");
+            $this->userModel->db->bind(':junta_id', $orgId);
+            $this->userModel->db->bind(':rut', $rut);
+            $this->userModel->db->bind(':nombre', $nombre);
+            $this->userModel->db->bind(':email', $email);
+            $this->userModel->db->bind(':password', password_hash('admin123', PASSWORD_BCRYPT));
+            $this->userModel->db->execute();
+            $this->membresiaModel->upsert($this->userModel->db->lastInsertId(), $orgId, 'admin');
+        }
+        $_SESSION['success_msg'] = 'Administrador agregado. Clave inicial: admin123';
         $this->redirect('/maestro/dashboard');
     }
 

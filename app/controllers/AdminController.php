@@ -7,6 +7,7 @@ class AdminController extends Controller {
     private $reunionModel;
     private $asistenciaModel;
     private $cierreModel;
+    private $membresiaModel;
     private $db;
 
     public function __construct() {
@@ -17,7 +18,26 @@ class AdminController extends Controller {
         $this->reunionModel = $this->model('Reunion');
         $this->asistenciaModel = $this->model('Asistencia');
         $this->cierreModel = $this->model('CierreMensual');
+        $this->membresiaModel = $this->model('Membresia');
         $this->db = new Database();
+    }
+
+    private function requireManageSocios() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canManageSocios()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para gestionar socios.';
+            $this->redirect('/admin/dashboard');
+            exit;
+        }
+    }
+
+    private function requireRegisterPayments() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canRegisterPayments()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para registrar pagos.';
+            $this->redirect('/admin/dashboard');
+            exit;
+        }
     }
 
     // Enviar correo de prueba (GET muestra formulario, POST envía)
@@ -122,6 +142,7 @@ class AdminController extends Controller {
 
     // Mostrar listado de socios y configuración de cuotas de la Junta
     public function socios() {
+        $this->requireManageSocios();
         $juntaId = $_SESSION['user_junta_id'];
 
         // Obtener historial completo de cuotas
@@ -148,6 +169,7 @@ class AdminController extends Controller {
             'cuotas_historial' => $cuotasHistorial,
             'calles' => $calles,
             'proposed_id_socio' => $proposedIdSocio,
+            'membresias_map' => $this->buildMembresiasMap($juntaId),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? ''
         ];
@@ -160,6 +182,7 @@ class AdminController extends Controller {
 
     // Inscribir un nuevo Socio en la Junta (POST)
     public function socio_crear() {
+        $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
 
@@ -228,7 +251,8 @@ class AdminController extends Controller {
             }
 
             // Registrar socio
-            if ($this->userModel->register($dataSocio)) {
+            if ($newUserId = $this->userModel->register($dataSocio)) {
+                $this->membresiaModel->upsert($newUserId, $dataSocio['junta_id'], 'socio', ['id_socio' => $idSocio]);
                 $_SESSION['success_msg'] = 'Socio "' . $dataSocio['nombres'] . ' ' . $dataSocio['apellido_paterno'] . '" inscrito con éxito con ID #' . $idSocio . '.';
             } else {
                 $_SESSION['error_msg'] = 'Error al registrar al socio en la base de datos.';
@@ -239,6 +263,7 @@ class AdminController extends Controller {
 
     // Crear una nueva calle en la jurisdicción de la junta (POST)
     public function calle_crear() {
+        $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
             $nombre = trim($post['nombre'] ?? '');
@@ -276,6 +301,7 @@ class AdminController extends Controller {
 
     // Eliminar una calle de la jurisdicción (POST)
     public function calle_eliminar($id) {
+        $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $juntaId = $_SESSION['user_junta_id'];
 
@@ -306,6 +332,7 @@ class AdminController extends Controller {
 
     // Resetear contraseña de un socio a la inicial ("socio123") (POST)
     public function socio_reset_password($id) {
+        $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $socio = $this->userModel->getSocioById($id);
             if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
@@ -323,6 +350,7 @@ class AdminController extends Controller {
 
     // Dar de baja a un socio (POST)
     public function socio_eliminar($id) {
+        $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $socio = $this->userModel->getSocioById($id);
             if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
@@ -340,6 +368,7 @@ class AdminController extends Controller {
 
     // Reactivar / Dar de alta a un socio (POST)
     public function socio_reactivar($id) {
+        $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             // Obtener el socio de cualquier estado
             $socio = $this->userModel->getUserById($id);
@@ -358,6 +387,7 @@ class AdminController extends Controller {
 
     // Modificar/Ajustar valor de cuota de la Junta (POST)
     public function cuota_ajustar() {
+        $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
 
@@ -385,6 +415,7 @@ class AdminController extends Controller {
     // 3. REGISTRO FINANCIERO Y CONTROL DE TRANSACCIONES
     // =========================================================================
     public function finanzas() {
+        $this->requireRegisterPayments();
         $juntaId = $_SESSION['user_junta_id'];
 
         $data = [
@@ -407,6 +438,7 @@ class AdminController extends Controller {
 
     // Registrar pago de cuota de socio (POST, soporta múltiples meses)
     public function registrar_pago_cuota() {
+        $this->requireRegisterPayments();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
 
@@ -512,9 +544,8 @@ class AdminController extends Controller {
     // Obtener los meses pendientes, futuros y pagados de un socio (AJAX JSON)
     public function get_socio_cuotas($socioId) {
         header('Content-Type: application/json');
-
-        // Validar sesión y rol
-        if (!isset($_SESSION['user_id']) || $_SESSION['user_rol'] !== 'admin') {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!isset($_SESSION['user_id']) || !AuthContext::canRegisterPayments()) {
             echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
             exit;
         }
@@ -605,6 +636,7 @@ class AdminController extends Controller {
 
     // Registrar otros ingresos o egresos (POST)
     public function registrar_transaccion() {
+        $this->requireRegisterPayments();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
 
@@ -1421,5 +1453,60 @@ class AdminController extends Controller {
         </html>";
 
         return $html;
+    }
+
+    private function buildMembresiasMap($juntaId) {
+        $equipo = $this->membresiaModel->getEquipoByJunta($juntaId);
+        $map = [];
+        foreach ($equipo as $m) {
+            if ($m->rol === 'socio') {
+                $map[$m->id] = $m;
+            }
+        }
+        return $map;
+    }
+
+    public function socio_delegacion() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::isFullAdmin()) {
+            $_SESSION['error_msg'] = 'Solo el administrador puede delegar cargos y permisos.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $usuarioId = (int)($post['usuario_id'] ?? 0);
+        $juntaId = $_SESSION['user_junta_id'];
+        $membresia = $this->membresiaModel->getByUsuarioJunta($usuarioId, $juntaId);
+        if (!$membresia) {
+            $user = $this->userModel->getUserById($usuarioId);
+            if ($user && (int)$user->junta_id === (int)$juntaId && $user->rol === 'socio') {
+                $this->membresiaModel->upsert($usuarioId, $juntaId, 'socio', ['id_socio' => $user->id_socio]);
+                $membresia = $this->membresiaModel->getByUsuarioJunta($usuarioId, $juntaId);
+            }
+        }
+        if (!$membresia || $membresia->rol !== 'socio') {
+            $_SESSION['error_msg'] = 'Socio no válido para delegación.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $cargo = $post['cargo'] ?? '';
+        $validCargos = ['', 'SECRETARIO', 'TESORERO', 'DIRECTOR'];
+        if (!in_array($cargo, $validCargos, true)) {
+            $_SESSION['error_msg'] = 'Cargo inválido.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $this->membresiaModel->updateDelegacion($membresia->id, [
+            'cargo' => $cargo ?: null,
+            'permiso_gestion_socios' => !empty($post['permiso_gestion_socios']),
+            'permiso_registro_pagos' => !empty($post['permiso_registro_pagos']),
+            'permiso_todos' => !empty($post['permiso_todos']),
+        ]);
+        $_SESSION['success_msg'] = 'Cargo y permisos del socio actualizados correctamente.';
+        $this->redirect('/admin/socios');
     }
 }

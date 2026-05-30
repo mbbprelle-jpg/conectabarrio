@@ -50,8 +50,7 @@ class AuthController extends Controller {
             $loggedInUser = $this->userModel->login($rutOrEmail, $password);
 
             if ($loggedInUser) {
-                // Crear Sesión del Usuario
-                $this->createUserSession($loggedInUser);
+                $this->beginUserSession($loggedInUser);
             } else {
                 $data['error'] = 'Credenciales incorrectas o usuario inactivo.';
                 $this->view('auth/login', $data);
@@ -61,8 +60,88 @@ class AuthController extends Controller {
         }
     }
 
-    // Crear sesión e inicializar variables de sesión
-    private function createUserSession($user) {
+    private function beginUserSession($user) {
+        if ($user->rol === 'maestro') {
+            AuthContext::applyMaestro($user);
+            $this->redirectByRole('maestro');
+            return;
+        }
+
+        $membresiaModel = $this->model('Membresia');
+        $membresiaModel->ensureFromUsuario($user);
+        $membresias = $membresiaModel->getActiveByUsuario($user->id);
+
+        if (empty($membresias) && !empty($user->junta_id)) {
+            $this->createLegacySession($user);
+            return;
+        }
+
+        if (count($membresias) === 1) {
+            AuthContext::applyMembership($membresias[0], $user);
+            $this->redirectByRole($membresias[0]->rol);
+            return;
+        }
+
+        if (count($membresias) > 1) {
+            $_SESSION['auth_pending_user_id'] = $user->id;
+            $this->redirect('/auth/select_context');
+            return;
+        }
+
+        $this->createLegacySession($user);
+    }
+
+    public function select_context() {
+        $userId = $_SESSION['auth_pending_user_id'] ?? null;
+        if (!$userId) {
+            $this->redirect('/auth/login');
+            return;
+        }
+        $user = $this->userModel->getUserById($userId);
+        $membresiaModel = $this->model('Membresia');
+        $membresias = $membresiaModel->getActiveByUsuario($userId);
+        if (count($membresias) <= 1) {
+            $this->redirect('/auth/login');
+            return;
+        }
+        $data = [
+            'title' => 'Seleccionar acceso',
+            'nombre' => $user->nombre ?? '',
+            'membresias' => $membresias,
+            'error' => ''
+        ];
+        $this->view('auth/select_context', $data);
+    }
+
+    public function set_context() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/auth/login');
+            return;
+        }
+        $userId = $_SESSION['auth_pending_user_id'] ?? null;
+        $membershipId = (int)($_POST['membership_id'] ?? 0);
+        if (!$userId || $membershipId <= 0) {
+            $this->redirect('/auth/login');
+            return;
+        }
+        $membresiaModel = $this->model('Membresia');
+        $membership = $membresiaModel->getById($membershipId);
+        if (!$membership || (int)$membership->usuario_id !== (int)$userId) {
+            $this->redirect('/auth/login');
+            return;
+        }
+        $user = $this->userModel->getUserById($userId);
+        unset($_SESSION['auth_pending_user_id']);
+        AuthContext::applyMembership($membership, $user);
+        $this->userModel->db->query('UPDATE usuarios SET junta_id = :junta_id, rol = :rol WHERE id = :id');
+        $this->userModel->db->bind(':junta_id', $membership->junta_id);
+        $this->userModel->db->bind(':rol', $membership->rol);
+        $this->userModel->db->bind(':id', $userId);
+        $this->userModel->db->execute();
+        $this->redirectByRole($membership->rol);
+    }
+
+    private function createLegacySession($user) {
         $_SESSION['user_id'] = $user->id;
         $_SESSION['user_rut'] = $user->rut;
         $_SESSION['user_nombre'] = $user->nombre;
@@ -70,8 +149,12 @@ class AuthController extends Controller {
         $_SESSION['user_rol'] = $user->rol;
         $_SESSION['user_junta_id'] = $user->junta_id;
         $_SESSION['must_change'] = $user->must_change ?? false;
-        
-        // Obtener el nombre de la Junta de Vecinos si tiene una
+        $_SESSION['membership_id'] = null;
+        $_SESSION['user_cargo'] = null;
+        $_SESSION['permiso_gestion_socios'] = 0;
+        $_SESSION['permiso_registro_pagos'] = 0;
+        $_SESSION['permiso_todos'] = 0;
+
         if ($user->junta_id) {
             $juntaModel = $this->model('JuntaVecinos');
             $junta = $juntaModel->getJuntaById($user->junta_id);
@@ -87,8 +170,12 @@ class AuthController extends Controller {
             $_SESSION['user_junta_nombre'] = 'Global';
         }
 
-        // Redirigir según el rol del usuario
         $this->redirectByRole($user->rol);
+    }
+
+    // Crear sesión e inicializar variables de sesión (legacy)
+    private function createUserSession($user) {
+        $this->beginUserSession($user);
     }
 
     // Cierre de sesión seguro
