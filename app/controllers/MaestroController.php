@@ -173,9 +173,10 @@ class MaestroController extends Controller {
             $juntaId = isset($post['junta_id']) ? (int)$post['junta_id'] : 0;
             $plan = $post['plan'] ?? 'basico';
             $precioAnual = isset($post['precio_anual']) ? (int)$post['precio_anual'] : 0;
+            $mesInicioSuscripcion = $post['mes_inicio_suscripcion'] ?? null;
 
             if ($juntaId > 0 && in_array($plan, ['basico', 'mediano', 'premium'])) {
-                if ($this->juntaModel->updatePlanAndPrice($juntaId, $plan, $precioAnual)) {
+                if ($this->juntaModel->updatePlanAndPrice($juntaId, $plan, $precioAnual, $mesInicioSuscripcion)) {
                     $_SESSION['success_msg'] = 'Plan y precio de la organización actualizados exitosamente.';
                 } else {
                     $_SESSION['error_msg'] = 'Error al actualizar el plan en la base de datos.';
@@ -231,6 +232,16 @@ class MaestroController extends Controller {
 
             while ($y < $endYear || ($y == $endYear && $m <= $endMonthNum)) {
                 $mes = sprintf('%04d-%02d', $y, $m);
+
+                if ($mes < $startMonth) {
+                    $m++;
+                    if ($m > 12) {
+                        $m = 1;
+                        $y++;
+                    }
+                    continue;
+                }
+
                 $record = $this->paymentModel->getByOrgMonth($orgId, $mes);
 
                 if ($record && $record->status === 'paid') {
@@ -278,14 +289,14 @@ class MaestroController extends Controller {
     }
 
     private function resolveSubscriptionStartMonth($junta) {
-        if (!empty($junta->mes_inicio_suscripcion)) {
-            $candidate = substr((string)$junta->mes_inicio_suscripcion, 0, 7);
+        if (isset($junta->mes_inicio_suscripcion) && $junta->mes_inicio_suscripcion !== '') {
+            $candidate = substr(trim((string)$junta->mes_inicio_suscripcion), 0, 7);
             if (preg_match('/^\d{4}-\d{2}$/', $candidate)) {
                 return $candidate;
             }
         }
         if (!empty($junta->created_at)) {
-            $candidate = substr((string)$junta->created_at, 0, 7);
+            $candidate = substr(trim((string)$junta->created_at), 0, 7);
             if (preg_match('/^\d{4}-\d{2}$/', $candidate)) {
                 return $candidate;
             }
@@ -321,12 +332,23 @@ class MaestroController extends Controller {
             return;
         }
 
-        $monthlyAmount = Payment::monthlyAmountForOrg($junta);
-        $registered = $this->paymentModel->registerMonths($orgId, $meses, $fechaPago, $monthlyAmount);
+        $defaultAmount = Payment::monthlyAmountForOrg($junta);
+        $montosPorMes = is_array($post['monto_mes'] ?? null) ? $post['monto_mes'] : [];
+        $mesAmounts = [];
 
-        if ($registered > 0) {
-            $total = $registered * $monthlyAmount;
-            $_SESSION['success_msg'] = 'Se registraron ' . $registered . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($total, 0, ',', '.') . ' CLP.';
+        foreach ($meses as $mes) {
+            $mes = trim((string)$mes);
+            if (isset($montosPorMes[$mes]) && $montosPorMes[$mes] !== '') {
+                $mesAmounts[$mes] = max(0, (int)$montosPorMes[$mes]);
+            } else {
+                $mesAmounts[$mes] = $defaultAmount;
+            }
+        }
+
+        $result = $this->paymentModel->registerMonths($orgId, $mesAmounts, $fechaPago);
+
+        if ($result['registered'] > 0) {
+            $_SESSION['success_msg'] = 'Se registraron ' . $result['registered'] . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($result['total'], 0, ',', '.') . ' CLP.';
         } else {
             $_SESSION['error_msg'] = 'No se registraron pagos. Los meses seleccionados ya estaban pagados.';
         }

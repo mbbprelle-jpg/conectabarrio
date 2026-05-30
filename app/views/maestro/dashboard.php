@@ -146,7 +146,8 @@
                                             data-id="<?php echo $junta->id; ?>" 
                                             data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>" 
                                             data-plan="<?php echo htmlspecialchars($junta->plan ?? 'basico'); ?>" 
-                                            data-precio="<?php echo htmlspecialchars($junta->precio_anual ?? 0); ?>" 
+                                            data-precio="<?php echo htmlspecialchars($junta->precio_anual ?? 0); ?>"
+                                            data-suscripcion="<?php echo htmlspecialchars(substr($junta->mes_inicio_suscripcion ?? ($junta->created_at ?? date('Y-m-d')), 0, 7)); ?>"
                                             style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                                         Configurar Plan
@@ -190,9 +191,12 @@
                         <button type="button" id="btn_clear_pago_selection" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">✕ Limpiar</button>
                     </div>
                 </div>
-                <div id="pago_meses_container" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--bg-input);">
+                <div id="pago_meses_container" style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--bg-input);">
                     <p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Cargando meses...</p>
                 </div>
+                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.35rem;">
+                    Puede ajustar el monto de cada mes seleccionado para registrar ofertas o precios especiales.
+                </small>
             </div>
 
             <div id="pago_monto_alert" class="alert alert-success" style="padding: 0.8rem; font-size: 0.8rem; margin-bottom: 1.25rem; display: none;">
@@ -240,6 +244,14 @@
                 <input type="number" name="precio_anual" id="modal_precio_anual" class="form-control" style="background: var(--bg-input);" min="0" required>
                 <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem;">
                     Se autocalcula al cambiar el plan ($Monto/mes * 12), pero puedes adaptarlo como precio especial de alta.
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="modal_mes_inicio_suscripcion" class="form-label" style="font-weight: bold;">Mes Inicio Suscripción *</label>
+                <input type="month" name="mes_inicio_suscripcion" id="modal_mes_inicio_suscripcion" class="form-control" style="background: var(--bg-input);" required>
+                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem;">
+                    Desde qué mes se generan los cobros de suscripción ConectaBarrio para esta organización.
                 </small>
             </div>
 
@@ -301,12 +313,28 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 0.5rem;
     padding: 0.55rem 0.75rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: rgba(255,255,255,0.02);
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
+}
+.mes-card-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+.mes-monto-input {
+    width: 92px;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.78rem;
+    text-align: right;
+}
+.mes-monto-input:disabled {
+    opacity: 0.45;
 }
 .mes-card-label:hover:not(.disabled) {
     border-color: var(--primary);
@@ -352,6 +380,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const modalJuntaNombre = document.getElementById('modal_junta_nombre');
     const modalPlan = document.getElementById('modal_plan');
     const modalPrecioAnual = document.getElementById('modal_precio_anual');
+    const modalMesSuscripcion = document.getElementById('modal_mes_inicio_suscripcion');
 
     const pagoOrgId = document.getElementById('pago_modal_org_id');
     const pagoOrgNombre = document.getElementById('pago_modal_org_nombre');
@@ -385,8 +414,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderMesCard(item) {
-        const label = document.createElement('label');
-        label.className = 'mes-card-label';
+        const row = document.createElement('div');
+        row.className = 'mes-card-label';
 
         const leftDiv = document.createElement('div');
         leftDiv.className = 'mes-card-left';
@@ -396,40 +425,73 @@ document.addEventListener('DOMContentLoaded', function() {
         checkbox.name = 'mes_pagado[]';
         checkbox.value = item.mes;
         checkbox.className = 'mes-checkbox-pago';
-        checkbox.dataset.monto = item.monto;
         checkbox.dataset.estado = item.estado;
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'mes-card-name';
         nameSpan.textContent = formatMesLabel(item.mes);
 
+        leftDiv.appendChild(checkbox);
+        leftDiv.appendChild(nameSpan);
+        row.appendChild(leftDiv);
+
+        const rightDiv = document.createElement('div');
+        rightDiv.className = 'mes-card-right';
+
         const badgeSpan = document.createElement('span');
         badgeSpan.className = `mes-card-badge badge-${item.estado}`;
 
-        leftDiv.appendChild(checkbox);
-        leftDiv.appendChild(nameSpan);
-        label.appendChild(leftDiv);
-        label.appendChild(badgeSpan);
-
         if (item.estado === 'pagado') {
             checkbox.disabled = true;
-            label.classList.add('disabled');
+            row.classList.add('disabled');
             badgeSpan.textContent = `PAGADO: $${item.monto.toLocaleString('es-CL')}`;
-        } else if (item.estado === 'pendiente') {
-            badgeSpan.textContent = `PENDIENTE: $${item.monto.toLocaleString('es-CL')}`;
-            checkbox.addEventListener('change', updatePagoMontoVisual);
+            rightDiv.appendChild(badgeSpan);
         } else {
-            badgeSpan.textContent = `FUTURO: $${item.monto.toLocaleString('es-CL')}`;
-            checkbox.addEventListener('change', updatePagoMontoVisual);
+            badgeSpan.textContent = item.estado === 'pendiente' ? 'PENDIENTE' : 'FUTURO';
+            const amountInput = document.createElement('input');
+            amountInput.type = 'number';
+            amountInput.name = `monto_mes[${item.mes}]`;
+            amountInput.value = item.monto;
+            amountInput.min = 0;
+            amountInput.step = 1;
+            amountInput.className = 'form-control mes-monto-input';
+            amountInput.disabled = true;
+            amountInput.title = 'Monto a registrar para este mes';
+
+            const syncAmountState = () => {
+                amountInput.disabled = !checkbox.checked;
+                updatePagoMontoVisual();
+            };
+
+            checkbox.addEventListener('change', syncAmountState);
+            amountInput.addEventListener('input', updatePagoMontoVisual);
+            row.addEventListener('click', e => {
+                if (e.target === amountInput) return;
+                if (e.target !== checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    syncAmountState();
+                }
+            });
+
+            rightDiv.appendChild(badgeSpan);
+            rightDiv.appendChild(amountInput);
         }
 
-        return label;
+        row.appendChild(rightDiv);
+        return row;
+    }
+
+    function getSelectedMonthAmount(checkbox) {
+        const row = checkbox.closest('.mes-card-label');
+        const input = row ? row.querySelector('.mes-monto-input') : null;
+        if (input) return parseInt(input.value, 10) || 0;
+        return parseInt(checkbox.dataset.monto, 10) || 0;
     }
 
     function updatePagoMontoVisual() {
         const selected = pagoMesesContainer.querySelectorAll('.mes-checkbox-pago:checked');
         let total = 0;
-        selected.forEach(cb => { total += parseInt(cb.dataset.monto, 10) || 0; });
+        selected.forEach(cb => { total += getSelectedMonthAmount(cb); });
         if (selected.length > 0) {
             pagoMontoAlert.style.display = 'block';
             pagoMontoVisual.textContent = '$' + total.toLocaleString('es-CL');
@@ -510,6 +572,9 @@ document.addEventListener('DOMContentLoaded', function() {
             modalJuntaNombre.textContent = this.getAttribute('data-nombre');
             modalPlan.value = this.getAttribute('data-plan');
             modalPrecioAnual.value = this.getAttribute('data-precio');
+            if (modalMesSuscripcion) {
+                modalMesSuscripcion.value = this.getAttribute('data-suscripcion') || '';
+            }
             openModal(modal);
         });
     });
@@ -534,11 +599,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.getElementById('btn_select_pendientes_pago')?.addEventListener('click', () => {
-        pagoMesesContainer.querySelectorAll('.mes-checkbox-pago[data-estado="pendiente"]').forEach(cb => { cb.checked = true; });
+        pagoMesesContainer.querySelectorAll('.mes-checkbox-pago[data-estado="pendiente"]').forEach(cb => {
+            cb.checked = true;
+            const input = cb.closest('.mes-card-label')?.querySelector('.mes-monto-input');
+            if (input) input.disabled = false;
+        });
         updatePagoMontoVisual();
     });
     document.getElementById('btn_clear_pago_selection')?.addEventListener('click', () => {
-        pagoMesesContainer.querySelectorAll('.mes-checkbox-pago:checked').forEach(cb => { cb.checked = false; });
+        pagoMesesContainer.querySelectorAll('.mes-checkbox-pago:checked').forEach(cb => {
+            cb.checked = false;
+            const input = cb.closest('.mes-card-label')?.querySelector('.mes-monto-input');
+            if (input) input.disabled = true;
+        });
         updatePagoMontoVisual();
     });
 

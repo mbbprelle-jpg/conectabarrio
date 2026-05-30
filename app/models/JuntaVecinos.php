@@ -38,9 +38,14 @@ class JuntaVecinos extends Model {
         return false;
     }
 
-    // Actualizar plan comercial y precio anual de una organización
-    public function updatePlanAndPrice($id, $plan, $precioAnual) {
-        $this->db->query("UPDATE juntas_vecinos SET plan = :plan, precio_anual = :precio_anual WHERE id = :id");
+    // Actualizar plan comercial, precio anual e inicio de suscripción
+    public function updatePlanAndPrice($id, $plan, $precioAnual, $mesInicioSuscripcion = null) {
+        if ($mesInicioSuscripcion) {
+            $this->db->query("UPDATE juntas_vecinos SET plan = :plan, precio_anual = :precio_anual, mes_inicio_suscripcion = :mes_inicio_suscripcion WHERE id = :id");
+            $this->db->bind(':mes_inicio_suscripcion', $mesInicioSuscripcion);
+        } else {
+            $this->db->query("UPDATE juntas_vecinos SET plan = :plan, precio_anual = :precio_anual WHERE id = :id");
+        }
         $this->db->bind(':plan', $plan);
         $this->db->bind(':precio_anual', $precioAnual);
         $this->db->bind(':id', $id);

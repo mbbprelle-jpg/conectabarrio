@@ -49,12 +49,14 @@ class Payment extends Model {
         return $record && $record->status === 'paid';
     }
 
-    public function registerMonths($orgId, array $meses, $fechaPago, $monthlyAmount) {
+    public function registerMonths($orgId, array $mesAmounts, $fechaPago) {
         $registered = 0;
+        $total = 0;
         $useMesPeriodo = $this->hasMesPeriodoColumn();
 
-        foreach ($meses as $mes) {
-            $mes = trim($mes);
+        foreach ($mesAmounts as $mes => $amount) {
+            $mes = trim((string)$mes);
+            $amount = max(0, (int)$amount);
             if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
                 continue;
             }
@@ -76,7 +78,7 @@ class Payment extends Model {
                         SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid'
                         WHERE id = :id");
                 }
-                $this->db->bind(':amount', $monthlyAmount);
+                $this->db->bind(':amount', $amount);
                 $this->db->bind(':due_date', $dueDate);
                 $this->db->bind(':paid_at', $fechaPago);
                 $this->db->bind(':id', $existing->id);
@@ -85,23 +87,24 @@ class Payment extends Model {
                     VALUES (:org_id, :mes_periodo, :amount, :due_date, :paid_at, 'paid')");
                 $this->db->bind(':org_id', $orgId);
                 $this->db->bind(':mes_periodo', $mes);
-                $this->db->bind(':amount', $monthlyAmount);
+                $this->db->bind(':amount', $amount);
                 $this->db->bind(':due_date', $dueDate);
                 $this->db->bind(':paid_at', $fechaPago);
             } else {
                 $this->db->query("INSERT INTO payments (org_id, amount, due_date, paid_at, status)
                     VALUES (:org_id, :amount, :due_date, :paid_at, 'paid')");
                 $this->db->bind(':org_id', $orgId);
-                $this->db->bind(':amount', $monthlyAmount);
+                $this->db->bind(':amount', $amount);
                 $this->db->bind(':due_date', $dueDate);
                 $this->db->bind(':paid_at', $fechaPago);
             }
 
             if ($this->db->execute()) {
                 $registered++;
+                $total += $amount;
             }
         }
-        return $registered;
+        return ['registered' => $registered, 'total' => $total];
     }
 
     public function getAllWithOrg() {
