@@ -183,64 +183,127 @@ class MaestroController extends Controller {
         }
         $this->redirect('/maestro/dashboard');
     }
-    // ==================== Payments UI ====================
+    // ==================== Pagos de Organizaciones (Suscripción ConectaBarrio) ====================
+
     public function payments() {
         $data = [
-            'title' => 'Gestión de Pagos',
-            'header_title' => 'Gestión de Pagos',
-            'header_subtitle' => 'Control de pagos de todas las organizaciones',
+            'title' => 'Historial de Pagos',
+            'header_title' => 'Historial de Pagos',
+            'header_subtitle' => 'Registro de suscripciones pagadas por las organizaciones',
             'active_menu' => 'payments',
-            'juntas' => $this->juntaModel->getJuntas()
+            'payments' => $this->paymentModel->getAllWithOrg(),
+            'summary' => $this->paymentModel->summarizeGlobal()
         ];
         $this->view('maestro/payments', $data);
     }
 
-    public function paymentsData() {
+    public function get_org_pagos($orgId = null) {
         header('Content-Type: application/json');
-        $summary = $this->paymentModel->summarizeGlobal();
-        $payments = $this->paymentModel->getAllWithOrg();
-        echo json_encode(['summary' => $summary, 'payments' => $payments]);
+        $orgId = (int)$orgId;
+        $junta = $this->juntaModel->getJuntaById($orgId);
+        if (!$junta) {
+            echo json_encode(['success' => false, 'message' => 'Organización no encontrada']);
+            return;
+        }
+
+        $startMonth = !empty($junta->mes_inicio) ? $junta->mes_inicio : substr($junta->created_at ?? date('Y-m-d'), 0, 7);
+        $currentMonthStr = date('Y-m');
+        $monthlyAmount = Payment::monthlyAmountForOrg($junta);
+
+        $startYear = (int)substr($startMonth, 0, 4);
+        $startMonthNum = (int)substr($startMonth, 5, 2);
+        $endYear = (int)date('Y') + 1;
+        $endMonthNum = (int)date('m');
+
+        $y = $startYear;
+        $m = $startMonthNum;
+        $meses = [];
+
+        while ($y < $endYear || ($y == $endYear && $m <= $endMonthNum)) {
+            $mes = sprintf('%04d-%02d', $y, $m);
+            $record = $this->paymentModel->getByOrgMonth($orgId, $mes);
+
+            if ($record && $record->status === 'paid') {
+                $estado = 'pagado';
+                $descripcion = 'Pagado el ' . date('d-m-Y', strtotime($record->paid_at ?? $record->due_date));
+                $monto = (int)$record->amount;
+            } else {
+                $monto = $monthlyAmount;
+                if ($mes <= $currentMonthStr) {
+                    $estado = 'pendiente';
+                    $descripcion = '';
+                } else {
+                    $estado = 'futuro';
+                    $descripcion = '';
+                }
+            }
+
+            $meses[] = [
+                'mes' => $mes,
+                'monto' => $monto,
+                'estado' => $estado,
+                'descripcion' => $descripcion
+            ];
+
+            $m++;
+            if ($m > 12) {
+                $m = 1;
+                $y++;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'org' => [
+                'id' => $junta->id,
+                'nombre' => $junta->nombre,
+                'plan' => $junta->plan ?? 'basico',
+                'mes_inicio' => $startMonth,
+                'monto_mensual' => $monthlyAmount
+            ],
+            'meses' => $meses
+        ]);
     }
 
-    public function payment($id = null) {
-        $method = $_SERVER['REQUEST_METHOD'];
-        header('Content-Type: application/json');
-        if ($method === 'GET' && $id) {
-            $payment = $this->paymentModel->getById($id);
-            if ($payment) {
-                echo json_encode($payment);
-                return;
-            }
-            http_response_code(404);
-            echo json_encode(['error' => 'Pago no encontrado']);
+    public function registrar_pago_org() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/maestro/dashboard');
             return;
         }
-        $payload = json_decode(file_get_contents('php://input'), true);
-        if ($method === 'POST') {
-            if (empty($payload['org_id'])) {
-                http_response_code(400);
-                echo json_encode(['error' => 'Debe seleccionar una organización']);
-                return;
-            }
-            $ok = $this->paymentModel->create($payload);
-            http_response_code($ok ? 201 : 400);
-            echo json_encode(['ok' => $ok]);
+
+        $post = $this->sanitizePost();
+        $orgId = isset($post['org_id']) ? (int)$post['org_id'] : 0;
+        $meses = $post['mes_pagado'] ?? [];
+        $fechaPago = $post['fecha_pago'] ?? date('Y-m-d');
+
+        if (!is_array($meses)) {
+            $meses = !empty($meses) ? [$meses] : [];
+        }
+
+        if ($orgId <= 0 || empty($meses)) {
+            $_SESSION['error_msg'] = 'Debe seleccionar una organización y al menos un mes a registrar.';
+            $this->redirect('/maestro/dashboard');
             return;
         }
-        if ($method === 'PUT' && $id) {
-            $ok = $this->paymentModel->update($id, $payload);
-            http_response_code($ok ? 200 : 400);
-            echo json_encode(['ok' => $ok]);
+
+        $junta = $this->juntaModel->getJuntaById($orgId);
+        if (!$junta) {
+            $_SESSION['error_msg'] = 'Organización no válida.';
+            $this->redirect('/maestro/dashboard');
             return;
         }
-        if ($method === 'DELETE' && $id) {
-            $ok = $this->paymentModel->delete($id);
-            http_response_code($ok ? 200 : 400);
-            echo json_encode(['ok' => $ok]);
-            return;
+
+        $monthlyAmount = Payment::monthlyAmountForOrg($junta);
+        $registered = $this->paymentModel->registerMonths($orgId, $meses, $fechaPago, $monthlyAmount);
+
+        if ($registered > 0) {
+            $total = $registered * $monthlyAmount;
+            $_SESSION['success_msg'] = 'Se registraron ' . $registered . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($total, 0, ',', '.') . ' CLP.';
+        } else {
+            $_SESSION['error_msg'] = 'No se registraron pagos. Los meses seleccionados ya estaban pagados.';
         }
-        http_response_code(405);
-        echo json_encode(['error' => 'Método no permitido']);
+
+        $this->redirect('/maestro/dashboard');
     }
 
 }
