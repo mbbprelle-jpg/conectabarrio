@@ -165,7 +165,7 @@
 
 <!-- Modal de Autenticación (Glassmorphism Premium) -->
 <div class="auth-modal-overlay <?php echo !empty($data['error']) ? 'active' : ''; ?>" id="authModalOverlay">
-    <div class="auth-modal">
+    <div class="auth-modal login-card">
         <!-- Botón de Cerrar (solo X) -->
         <button class="modal-close" id="modalCloseBtn">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

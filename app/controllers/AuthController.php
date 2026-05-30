@@ -161,7 +161,19 @@ class AuthController extends Controller {
             // Enviar email (usa configuración existente)
             $subject = 'Recuperación de contraseña - ConectaBarrio';
             $message = "Hola {$user->nombre},\n\nSu contraseña temporal es: {$tempPass}\nPor favor ingrese al portal y cambie su contraseña inmediatamente.\n\nSaludos,\nEquipo ConectaBarrio";
-            mail($email, $subject, $message);
+            if (!Mailer::isConfigured()) {
+    $data = ['title' => 'Recuperar Contraseña', 'error' => 'SMTP no configurado. Contacte al administrador.'];
+    $this->view('auth/recover', $data);
+    return;
+}
+$mailResult = Mailer::send($email, $subject, $message, SMTP_FROM_EMAIL);
+if ($mailResult['ok']) {
+    $data = ['title' => 'Recuperar Contraseña', 'success' => 'Se ha enviado una contraseña temporal a su correo.'];
+} else {
+    $data = ['title' => 'Recuperar Contraseña', 'error' => 'Error al enviar el correo: ' . ($mailResult['error'] ?? 'desconocido')];
+}
+$this->view('auth/recover', $data);
+return;
             $data = ['title' => 'Recuperar Contraseña', 'success' => 'Se ha enviado una contraseña temporal a su correo.'];
             $this->view('auth/recover', $data);
             return;
