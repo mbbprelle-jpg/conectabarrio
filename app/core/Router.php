@@ -66,7 +66,7 @@ class Router {
 
         // Rutas públicas que no requieren login
         $publicRoutes = [
-            'AuthController' => ['login', 'logout', 'authenticate']
+            'AuthController' => ['login', 'logout', 'authenticate', 'recover']
         ];
 
         // Si la ruta no es pública y el usuario no está logueado, forzar login

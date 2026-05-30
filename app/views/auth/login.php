@@ -223,8 +223,14 @@
 
             <!-- Enlace de recuperación de contraseña -->
             <div class="text-center" style="margin-top:0.5rem;">
-                <a href="<?php echo URLROOT; ?>/auth/recover" class="link-underline link-primary" style="font-size:0.85rem;">¿Olvidó su contraseña?</a>
+                <a href="#" id="forgotPasswordLink" class="link-underline link-primary" style="font-size:0.85rem;">¿Olvidó su contraseña?</a>
             </div>
+            <script>
+                document.getElementById('forgotPasswordLink').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    window.location.href = '<?php echo URLROOT; ?>/auth/recover';
+                });
+            </script>            </div>
 
             <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 0.85rem;">
                 Ingresar al Portal
