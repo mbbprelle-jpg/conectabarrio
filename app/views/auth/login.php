@@ -221,20 +221,14 @@
                        required>
             </div>
 
-            <!-- Enlace de recuperación de contraseña -->
-            <div class="text-center" style="margin-top:0.5rem;">
-                <a href="#" id="forgotPasswordLink" class="link-underline link-primary" style="font-size:0.85rem;">¿Olvidó su contraseña?</a>
+            <div class="auth-actions" style="display: flex; flex-direction: column; align-items: stretch; margin-top: 0.5rem; gap: 0.5rem;">
+                <div class="text-center">
+                    <a href="#" id="forgotPasswordLink" class="link-underline link-primary" style="font-size:0.85rem;">¿Olvidó su contraseña?</a>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.85rem;">Ingresar al Portal</button>
             </div>
-            <script>
-                document.getElementById('forgotPasswordLink').addEventListener('click', function(e) {
-                    e.preventDefault();
-                    window.location.href = '<?php echo URLROOT; ?>/auth/recover';
-                });
-            </script>            </div>
 
-            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem; padding: 0.85rem;">
-                Ingresar al Portal
-            </button>
+
         </form>
         
         <div style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
