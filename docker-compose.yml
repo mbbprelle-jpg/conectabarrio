@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/html/public
+    environment:
+      - DB_HOST=${DB_HOST:-127.0.0.1}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASS=${DB_PASS:-}
+      - DB_NAME=${DB_NAME:-conectabarrio}
+    restart: unless-stopped
+
+# Optional: you can add a separate service for a database if needed.
