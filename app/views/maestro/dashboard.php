@@ -8,6 +8,13 @@
     </div>
 <?php endif; ?>
 
+<?php if (!empty($data['error'])): ?>
+    <div class="alert alert-danger">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span><?php echo htmlspecialchars($data['error']); ?></span>
+    </div>
+<?php endif; ?>
+
 <!-- Grid de Métricas -->
 <div class="metrics-grid">
     
@@ -127,15 +134,24 @@
                             </td>
                             <td style="text-align: center; font-weight: 700; color: var(--text-main);"><?php echo htmlspecialchars($junta->total_socios); ?></td>
                             <td style="text-align: center;">
-                                <button class="btn btn-warning btn-sm btn-cambiar-plan" 
-                                        data-id="<?php echo $junta->id; ?>" 
-                                        data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>" 
-                                        data-plan="<?php echo htmlspecialchars($junta->plan ?? 'basico'); ?>" 
-                                        data-precio="<?php echo htmlspecialchars($junta->precio_anual ?? 0); ?>" 
-                                        style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                                    Configurar Plan
-                                </button>
+                                <div style="display: flex; gap: 0.35rem; justify-content: center; flex-wrap: wrap;">
+                                    <button class="btn btn-success btn-sm btn-registrar-pago"
+                                            data-id="<?php echo $junta->id; ?>"
+                                            data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>"
+                                            style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2" ry="2"></rect><line x1="3" y1="11" x2="21" y2="11"></line></svg>
+                                        Registrar Pago
+                                    </button>
+                                    <button class="btn btn-warning btn-sm btn-cambiar-plan" 
+                                            data-id="<?php echo $junta->id; ?>" 
+                                            data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>" 
+                                            data-plan="<?php echo htmlspecialchars($junta->plan ?? 'basico'); ?>" 
+                                            data-precio="<?php echo htmlspecialchars($junta->precio_anual ?? 0); ?>" 
+                                            style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                                        Configurar Plan
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -143,6 +159,52 @@
             </table>
         </div>
     <?php endif; ?>
+</div>
+
+<!-- Modal Registrar Pago de Suscripción -->
+<div id="pagoModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 620px;">
+        <button id="closePagoModalBtn" type="button" style="position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+            <h3 style="font-family: var(--font-heading); color: var(--text-main); font-size: 1.5rem; margin-bottom: 0.25rem;">Registrar Pago de Suscripción</h3>
+            <p id="pago_modal_org_nombre" style="color: var(--primary); font-weight: bold; font-size: 0.95rem; margin: 0;">Organización</p>
+            <p id="pago_modal_plan_info" style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.35rem;"></p>
+        </div>
+
+        <form id="formRegistrarPago" action="<?php echo URLROOT; ?>/maestro/registrar_pago_org" method="POST">
+            <input type="hidden" name="org_id" id="pago_modal_org_id">
+
+            <div class="form-group">
+                <label for="fecha_pago" class="form-label">Fecha de Pago *</label>
+                <input type="date" name="fecha_pago" id="fecha_pago" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <label class="form-label" style="margin-bottom: 0;">Meses a Pagar *</label>
+                    <div id="pago_quick_actions" style="display: none; gap: 0.4rem;">
+                        <button type="button" id="btn_select_pendientes_pago" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">✓ Todos los Pendientes</button>
+                        <button type="button" id="btn_clear_pago_selection" class="btn btn-secondary btn-sm" style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">✕ Limpiar</button>
+                    </div>
+                </div>
+                <div id="pago_meses_container" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem; background: var(--bg-input);">
+                    <p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Cargando meses...</p>
+                </div>
+            </div>
+
+            <div id="pago_monto_alert" class="alert alert-success" style="padding: 0.8rem; font-size: 0.8rem; margin-bottom: 1.25rem; display: none;">
+                Monto a registrar: <strong id="pago_monto_visual">$0</strong>
+            </div>
+
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button id="cancelPagoBtn" type="button" class="btn btn-secondary">Cancelar</button>
+                <button type="submit" class="btn btn-success">Registrar Pago</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <!-- Modal de Edición de Plan y Precio (Glassmorphic) -->
@@ -222,69 +284,268 @@
     transition: transform 0.3s ease; 
     position: relative;
 }
+.mes-group-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin: 0.75rem 0 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.mes-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+.mes-card-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.02);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.mes-card-label:hover:not(.disabled) {
+    border-color: var(--primary);
+    background: rgba(6, 182, 212, 0.05);
+}
+.mes-card-label.disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+.mes-card-left {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+.mes-card-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-main);
+}
+.mes-card-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+}
+.badge-pendiente { color: var(--danger); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); }
+.badge-futuro { color: var(--primary); background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.2); }
+.badge-pagado { color: var(--success); background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('planModal');
+    const pagoModal = document.getElementById('pagoModal');
     const closeBtn = document.getElementById('closePlanModalBtn');
     const cancelBtn = document.getElementById('cancelPlanBtn');
+    const closePagoBtn = document.getElementById('closePagoModalBtn');
+    const cancelPagoBtn = document.getElementById('cancelPagoBtn');
     const form = document.getElementById('formActualizarPlan');
+    const formPago = document.getElementById('formRegistrarPago');
 
     const modalJuntaId = document.getElementById('modal_junta_id');
     const modalJuntaNombre = document.getElementById('modal_junta_nombre');
     const modalPlan = document.getElementById('modal_plan');
     const modalPrecioAnual = document.getElementById('modal_precio_anual');
 
-    function openModal() {
-        modal.style.display = 'flex';
+    const pagoOrgId = document.getElementById('pago_modal_org_id');
+    const pagoOrgNombre = document.getElementById('pago_modal_org_nombre');
+    const pagoPlanInfo = document.getElementById('pago_modal_plan_info');
+    const pagoMesesContainer = document.getElementById('pago_meses_container');
+    const pagoQuickActions = document.getElementById('pago_quick_actions');
+    const pagoMontoAlert = document.getElementById('pago_monto_alert');
+    const pagoMontoVisual = document.getElementById('pago_monto_visual');
+
+    function openModal(targetModal) {
+        targetModal.style.display = 'flex';
         setTimeout(() => {
-            modal.style.opacity = '1';
-            modal.querySelector('.glass-modal-container').style.transform = 'scale(1)';
+            targetModal.style.opacity = '1';
+            targetModal.querySelector('.glass-modal-container').style.transform = 'scale(1)';
         }, 10);
     }
 
-    function closeModal() {
-        modal.style.opacity = '0';
-        modal.querySelector('.glass-modal-container').style.transform = 'scale(0.9)';
+    function closeModal(targetModal) {
+        targetModal.style.opacity = '0';
+        targetModal.querySelector('.glass-modal-container').style.transform = 'scale(0.9)';
         setTimeout(() => {
-            modal.style.display = 'none';
+            targetModal.style.display = 'none';
         }, 300);
     }
 
-    // Escuchador para botones de cambio de plan
+    function formatMesLabel(mes) {
+        const parts = mes.split('-');
+        const dateObj = new Date(parts[0], parts[1] - 1, 1);
+        const label = dateObj.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+
+    function renderMesCard(item) {
+        const label = document.createElement('label');
+        label.className = 'mes-card-label';
+
+        const leftDiv = document.createElement('div');
+        leftDiv.className = 'mes-card-left';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'mes_pagado[]';
+        checkbox.value = item.mes;
+        checkbox.className = 'mes-checkbox-pago';
+        checkbox.dataset.monto = item.monto;
+        checkbox.dataset.estado = item.estado;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'mes-card-name';
+        nameSpan.textContent = formatMesLabel(item.mes);
+
+        const badgeSpan = document.createElement('span');
+        badgeSpan.className = `mes-card-badge badge-${item.estado}`;
+
+        leftDiv.appendChild(checkbox);
+        leftDiv.appendChild(nameSpan);
+        label.appendChild(leftDiv);
+        label.appendChild(badgeSpan);
+
+        if (item.estado === 'pagado') {
+            checkbox.disabled = true;
+            label.classList.add('disabled');
+            badgeSpan.textContent = `PAGADO: $${item.monto.toLocaleString('es-CL')}`;
+        } else if (item.estado === 'pendiente') {
+            badgeSpan.textContent = `PENDIENTE: $${item.monto.toLocaleString('es-CL')}`;
+            checkbox.addEventListener('change', updatePagoMontoVisual);
+        } else {
+            badgeSpan.textContent = `FUTURO: $${item.monto.toLocaleString('es-CL')}`;
+            checkbox.addEventListener('change', updatePagoMontoVisual);
+        }
+
+        return label;
+    }
+
+    function updatePagoMontoVisual() {
+        const selected = pagoMesesContainer.querySelectorAll('.mes-checkbox-pago:checked');
+        let total = 0;
+        selected.forEach(cb => { total += parseInt(cb.dataset.monto, 10) || 0; });
+        if (selected.length > 0) {
+            pagoMontoAlert.style.display = 'block';
+            pagoMontoVisual.textContent = '$' + total.toLocaleString('es-CL');
+        } else {
+            pagoMontoAlert.style.display = 'none';
+        }
+    }
+
+    function loadOrgPagos(orgId) {
+        pagoMesesContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Cargando meses...</p>';
+        pagoQuickActions.style.display = 'none';
+        pagoMontoAlert.style.display = 'none';
+
+        fetch('<?php echo URLROOT; ?>/maestro/get_org_pagos/' + orgId)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) {
+                    pagoMesesContainer.innerHTML = '<p style="color: var(--danger); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Error al cargar meses</p>';
+                    return;
+                }
+
+                pagoPlanInfo.textContent = 'Plan ' + data.org.plan + ' · $' + data.org.monto_mensual.toLocaleString('es-CL') + ' / mes · Desde ' + data.org.mes_inicio;
+                pagoMesesContainer.innerHTML = '';
+
+                const pendingGrid = document.createElement('div');
+                pendingGrid.className = 'mes-grid';
+                const futureGrid = document.createElement('div');
+                futureGrid.className = 'mes-grid';
+                const resolvedGrid = document.createElement('div');
+                resolvedGrid.className = 'mes-grid';
+
+                let hasPending = false, hasFuture = false, hasResolved = false;
+
+                data.meses.forEach(item => {
+                    const card = renderMesCard(item);
+                    if (item.estado === 'pagado') { resolvedGrid.appendChild(card); hasResolved = true; }
+                    else if (item.estado === 'pendiente') { pendingGrid.appendChild(card); hasPending = true; }
+                    else { futureGrid.appendChild(card); hasFuture = true; }
+                });
+
+                if (hasPending) {
+                    const t = document.createElement('div'); t.className = 'mes-group-title'; t.textContent = '⚠️ Atrasados / Pendientes';
+                    pagoMesesContainer.appendChild(t); pagoMesesContainer.appendChild(pendingGrid);
+                }
+                if (hasFuture) {
+                    const t = document.createElement('div'); t.className = 'mes-group-title'; t.textContent = '🔮 Meses Futuros (adelantar pago)';
+                    pagoMesesContainer.appendChild(t); pagoMesesContainer.appendChild(futureGrid);
+                }
+                if (hasResolved) {
+                    const t = document.createElement('div'); t.className = 'mes-group-title'; t.textContent = '✅ Pagados';
+                    pagoMesesContainer.appendChild(t); pagoMesesContainer.appendChild(resolvedGrid);
+                }
+                if (!hasPending && !hasFuture && !hasResolved) {
+                    pagoMesesContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Sin períodos disponibles.</p>';
+                } else if (hasPending || hasFuture) {
+                    pagoQuickActions.style.display = 'flex';
+                }
+            })
+            .catch(() => {
+                pagoMesesContainer.innerHTML = '<p style="color: var(--danger); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Error de conexión</p>';
+            });
+    }
+
     document.querySelectorAll('.btn-cambiar-plan').forEach(btn => {
         btn.addEventListener('click', function() {
             modalJuntaId.value = this.getAttribute('data-id');
             modalJuntaNombre.textContent = this.getAttribute('data-nombre');
             modalPlan.value = this.getAttribute('data-plan');
             modalPrecioAnual.value = this.getAttribute('data-precio');
-            openModal();
+            openModal(modal);
         });
     });
 
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    document.querySelectorAll('.btn-registrar-pago').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const orgId = this.getAttribute('data-id');
+            pagoOrgId.value = orgId;
+            pagoOrgNombre.textContent = this.getAttribute('data-nombre');
+            loadOrgPagos(orgId);
+            openModal(pagoModal);
+        });
+    });
 
-    if (modal) {
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
-                closeModal();
+    if (closeBtn) closeBtn.addEventListener('click', () => closeModal(modal));
+    if (cancelBtn) cancelBtn.addEventListener('click', () => closeModal(modal));
+    if (closePagoBtn) closePagoBtn.addEventListener('click', () => closeModal(pagoModal));
+    if (cancelPagoBtn) cancelPagoBtn.addEventListener('click', () => closeModal(pagoModal));
+
+    [modal, pagoModal].forEach(m => {
+        if (m) m.addEventListener('click', e => { if (e.target === m) closeModal(m); });
+    });
+
+    document.getElementById('btn_select_pendientes_pago')?.addEventListener('click', () => {
+        pagoMesesContainer.querySelectorAll('.mes-checkbox-pago[data-estado="pendiente"]').forEach(cb => { cb.checked = true; });
+        updatePagoMontoVisual();
+    });
+    document.getElementById('btn_clear_pago_selection')?.addEventListener('click', () => {
+        pagoMesesContainer.querySelectorAll('.mes-checkbox-pago:checked').forEach(cb => { cb.checked = false; });
+        updatePagoMontoVisual();
+    });
+
+    if (formPago) {
+        formPago.addEventListener('submit', e => {
+            if (!pagoMesesContainer.querySelector('.mes-checkbox-pago:checked')) {
+                e.preventDefault();
+                alert('Debe seleccionar al menos un mes para registrar el pago.');
             }
         });
     }
 
-    // Autocalcular precio anual en el modal reactivamente
     if (modalPlan && modalPrecioAnual) {
         modalPlan.addEventListener('change', function() {
             const val = this.value;
-            if (val === 'basico') {
-                modalPrecioAnual.value = 59880; // $4.990 * 12
-            } else if (val === 'mediano') {
-                modalPrecioAnual.value = 95880; // $7.990 * 12
-            } else if (val === 'premium') {
-                modalPrecioAnual.value = 119880; // $9.990 * 12
-            }
+            if (val === 'basico') modalPrecioAnual.value = 59880;
+            else if (val === 'mediano') modalPrecioAnual.value = 95880;
+            else if (val === 'premium') modalPrecioAnual.value = 119880;
         });
     }
 });
