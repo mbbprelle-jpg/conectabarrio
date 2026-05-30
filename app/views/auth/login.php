@@ -227,6 +227,12 @@
                 </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.85rem;">Ingresar al Portal</button>
             </div>
+            <script>
+                document.getElementById('forgotPasswordLink').addEventListener('click', function(e) {
+                    e.preventDefault();
+                    window.location.href = '<?php echo URLROOT; ?>/auth/recover';
+                });
+            </script>
 
 
         </form>
