@@ -1,6 +1,28 @@
 <?php
 class Payment extends Model {
     private static $hasMesPeriodo = null;
+    private static $hasMetodoPago = null;
+
+    public static function metodoPagoLabels() {
+        return [
+            'transferencia' => 'Transferencia',
+            'efectivo' => 'Efectivo',
+            'webpay' => 'Webpay'
+        ];
+    }
+
+    private function hasMetodoPagoColumn() {
+        if (self::$hasMetodoPago === null) {
+            try {
+                $this->db->query('SELECT metodo_pago FROM payments LIMIT 1');
+                $this->db->execute();
+                self::$hasMetodoPago = true;
+            } catch (Exception $e) {
+                self::$hasMetodoPago = false;
+            }
+        }
+        return self::$hasMetodoPago;
+    }
 
     private function hasMesPeriodoColumn() {
         if (self::$hasMesPeriodo === null) {
@@ -49,10 +71,11 @@ class Payment extends Model {
         return $record && $record->status === 'paid';
     }
 
-    public function registerMonths($orgId, array $mesAmounts, $fechaPago) {
+    public function registerMonths($orgId, array $mesAmounts, $fechaPago, $metodoPago = null) {
         $registered = 0;
         $total = 0;
         $useMesPeriodo = $this->hasMesPeriodoColumn();
+        $useMetodoPago = $this->hasMetodoPagoColumn() && $metodoPago;
 
         foreach ($mesAmounts as $mes => $amount) {
             $mes = trim((string)$mes);
@@ -68,11 +91,22 @@ class Payment extends Model {
             $dueDate = date('Y-m-t', strtotime($mes . '-01'));
 
             if ($existing) {
-                if ($useMesPeriodo) {
+                if ($useMesPeriodo && $useMetodoPago) {
+                    $this->db->query("UPDATE payments
+                        SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid', mes_periodo = :mes_periodo, metodo_pago = :metodo_pago
+                        WHERE id = :id");
+                    $this->db->bind(':mes_periodo', $mes);
+                    $this->db->bind(':metodo_pago', $metodoPago);
+                } elseif ($useMesPeriodo) {
                     $this->db->query("UPDATE payments
                         SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid', mes_periodo = :mes_periodo
                         WHERE id = :id");
                     $this->db->bind(':mes_periodo', $mes);
+                } elseif ($useMetodoPago) {
+                    $this->db->query("UPDATE payments
+                        SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid', metodo_pago = :metodo_pago
+                        WHERE id = :id");
+                    $this->db->bind(':metodo_pago', $metodoPago);
                 } else {
                     $this->db->query("UPDATE payments
                         SET amount = :amount, due_date = :due_date, paid_at = :paid_at, status = 'paid'
@@ -82,6 +116,15 @@ class Payment extends Model {
                 $this->db->bind(':due_date', $dueDate);
                 $this->db->bind(':paid_at', $fechaPago);
                 $this->db->bind(':id', $existing->id);
+            } elseif ($useMesPeriodo && $useMetodoPago) {
+                $this->db->query("INSERT INTO payments (org_id, mes_periodo, amount, due_date, paid_at, metodo_pago, status)
+                    VALUES (:org_id, :mes_periodo, :amount, :due_date, :paid_at, :metodo_pago, 'paid')");
+                $this->db->bind(':org_id', $orgId);
+                $this->db->bind(':mes_periodo', $mes);
+                $this->db->bind(':amount', $amount);
+                $this->db->bind(':due_date', $dueDate);
+                $this->db->bind(':paid_at', $fechaPago);
+                $this->db->bind(':metodo_pago', $metodoPago);
             } elseif ($useMesPeriodo) {
                 $this->db->query("INSERT INTO payments (org_id, mes_periodo, amount, due_date, paid_at, status)
                     VALUES (:org_id, :mes_periodo, :amount, :due_date, :paid_at, 'paid')");
@@ -90,6 +133,14 @@ class Payment extends Model {
                 $this->db->bind(':amount', $amount);
                 $this->db->bind(':due_date', $dueDate);
                 $this->db->bind(':paid_at', $fechaPago);
+            } elseif ($useMetodoPago) {
+                $this->db->query("INSERT INTO payments (org_id, amount, due_date, paid_at, metodo_pago, status)
+                    VALUES (:org_id, :amount, :due_date, :paid_at, :metodo_pago, 'paid')");
+                $this->db->bind(':org_id', $orgId);
+                $this->db->bind(':amount', $amount);
+                $this->db->bind(':due_date', $dueDate);
+                $this->db->bind(':paid_at', $fechaPago);
+                $this->db->bind(':metodo_pago', $metodoPago);
             } else {
                 $this->db->query("INSERT INTO payments (org_id, amount, due_date, paid_at, status)
                     VALUES (:org_id, :amount, :due_date, :paid_at, 'paid')");

@@ -196,7 +196,8 @@ class MaestroController extends Controller {
             'header_subtitle' => 'Registro de suscripciones pagadas por las organizaciones',
             'active_menu' => 'payments',
             'payments' => $this->paymentModel->getAllWithOrg(),
-            'summary' => $this->paymentModel->summarizeGlobal()
+            'summary' => $this->paymentModel->summarizeGlobal(),
+            'metodo_labels' => Payment::metodoPagoLabels()
         ];
         $this->view('maestro/payments', $data);
     }
@@ -314,6 +315,8 @@ class MaestroController extends Controller {
         $orgId = isset($post['org_id']) ? (int)$post['org_id'] : 0;
         $meses = $post['mes_pagado'] ?? [];
         $fechaPago = $post['fecha_pago'] ?? date('Y-m-d');
+        $metodoPago = $post['metodo_pago'] ?? '';
+        $metodosValidos = array_keys(Payment::metodoPagoLabels());
 
         if (!is_array($meses)) {
             $meses = !empty($meses) ? [$meses] : [];
@@ -321,6 +324,12 @@ class MaestroController extends Controller {
 
         if ($orgId <= 0 || empty($meses)) {
             $_SESSION['error_msg'] = 'Debe seleccionar una organización y al menos un mes a registrar.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        if (!in_array($metodoPago, $metodosValidos, true)) {
+            $_SESSION['error_msg'] = 'Debe seleccionar un método de pago (Transferencia, Efectivo o Webpay).';
             $this->redirect('/maestro/dashboard');
             return;
         }
@@ -345,10 +354,11 @@ class MaestroController extends Controller {
             }
         }
 
-        $result = $this->paymentModel->registerMonths($orgId, $mesAmounts, $fechaPago);
+        $result = $this->paymentModel->registerMonths($orgId, $mesAmounts, $fechaPago, $metodoPago);
 
         if ($result['registered'] > 0) {
-            $_SESSION['success_msg'] = 'Se registraron ' . $result['registered'] . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($result['total'], 0, ',', '.') . ' CLP.';
+            $metodoLabel = Payment::metodoPagoLabels()[$metodoPago];
+            $_SESSION['success_msg'] = 'Se registraron ' . $result['registered'] . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($result['total'], 0, ',', '.') . ' CLP (' . $metodoLabel . ').';
         } else {
             $_SESSION['error_msg'] = 'No se registraron pagos. Los meses seleccionados ya estaban pagados.';
         }

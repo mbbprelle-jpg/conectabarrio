@@ -178,9 +178,20 @@
         <form id="formRegistrarPago" action="<?php echo URLROOT; ?>/maestro/registrar_pago_org" method="POST">
             <input type="hidden" name="org_id" id="pago_modal_org_id">
 
-            <div class="form-group">
-                <label for="fecha_pago" class="form-label">Fecha de Pago *</label>
-                <input type="date" name="fecha_pago" id="fecha_pago" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label for="fecha_pago" class="form-label">Fecha de Pago *</label>
+                    <input type="date" name="fecha_pago" id="fecha_pago" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                </div>
+                <div class="form-group">
+                    <label for="metodo_pago" class="form-label">Método de Pago *</label>
+                    <select name="metodo_pago" id="metodo_pago" class="form-control" required>
+                        <option value="">-- Seleccionar --</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="efectivo">Efectivo</option>
+                        <option value="webpay">Webpay</option>
+                    </select>
+                </div>
             </div>
 
             <div class="form-group" style="margin-bottom: 1rem;">

@@ -58,6 +58,7 @@
                         <th>Organización</th>
                         <th>Período</th>
                         <th>Monto</th>
+                        <th>Método</th>
                         <th>Fecha de pago</th>
                         <th>Estado</th>
                     </tr>
@@ -69,11 +70,14 @@
                         $estadoLabels = ['paid' => 'Pagado', 'pending' => 'Pendiente', 'overdue' => 'Vencido'];
                         $estadoClasses = ['paid' => 'badge-success', 'pending' => 'badge-warning', 'overdue' => 'badge-danger'];
                         $estado = $p->status ?? 'pending';
+                        $metodoLabels = $data['metodo_labels'];
+                        $metodo = $p->metodo_pago ?? null;
                         ?>
                         <tr>
                             <td><strong><?php echo htmlspecialchars($p->org_nombre); ?></strong></td>
                             <td><?php echo htmlspecialchars($periodo); ?></td>
                             <td>$<?php echo number_format($p->amount, 0, ',', '.'); ?></td>
+                            <td><?php echo $metodo ? htmlspecialchars($metodoLabels[$metodo] ?? $metodo) : '—'; ?></td>
                             <td><?php echo !empty($p->paid_at) ? date('d-m-Y', strtotime($p->paid_at)) : '—'; ?></td>
                             <td><span class="badge <?php echo $estadoClasses[$estado] ?? 'badge-secondary'; ?>"><?php echo $estadoLabels[$estado] ?? $estado; ?></span></td>
                         </tr>
