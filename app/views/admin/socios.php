@@ -328,12 +328,22 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
             <?php if (!empty($invitacionesActivas)): ?>
                 <div style="margin-bottom: 1rem;">
                     <h4 style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Enlaces activos</h4>
-                    <?php foreach ($invitacionesActivas as $inv): ?>
-                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 0.4rem; font-size: 0.75rem;">
-                            <span>Vence: <?php echo date('d-m-Y H:i', strtotime($inv->expires_at)); ?></span>
-                            <form action="<?php echo URLROOT; ?>/admin/invitacion_revocar/<?php echo (int)$inv->id; ?>" method="POST" style="margin: 0;">
-                                <button type="submit" class="btn btn-danger btn-sm confirm-action" data-confirm-message="¿Revocar este enlace de invitación?" style="padding: 0.2rem 0.45rem; font-size: 0.7rem;">Revocar</button>
-                            </form>
+                    <?php foreach ($invitacionesActivas as $inv):
+                        $linkInv = URLROOT . '/invite/registro/' . $inv->token;
+                    ?>
+                        <div style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 0.4rem; font-size: 0.75rem;">
+                            <div style="margin-bottom: 0.35rem; color: var(--text-muted);">
+                                Vence: <?php echo date('d-m-Y H:i', strtotime($inv->expires_at)); ?>
+                            </div>
+                            <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+                                <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($linkInv); ?>"
+                                       style="flex: 1; min-width: 0; font-size: 0.68rem; font-family: monospace; padding: 0.35rem 0.5rem;">
+                                <button type="button" class="btn btn-secondary btn-sm btn-copiar-invitacion" data-link="<?php echo htmlspecialchars($linkInv); ?>"
+                                        style="padding: 0.25rem 0.5rem; font-size: 0.7rem; white-space: nowrap;">Copiar link</button>
+                                <form action="<?php echo URLROOT; ?>/admin/invitacion_revocar/<?php echo (int)$inv->id; ?>" method="POST" style="margin: 0;">
+                                    <button type="submit" class="btn btn-danger btn-sm confirm-action" data-confirm-message="¿Revocar este enlace de invitación?" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; white-space: nowrap;">Revocar</button>
+                                </form>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -817,13 +827,36 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('cancelPendienteSocioModal')?.addEventListener('click', () => closeModal(pendModal));
     pendModal?.addEventListener('click', e => { if (e.target === pendModal) closeModal(pendModal); });
 
+    function copiarLinkInvitacion(btn, link) {
+        const url = link || btn.dataset.link;
+        if (!url) return;
+        const copiar = navigator.clipboard?.writeText(url);
+        const ok = () => {
+            const prev = btn.textContent;
+            btn.textContent = 'Copiado';
+            setTimeout(() => { btn.textContent = prev; }, 2000);
+        };
+        if (copiar) {
+            copiar.then(ok).catch(() => {
+                const tmp = document.createElement('textarea');
+                tmp.value = url;
+                document.body.appendChild(tmp);
+                tmp.select();
+                document.execCommand('copy');
+                tmp.remove();
+                ok();
+            });
+        }
+    }
+
     document.getElementById('btnCopiarLink')?.addEventListener('click', function() {
         const input = document.getElementById('linkInvitacionInput');
-        if (!input) return;
-        input.select();
-        navigator.clipboard?.writeText(input.value).then(() => {
-            this.textContent = 'Copiado';
-            setTimeout(() => { this.textContent = 'Copiar'; }, 2000);
+        copiarLinkInvitacion(this, input ? input.value : '');
+    });
+
+    document.querySelectorAll('.btn-copiar-invitacion').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            copiarLinkInvitacion(this);
         });
     });
 
