@@ -76,8 +76,18 @@ class InviteController extends Controller {
         if ($dataSocio['rut'] === '' || $dataSocio['nombres'] === '' || $dataSocio['apellido_paterno'] === ''
             || $dataSocio['apellido_materno'] === '' || $dataSocio['email'] === ''
             || empty($dataSocio['calle_id']) || $dataSocio['numero_casa'] === ''
-            || empty($dataSocio['genero']) || empty($dataSocio['fecha_nacimiento'])) {
+            || empty($dataSocio['genero']) || empty($dataSocio['fecha_nacimiento'])
+            || empty($dataSocio['estado_civil']) || empty($dataSocio['nacionalidad'])) {
             $renderForm('Complete todos los campos obligatorios.');
+            return;
+        }
+
+        if ($profileError = SocioInput::validateProfile($dataSocio, false)) {
+            $renderForm($profileError);
+            return;
+        }
+        if (trim($post['telefono'] ?? '') !== '' && $dataSocio['telefono'] === '') {
+            $renderForm('El teléfono debe tener 9 dígitos (ej: 912345678).');
             return;
         }
 
@@ -154,6 +164,7 @@ class InviteController extends Controller {
 
         $idSocioRaw = trim($post['id_socio'] ?? '');
         $idSocio = ($idSocioRaw !== '') ? (int)$idSocioRaw : null;
+        $profile = SocioInput::parseProfileFromPost($post);
 
         $data = [
             'junta_id' => $juntaId,
@@ -165,13 +176,15 @@ class InviteController extends Controller {
             'email' => mb_strtolower(trim($post['email'] ?? ''), 'UTF-8'),
             'password' => bin2hex(random_bytes(16)),
             'rol' => 'socio',
-            'telefono' => trim($post['telefono'] ?? ''),
+            'telefono' => $profile['telefono'],
             'estado' => 1,
             'calle_id' => $post['calle_id'] ?? null,
             'numero_casa' => trim($post['numero_casa'] ?? ''),
             'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d'),
-            'genero' => SocioInput::normalizeGenero($post['genero'] ?? ''),
-            'fecha_nacimiento' => !empty($post['fecha_nacimiento']) ? $post['fecha_nacimiento'] : null,
+            'genero' => $profile['genero'],
+            'fecha_nacimiento' => $profile['fecha_nacimiento'],
+            'estado_civil' => $profile['estado_civil'],
+            'nacionalidad' => $profile['nacionalidad'],
         ];
 
         return SocioInput::normalizeTextFields($data);

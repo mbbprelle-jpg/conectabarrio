@@ -110,23 +110,12 @@
                         </div>
                     </div>
 
-                    <div class="form-grid-2">
-                        <div class="form-group">
-                            <label class="form-label">Género *</label>
-                            <select name="genero" class="form-control" required>
-                                <option value="">-- Seleccionar --</option>
-                                <option value="MASCULINO" <?php echo (($old['genero'] ?? '') === 'MASCULINO') ? 'selected' : ''; ?>>Masculino</option>
-                                <option value="FEMENINO" <?php echo (($old['genero'] ?? '') === 'FEMENINO') ? 'selected' : ''; ?>>Femenino</option>
-                                <option value="NO ESPECIFICAR" <?php echo (($old['genero'] ?? '') === 'NO ESPECIFICAR') ? 'selected' : ''; ?>>No especificar</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Fecha de Nacimiento *</label>
-                            <input type="date" name="fecha_nacimiento" class="form-control" required
-                                   max="<?php echo date('Y-m-d'); ?>"
-                                   value="<?php echo htmlspecialchars($old['fecha_nacimiento'] ?? ''); ?>">
-                        </div>
-                    </div>
+                    <?php
+                    $prefix = '';
+                    $values = $old ?? [];
+                    $required = true;
+                    require APPROOT . '/views/partials/socio_demografia_fields.php';
+                    ?>
 
                     <div class="form-group">
                         <label class="form-label">RUT *</label>
@@ -141,10 +130,14 @@
                         <input type="email" name="email" class="form-control" required value="<?php echo htmlspecialchars($old['email'] ?? ''); ?>">
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">Teléfono</label>
-                        <input type="text" name="telefono" class="form-control cb-uppercase" value="<?php echo htmlspecialchars($old['telefono'] ?? ''); ?>">
-                    </div>
+                    <?php
+                    $id = 'telefono_invitacion';
+                    $name = 'telefono';
+                    $label = 'Teléfono';
+                    $required = false;
+                    $value = $old['telefono'] ?? '';
+                    require APPROOT . '/views/partials/campo_telefono_cl.php';
+                    ?>
 
                     <div class="form-group">
                         <label class="form-label">Fecha de Inicio como Socio *</label>

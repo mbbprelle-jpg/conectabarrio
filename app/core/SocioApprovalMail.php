@@ -9,17 +9,21 @@ class SocioApprovalMail {
             return ['ok' => false, 'error' => 'Correo inválido'];
         }
 
+        require_once APPROOT . '/core/SocioInput.php';
+
         $nombre = htmlspecialchars($user->nombre ?? '');
         $apPat = htmlspecialchars($user->apellido_paterno ?? '');
         $apMat = htmlspecialchars($user->apellido_materno ?? '');
         $rut = htmlspecialchars($user->rut ?? '');
-        $telefono = htmlspecialchars($user->telefono ?? '—');
+        $telefono = htmlspecialchars(SocioInput::formatTelefonoDisplay($user->telefono ?? '') ?: '—');
         $idSocio = !empty($user->id_socio) ? (int)$user->id_socio : '—';
-        require_once APPROOT . '/core/SocioInput.php';
         $genero = SocioInput::generoLabel($user->genero ?? '');
         $fechaNac = !empty($user->fecha_nacimiento) ? date('d-m-Y', strtotime($user->fecha_nacimiento)) : '—';
+        $estadoCivil = SocioInput::estadoCivilLabel($user->estado_civil ?? '');
+        $nacionalidad = htmlspecialchars($user->nacionalidad ?? '—');
         $generoHtml = htmlspecialchars($genero ?: '—');
         $fechaNacHtml = htmlspecialchars($fechaNac);
+        $estadoCivilHtml = htmlspecialchars($estadoCivil ?: '—');
         $loginUrl = URLROOT . '/auth/login';
         $org = htmlspecialchars($juntaNombre);
 
@@ -38,6 +42,8 @@ class SocioApprovalMail {
             . '<tr><td style="padding:6px 0;color:#94a3b8;">RUT</td><td style="padding:6px 0;text-align:right;font-family:monospace;">' . $rut . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Género</td><td style="padding:6px 0;text-align:right;">' . $generoHtml . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Fecha nacimiento</td><td style="padding:6px 0;text-align:right;">' . $fechaNacHtml . '</td></tr>'
+            . '<tr><td style="padding:6px 0;color:#94a3b8;">Estado civil</td><td style="padding:6px 0;text-align:right;">' . $estadoCivilHtml . '</td></tr>'
+            . '<tr><td style="padding:6px 0;color:#94a3b8;">Nacionalidad</td><td style="padding:6px 0;text-align:right;">' . $nacionalidad . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Teléfono</td><td style="padding:6px 0;text-align:right;">' . $telefono . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Correo</td><td style="padding:6px 0;text-align:right;">' . htmlspecialchars($user->email) . '</td></tr>'
             . '</table>'

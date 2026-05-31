@@ -174,6 +174,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Teléfono Chile (+56 + 9 dígitos ingresados por el usuario)
+    document.querySelectorAll('.cb-telefono-cl').forEach(function(input) {
+        input.addEventListener('input', function() {
+            this.value = this.value.replace(/\D/g, '').slice(0, 9);
+        });
+        input.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const text = (e.clipboardData || window.clipboardData).getData('text');
+            this.value = text.replace(/\D/g, '').slice(0, 9);
+        });
+    });
+
     // Mostrar / ocultar contraseña en campos con .password-toggle-btn
     document.querySelectorAll('.password-toggle-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {

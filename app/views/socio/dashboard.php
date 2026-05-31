@@ -1,4 +1,5 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
+<?php require_once APPROOT . '/core/SocioInput.php'; ?>
 
 <!-- Grid de Información y Estadísticas -->
 <div class="metrics-grid">
@@ -91,8 +92,35 @@
 
             <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem;">
                 <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Teléfono de Contacto</span>
-                <span style="font-size: 1rem; color: var(--text-color);"><?php echo !empty($data['socio']->telefono) ? htmlspecialchars($data['socio']->telefono) : 'No Registrado'; ?></span>
+                <span style="font-size: 1rem; color: var(--text-color);"><?php
+                    $telDisplay = SocioInput::formatTelefonoDisplay($data['socio']->telefono ?? '');
+                    echo $telDisplay !== '' ? htmlspecialchars($telDisplay) : 'No Registrado';
+                ?></span>
             </div>
+
+            <?php if (!empty($data['socio']->genero) || !empty($data['socio']->fecha_nacimiento)): ?>
+            <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Género / Nacimiento</span>
+                <span style="font-size: 1rem; color: var(--text-color);">
+                    <?php echo htmlspecialchars(SocioInput::generoLabel($data['socio']->genero ?? '') ?: '—'); ?>
+                    <?php if (!empty($data['socio']->fecha_nacimiento)): ?>
+                        · <?php echo date('d-m-Y', strtotime($data['socio']->fecha_nacimiento)); ?>
+                    <?php endif; ?>
+                </span>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($data['socio']->estado_civil) || !empty($data['socio']->nacionalidad)): ?>
+            <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Estado Civil / Nacionalidad</span>
+                <span style="font-size: 1rem; color: var(--text-color);">
+                    <?php echo htmlspecialchars(SocioInput::estadoCivilLabel($data['socio']->estado_civil ?? '') ?: '—'); ?>
+                    <?php if (!empty($data['socio']->nacionalidad)): ?>
+                        · <?php echo htmlspecialchars($data['socio']->nacionalidad); ?>
+                    <?php endif; ?>
+                </span>
+            </div>
+            <?php endif; ?>
 
             <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem;">
                 <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Dirección Jurisdicción</span>

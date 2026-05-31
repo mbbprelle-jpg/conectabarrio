@@ -1,6 +1,7 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 <?php
 require_once APPROOT . '/core/AuthContext.php';
+require_once APPROOT . '/core/SocioInput.php';
 $isFullAdmin = AuthContext::isFullAdmin();
 $canManageSocios = AuthContext::canManageSocios();
 $membresiasMap = $data['membresias_map'] ?? [];
@@ -145,6 +146,8 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                     data-fecha-inicio="<?php echo cbFechaSocioInput($pend); ?>"
                                     data-genero="<?php echo htmlspecialchars($pend->genero ?? ''); ?>"
                                     data-fecha-nacimiento="<?php echo !empty($pend->fecha_nacimiento) ? substr($pend->fecha_nacimiento, 0, 10) : ''; ?>"
+                                    data-estado-civil="<?php echo htmlspecialchars($pend->estado_civil ?? ''); ?>"
+                                    data-nacionalidad="<?php echo htmlspecialchars($pend->nacionalidad ?? ''); ?>"
                                     data-calle-id="<?php echo (int)($pend->calle_id ?? 0); ?>"
                                     data-numero-casa="<?php echo htmlspecialchars($pend->numero_casa ?? ''); ?>"
                                     style="font-size: 0.75rem;">
@@ -195,7 +198,10 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                 <td style="font-family: monospace;" class="search-rut"><?php echo htmlspecialchars($socio->rut); ?></td>
                                 <td>
                                     <div><?php echo htmlspecialchars($socio->email); ?></div>
-                                    <div style="font-size: 0.8rem; color: var(--text-muted);"><?php echo htmlspecialchars($socio->telefono ?? 'Sin Fono'); ?></div>
+                                    <div style="font-size: 0.8rem; color: var(--text-muted);"><?php
+                                        $telPadron = SocioInput::formatTelefonoDisplay($socio->telefono ?? '');
+                                        echo $telPadron !== '' ? htmlspecialchars($telPadron) : 'Sin Fono';
+                                    ?></div>
                                     <div style="font-size: 0.75rem; color: var(--primary); font-weight: 500; margin-top: 0.15rem; display: flex; align-items: center; gap: 0.25rem;">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                                         Socio desde: <?php echo cbFormatFechaSocio($socio); ?>
@@ -245,6 +251,10 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                                 data-rut="<?php echo htmlspecialchars($socio->rut ?? ''); ?>"
                                                 data-email="<?php echo htmlspecialchars($socio->email ?? ''); ?>"
                                                 data-telefono="<?php echo htmlspecialchars($socio->telefono ?? ''); ?>"
+                                                data-genero="<?php echo htmlspecialchars($socio->genero ?? ''); ?>"
+                                                data-fecha-nacimiento="<?php echo !empty($socio->fecha_nacimiento) ? substr($socio->fecha_nacimiento, 0, 10) : ''; ?>"
+                                                data-estado-civil="<?php echo htmlspecialchars($socio->estado_civil ?? ''); ?>"
+                                                data-nacionalidad="<?php echo htmlspecialchars($socio->nacionalidad ?? ''); ?>"
                                                 data-fecha-inicio="<?php echo htmlspecialchars(cbFechaSocioInput($socio)); ?>"
                                                 data-calle-id="<?php echo (int)($socio->calle_id ?? 0); ?>"
                                                 data-numero-casa="<?php echo htmlspecialchars($socio->numero_casa ?? ''); ?>"
@@ -374,14 +384,17 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <label for="rut" class="form-label">RUT del Socio *</label>
                 <input type="text" name="rut" id="rut" class="form-control cb-rut-chile" placeholder="126667777-6" maxlength="12" required>
             </div>
+            <?php
+            $prefix = '';
+            $values = [];
+            $required = true;
+            require APPROOT . '/views/partials/socio_demografia_fields.php';
+            ?>
             <div class="form-group">
                 <label for="email" class="form-label">Correo Electrónico *</label>
                 <input type="email" name="email" id="email" class="form-control" required>
             </div>
-            <div class="form-group">
-                <label for="telefono" class="form-label">Teléfono de Contacto</label>
-                <input type="text" name="telefono" id="telefono" class="form-control">
-            </div>
+            <?php require APPROOT . '/views/partials/campo_telefono_cl.php'; ?>
             <div class="form-group">
                 <label for="fecha_inicio" class="form-label">Fecha de Inicio como Socio *</label>
                 <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
@@ -565,16 +578,26 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
             </div>
             <div class="form-group">
                 <label class="form-label">RUT *</label>
-                <input type="text" name="rut" id="edit_rut" class="form-control" required>
+                <input type="text" name="rut" id="edit_rut" class="form-control cb-rut-chile" required maxlength="12">
             </div>
+            <?php
+            $prefix = 'edit_';
+            $values = [];
+            $required = false;
+            require APPROOT . '/views/partials/socio_demografia_fields.php';
+            ?>
             <div class="form-group">
                 <label class="form-label">Correo *</label>
                 <input type="email" name="email" id="edit_email" class="form-control" required>
             </div>
-            <div class="form-group">
-                <label class="form-label">Teléfono</label>
-                <input type="text" name="telefono" id="edit_telefono" class="form-control">
-            </div>
+            <?php
+            $id = 'edit_telefono';
+            $name = 'telefono';
+            $label = 'Teléfono';
+            $required = false;
+            $value = '';
+            require APPROOT . '/views/partials/campo_telefono_cl.php';
+            ?>
             <div class="form-group">
                 <label class="form-label">Fecha inicio como socio *</label>
                 <input type="date" name="fecha_inicio" id="edit_fecha_inicio" class="form-control" required>
@@ -636,29 +659,24 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <label class="form-label">RUT *</label>
                 <input type="text" name="rut" id="pend_rut" class="form-control cb-rut-chile" required maxlength="12">
             </div>
-            <div class="grid-2col">
-                <div class="form-group">
-                    <label class="form-label">Género</label>
-                    <select name="genero" id="pend_genero" class="form-control">
-                        <option value="">-- Sin indicar --</option>
-                        <option value="MASCULINO">Masculino</option>
-                        <option value="FEMENINO">Femenino</option>
-                        <option value="NO ESPECIFICAR">No especificar</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Fecha nacimiento</label>
-                    <input type="date" name="fecha_nacimiento" id="pend_fecha_nacimiento" class="form-control" max="<?php echo date('Y-m-d'); ?>">
-                </div>
-            </div>
+            <?php
+            $prefix = 'pend_';
+            $values = [];
+            $required = false;
+            require APPROOT . '/views/partials/socio_demografia_fields.php';
+            ?>
             <div class="form-group">
                 <label class="form-label">Correo *</label>
                 <input type="email" name="email" id="pend_email" class="form-control" required>
             </div>
-            <div class="form-group">
-                <label class="form-label">Teléfono</label>
-                <input type="text" name="telefono" id="pend_telefono" class="form-control">
-            </div>
+            <?php
+            $id = 'pend_telefono';
+            $name = 'telefono';
+            $label = 'Teléfono';
+            $required = false;
+            $value = '';
+            require APPROOT . '/views/partials/campo_telefono_cl.php';
+            ?>
             <div class="form-group">
                 <label class="form-label">Fecha inicio *</label>
                 <input type="date" name="fecha_inicio" id="pend_fecha_inicio" class="form-control" required>
@@ -698,6 +716,8 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <input type="hidden" name="email" id="pend_aprobar_email">
                 <input type="hidden" name="genero" id="pend_aprobar_genero">
                 <input type="hidden" name="fecha_nacimiento" id="pend_aprobar_fecha_nacimiento">
+                <input type="hidden" name="estado_civil" id="pend_aprobar_estado_civil">
+                <input type="hidden" name="nacionalidad" id="pend_aprobar_nacionalidad">
                 <input type="hidden" name="telefono" id="pend_aprobar_telefono">
                 <input type="hidden" name="fecha_inicio" id="pend_aprobar_fecha_inicio">
                 <input type="hidden" name="calle_id" id="pend_aprobar_calle_id">
@@ -761,6 +781,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const openModal = (el) => { if (el) { el.classList.add('is-open'); document.body.style.overflow = 'hidden'; } };
     const closeModal = (el) => { if (el) { el.classList.remove('is-open'); document.body.style.overflow = ''; } };
 
+    function telefonoDigits(value) {
+        let digits = String(value || '').replace(/\D/g, '');
+        if (digits.length === 11 && digits.startsWith('56')) {
+            digits = digits.slice(2);
+        }
+        return digits.length === 9 ? digits : digits.slice(0, 9);
+    }
+
+    function setTelefonoInput(inputId, fullValue) {
+        const el = document.getElementById(inputId);
+        if (el) {
+            el.value = telefonoDigits(fullValue);
+        }
+    }
+
     document.querySelectorAll('[data-open-modal]').forEach(function(btn) {
         btn.addEventListener('click', function() {
             openModal(document.getElementById(this.getAttribute('data-open-modal')));
@@ -792,7 +827,11 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_apellido_materno').value = this.dataset.apellidoMaterno || '';
             document.getElementById('edit_rut').value = this.dataset.rut || '';
             document.getElementById('edit_email').value = this.dataset.email || '';
-            document.getElementById('edit_telefono').value = this.dataset.telefono || '';
+            setTelefonoInput('edit_telefono', this.dataset.telefono || '');
+            document.getElementById('edit_genero').value = this.dataset.genero || '';
+            document.getElementById('edit_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
+            document.getElementById('edit_estado_civil').value = this.dataset.estadoCivil || '';
+            document.getElementById('edit_nacionalidad').value = this.dataset.nacionalidad || '';
             document.getElementById('edit_fecha_inicio').value = this.dataset.fechaInicio || '';
             document.getElementById('edit_calle_id').value = this.dataset.calleId || '';
             document.getElementById('edit_numero_casa').value = this.dataset.numeroCasa || '';
@@ -814,6 +853,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('pend_aprobar_email').value = document.getElementById('pend_email').value;
         document.getElementById('pend_aprobar_genero').value = document.getElementById('pend_genero').value;
         document.getElementById('pend_aprobar_fecha_nacimiento').value = document.getElementById('pend_fecha_nacimiento').value;
+        document.getElementById('pend_aprobar_estado_civil').value = document.getElementById('pend_estado_civil').value;
+        document.getElementById('pend_aprobar_nacionalidad').value = document.getElementById('pend_nacionalidad').value;
         document.getElementById('pend_aprobar_telefono').value = document.getElementById('pend_telefono').value;
         document.getElementById('pend_aprobar_fecha_inicio').value = document.getElementById('pend_fecha_inicio').value;
         document.getElementById('pend_aprobar_calle_id').value = document.getElementById('pend_calle_id').value;
@@ -829,10 +870,12 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('pend_apellido_materno').value = this.dataset.apellidoMaterno || '';
             document.getElementById('pend_rut').value = this.dataset.rut || '';
             document.getElementById('pend_email').value = this.dataset.email || '';
-            document.getElementById('pend_telefono').value = this.dataset.telefono || '';
+            setTelefonoInput('pend_telefono', this.dataset.telefono || '');
             document.getElementById('pend_fecha_inicio').value = this.dataset.fechaInicio || '';
             document.getElementById('pend_genero').value = this.dataset.genero || '';
             document.getElementById('pend_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
+            document.getElementById('pend_estado_civil').value = this.dataset.estadoCivil || '';
+            document.getElementById('pend_nacionalidad').value = this.dataset.nacionalidad || '';
             document.getElementById('pend_calle_id').value = this.dataset.calleId || '';
             document.getElementById('pend_numero_casa').value = this.dataset.numeroCasa || '';
             document.getElementById('formPendienteRechazar').action = '<?php echo URLROOT; ?>/admin/socio_pendiente_rechazar/' + id;

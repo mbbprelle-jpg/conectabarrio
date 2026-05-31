@@ -206,31 +206,26 @@ class AdminController extends Controller {
                 }
             }
 
-            $idSocio = (int)($post['id_socio'] ?? 0);
+            require_once APPROOT . '/core/RutChile.php';
+            $dataSocio = $this->parseSocioFormData($post);
+            $dataSocio['junta_id'] = $_SESSION['user_junta_id'];
+            $dataSocio['password'] = 'socio123';
+            $dataSocio['rol'] = 'socio';
+            $dataSocio['estado'] = 1;
+            $idSocio = $dataSocio['id_socio'];
 
-            $dataSocio = [
-                'junta_id' => $_SESSION['user_junta_id'],
-                'id_socio' => $idSocio,
-                'rut' => trim($post['rut'] ?? ''),
-                'nombres' => trim($post['nombres'] ?? ''),
-                'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
-                'apellido_materno' => trim($post['apellido_materno'] ?? ''),
-                'email' => trim($post['email'] ?? ''),
-                'password' => 'socio123', // Contraseña inicial obligatoria
-                'rol' => 'socio',
-                'telefono' => trim($post['telefono'] ?? ''),
-                'estado' => 1,
-                'calle_id' => $post['calle_id'] ?? null,
-                'numero_casa' => trim($post['numero_casa'] ?? ''),
-                'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d')
-            ];
-
-            // Validar campos obligatorios
-            if ($idSocio <= 0 || empty($dataSocio['rut']) || empty($dataSocio['nombres']) || empty($dataSocio['apellido_paterno']) || empty($dataSocio['apellido_materno']) || empty($dataSocio['email']) || empty($dataSocio['calle_id']) || empty($dataSocio['numero_casa'])) {
-                $_SESSION['error_msg'] = 'Por favor, rellene todos los campos obligatorios (*) y asegúrese de que el ID Socio sea mayor a 0.';
+            $validationError = $this->validateSocioFormData($dataSocio, true, true);
+            if ($validationError) {
+                $_SESSION['error_msg'] = $validationError;
                 $this->redirect('/admin/socios');
                 return;
             }
+            if ($telError = $this->validateTelefonoPost($post, $dataSocio)) {
+                $_SESSION['error_msg'] = $telError;
+                $this->redirect('/admin/socios');
+                return;
+            }
+            $dataSocio['rut'] = RutChile::normalize($dataSocio['rut']);
 
             // Validar si el ID Socio ya está registrado en esta junta/organización
             $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio");
@@ -303,6 +298,7 @@ class AdminController extends Controller {
 
     private function parseSocioFormData($post) {
         require_once APPROOT . '/core/SocioInput.php';
+        $profile = SocioInput::parseProfileFromPost($post);
         $data = [
             'id_socio' => (int)($post['id_socio'] ?? 0),
             'rut' => trim($post['rut'] ?? ''),
@@ -310,18 +306,21 @@ class AdminController extends Controller {
             'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
             'apellido_materno' => trim($post['apellido_materno'] ?? ''),
             'email' => mb_strtolower(trim($post['email'] ?? ''), 'UTF-8'),
-            'telefono' => trim($post['telefono'] ?? ''),
+            'telefono' => $profile['telefono'],
             'calle_id' => $post['calle_id'] ?? null,
             'numero_casa' => trim($post['numero_casa'] ?? ''),
             'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d'),
-            'genero' => SocioInput::normalizeGenero($post['genero'] ?? ''),
-            'fecha_nacimiento' => !empty($post['fecha_nacimiento']) ? $post['fecha_nacimiento'] : null,
+            'genero' => $profile['genero'],
+            'fecha_nacimiento' => $profile['fecha_nacimiento'],
+            'estado_civil' => $profile['estado_civil'],
+            'nacionalidad' => $profile['nacionalidad'],
         ];
         return SocioInput::normalizeTextFields($data);
     }
 
-    private function validateSocioFormData(array $data, $requireIdSocio = true) {
+    private function validateSocioFormData(array $data, $requireIdSocio = true, $requireProfile = true) {
         require_once APPROOT . '/core/RutChile.php';
+        require_once APPROOT . '/core/SocioInput.php';
         if ($requireIdSocio && $data['id_socio'] <= 0) {
             return 'El ID Socio debe ser mayor a 0.';
         }
@@ -333,6 +332,16 @@ class AdminController extends Controller {
         $rutOk = RutChile::normalize($data['rut']);
         if ($rutOk === false) {
             return 'El RUT no es válido. Use el formato 126667777-6 (sin puntos ni espacios).';
+        }
+        if ($profileError = SocioInput::validateProfile($data, $requireProfile)) {
+            return $profileError;
+        }
+        return null;
+    }
+
+    private function validateTelefonoPost($post, array $data) {
+        if (trim($post['telefono'] ?? '') !== '' && ($data['telefono'] ?? '') === '') {
+            return 'El teléfono debe tener 9 dígitos (ej: 912345678).';
         }
         return null;
     }
@@ -362,7 +371,7 @@ class AdminController extends Controller {
         }
         $data = $this->parseSocioFormData($post);
         $data['id'] = $socioId;
-        $err = $this->validateSocioFormData($data, false);
+        $err = $this->validateSocioFormData($data, false, false);
         if ($err) {
             $_SESSION['error_msg'] = $err;
             $this->redirect('/admin/socios');
@@ -513,24 +522,23 @@ class AdminController extends Controller {
             return;
         }
         $idSocio = (int)($post['id_socio'] ?? 0);
-        $data = [
-            'id' => $socioId,
-            'id_socio' => $idSocio,
-            'rut' => trim($post['rut'] ?? ''),
-            'nombres' => trim($post['nombres'] ?? ''),
-            'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
-            'apellido_materno' => trim($post['apellido_materno'] ?? ''),
-            'email' => trim($post['email'] ?? ''),
-            'telefono' => trim($post['telefono'] ?? ''),
-            'calle_id' => $post['calle_id'] ?? null,
-            'numero_casa' => trim($post['numero_casa'] ?? ''),
-            'fecha_inicio' => $post['fecha_inicio'] ?? date('Y-m-d'),
-        ];
-        if ($idSocio <= 0 || $data['rut'] === '' || $data['nombres'] === '' || $data['apellido_paterno'] === '' || $data['apellido_materno'] === '' || $data['email'] === '' || empty($data['calle_id']) || $data['numero_casa'] === '') {
-            $_SESSION['error_msg'] = 'Complete todos los campos obligatorios del socio.';
+        $data = $this->parseSocioFormData($post);
+        $data['id'] = $socioId;
+        $data['id_socio'] = $idSocio;
+
+        $validationError = $this->validateSocioFormData($data, true, false);
+        if ($validationError) {
+            $_SESSION['error_msg'] = $validationError;
             $this->redirect('/admin/socios');
             return;
         }
+        if ($telError = $this->validateTelefonoPost($post, $data)) {
+            $_SESSION['error_msg'] = $telError;
+            $this->redirect('/admin/socios');
+            return;
+        }
+        require_once APPROOT . '/core/RutChile.php';
+        $data['rut'] = RutChile::normalize($data['rut']);
         $this->db->query("SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio AND id != :id LIMIT 1");
         $this->db->bind(':junta_id', $juntaId);
         $this->db->bind(':id_socio', $idSocio);
