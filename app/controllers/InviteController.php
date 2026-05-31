@@ -132,7 +132,7 @@ class InviteController extends Controller {
         };
 
         if ($dataSocio['rut'] === '' || $dataSocio['nombres'] === '' || $dataSocio['apellido_paterno'] === ''
-            || $dataSocio['apellido_materno'] === '' || $dataSocio['email'] === ''
+            || $dataSocio['email'] === ''
             || empty($dataSocio['calle_id']) || $dataSocio['numero_casa'] === ''
             || empty($dataSocio['genero']) || empty($dataSocio['fecha_nacimiento'])
             || empty($dataSocio['estado_civil']) || empty($dataSocio['nacionalidad'])
@@ -257,7 +257,7 @@ class InviteController extends Controller {
             'rut' => trim($post['rut'] ?? ''),
             'nombres' => trim($post['nombres'] ?? ''),
             'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
-            'apellido_materno' => trim($post['apellido_materno'] ?? ''),
+            'apellido_materno' => trim($post['apellido_materno'] ?? '') ?: null,
             'email' => mb_strtolower(trim($post['email'] ?? ''), 'UTF-8'),
             'password' => bin2hex(random_bytes(16)),
             'rol' => 'socio',

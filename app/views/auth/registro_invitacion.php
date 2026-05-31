@@ -176,8 +176,11 @@
                             <input type="text" name="apellido_paterno" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['apellido_paterno'] ?? ''); ?>">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Apellido Materno *</label>
-                            <input type="text" name="apellido_materno" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['apellido_materno'] ?? ''); ?>">
+                            <label class="form-label">Apellido Materno <span style="font-weight: normal; color: var(--text-muted);">(opcional)</span></label>
+                            <input type="text" name="apellido_materno" id="inputApellidoMaternoInvitacion" class="form-control cb-uppercase"
+                                   value="<?php echo htmlspecialchars($old['apellido_materno'] ?? ''); ?>"
+                                   placeholder="Dejar vacío si no aplica">
+                            <small style="color: var(--text-muted); font-size: 0.75rem;">Si no tiene apellido materno, puede dejarlo en blanco.</small>
                         </div>
                     </div>
 
@@ -292,3 +295,70 @@
 </script>
 
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>
+
+<script>
+(function() {
+    const form = document.getElementById('formRegistroInvitacion');
+    if (!form) return;
+
+    const overlay = document.getElementById('cbConfirmModal');
+    const titleEl = document.getElementById('cbConfirmTitle');
+    const messageEl = document.getElementById('cbConfirmMessage');
+    const iconEl = document.getElementById('cbConfirmIcon');
+    const okBtn = document.getElementById('cbConfirmOk');
+    const cancelBtn = document.getElementById('cbConfirmCancel');
+    let pendingSubmit = false;
+
+    function closeModal() {
+        if (!overlay) return;
+        overlay.classList.remove('is-open');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        pendingSubmit = false;
+    }
+
+    function openApellidoMaternoConfirm(onConfirm) {
+        if (!overlay || !okBtn) {
+            if (window.confirm('El apellido materno está vacío. ¿Confirma que desea continuar sin ese dato?')) {
+                onConfirm();
+            }
+            return;
+        }
+        titleEl.textContent = 'Apellido materno vacío';
+        messageEl.textContent = 'No ingresó apellido materno. ¿Confirma que desea continuar sin ese dato?';
+        iconEl.className = 'cb-confirm-icon warning';
+        okBtn.className = 'btn btn-warning';
+        okBtn.textContent = 'Sí, continuar sin apellido materno';
+        pendingSubmit = true;
+        overlay.classList.add('is-open');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        const handler = function() {
+            okBtn.removeEventListener('click', handler);
+            closeModal();
+            onConfirm();
+        };
+        okBtn.addEventListener('click', handler);
+    }
+
+    cancelBtn?.addEventListener('click', closeModal);
+    overlay?.addEventListener('click', function(e) {
+        if (e.target === overlay) closeModal();
+    });
+
+    form.addEventListener('submit', function(e) {
+        if (form.dataset.apellidoMaternoConfirmado === '1') {
+            form.dataset.apellidoMaternoConfirmado = '0';
+            return;
+        }
+        const apellidoMaterno = (document.getElementById('inputApellidoMaternoInvitacion')?.value || '').trim();
+        if (apellidoMaterno !== '') return;
+
+        e.preventDefault();
+        openApellidoMaternoConfirm(function() {
+            form.dataset.apellidoMaternoConfirmado = '1';
+            form.requestSubmit();
+        });
+    });
+})();
+</script>

@@ -817,7 +817,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
         <details style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
             <summary style="cursor: pointer; color: var(--primary);">Columnas esperadas</summary>
             <p style="margin: 0.5rem 0 0;">id_socio, rut, nombres, apellido_paterno, apellido_materno, email, telefono, genero, fecha_nacimiento, estado_civil, nacionalidad, profesion, calle, numero_casa, fecha_inicio</p>
-            <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres, apellido paterno y apellido materno. El correo puede quedar vacío.</p>
+            <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres y apellido paterno. Apellido materno y correo pueden quedar vacíos.</p>
         </details>
 
         <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST">

@@ -188,9 +188,6 @@ class SocioBulkImport {
         if (($data['apellido_paterno'] ?? '') === '') {
             $errors[] = 'Falta apellido paterno';
         }
-        if (($data['apellido_materno'] ?? '') === '') {
-            $errors[] = 'Falta apellido materno';
-        }
         if (!empty($data['email']) && !str_contains($data['email'], '@prevalidar.conectabarrio')) {
             if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
                 $errors[] = 'Correo inválido';
