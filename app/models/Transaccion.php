@@ -55,18 +55,26 @@ class Transaccion extends Model {
         return $this->db->resultSet();
     }
 
-    // Obtener un pago específico por ID para visualización del recibo
-    public function getPagoById($id) {
-        $this->db->query("SELECT t.*, u.nombre as socio_nombre, u.rut as socio_rut, u.email as socio_email, 
-                         j.nombre as junta_nombre, j.rut_junta as junta_rut_id, j.direccion as junta_direccion, j.comuna as junta_comuna,
-                         r.nombre as admin_nombre
-                         FROM transacciones t 
-                         INNER JOIN usuarios u ON t.socio_id = u.id 
-                         INNER JOIN juntas_vecinos j ON t.junta_id = j.id
-                         INNER JOIN usuarios r ON t.registrado_por = r.id
-                         WHERE t.id = :id AND t.categoria = 'Cuota Socio'");
+    // Obtener un comprobante de cuota por ID (recibo imprimible)
+    public function getComprobanteById($id) {
+        $this->db->query("SELECT t.*,
+            u.nombre AS socio_nombre, u.rut AS socio_rut, u.email AS socio_email, u.id_socio,
+            j.nombre AS junta_nombre, j.rut_junta AS junta_rut_id, j.direccion AS junta_direccion, j.comuna AS junta_comuna,
+            r.nombre AS admin_nombre
+            FROM transacciones t
+            INNER JOIN usuarios u ON t.socio_id = u.id
+            INNER JOIN juntas_vecinos j ON t.junta_id = j.id
+            LEFT JOIN usuarios r ON t.registrado_por = r.id
+            WHERE t.id = :id
+            AND t.socio_id IS NOT NULL
+            AND t.categoria IN ('Cuota Socio', 'Cuota Condonada')");
         $this->db->bind(':id', $id);
         return $this->db->single();
+    }
+
+    // Alias retrocompatible
+    public function getPagoById($id) {
+        return $this->getComprobanteById($id);
     }
 
     // Obtener balance financiero consolidado para el Dashboard

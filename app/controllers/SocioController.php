@@ -16,8 +16,11 @@ class SocioController extends Controller {
         $socioId = $_SESSION['user_id'];
         $juntaId = $_SESSION['user_junta_id'];
 
-        // Obtener datos del socio (incluyendo nombre de su junta)
+        // Obtener datos del socio
         $socio = $this->userModel->getSocioById($socioId);
+        if (!$socio) {
+            $socio = $this->userModel->getUserById($socioId);
+        }
         if (!$socio) {
             die('Error al cargar la información del socio.');
         }
@@ -66,32 +69,35 @@ class SocioController extends Controller {
         $data = [
             'title' => 'Mis Comprobantes de Pago',
             'header_title' => 'Historial de Comprobantes',
-            'header_subtitle' => 'Visualice y descargue los comprobantes de recaudación digitalizados de sus mensualidades y aportes',
+            'header_subtitle' => 'Visualice e imprima los comprobantes de sus cuotas registradas por la directiva',
             'active_menu' => 'comprobantes',
-            'transacciones' => $transacciones
+            'transacciones' => $transacciones,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
         ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
 
         $this->view('socio/comprobantes', $data);
     }
 
     // Visualizar un comprobante de pago específico para impresión
     public function comprobante($id) {
-        $socioId = $_SESSION['user_id'];
+        $socioId = (int)$_SESSION['user_id'];
+        $pago = $this->transaccionModel->getComprobanteById($id);
 
-        // Obtener los datos del pago
-        $pago = $this->transaccionModel->getPagoById($id);
-
-        // Control de seguridad riguroso: validar que exista y que pertenezca al socio en sesión
-        if (!$pago || $pago->socio_id != $socioId) {
-            die('Acceso Denegado: No tienes autorización para visualizar este comprobante.');
+        if (!$pago || (int)$pago->socio_id !== $socioId) {
+            $_SESSION['error_msg'] = 'No tiene autorización para visualizar este comprobante.';
+            $this->redirect('/socio/comprobantes');
+            return;
         }
 
         $data = [
-            'title' => 'Comprobante de Pago Folio #' . str_pad($pago->id, 6, '0', STR_PAD_LEFT),
-            'pago' => $pago
+            'title' => 'Comprobante Folio #' . str_pad($pago->id, 6, '0', STR_PAD_LEFT),
+            'pago' => $pago,
+            'is_socio_view' => true,
+            'back_url' => URLROOT . '/socio/comprobantes',
         ];
 
-        // Reutilizar la vista de comprobante limpio (sin dashboard wrapper) de forma segura
         $this->view('admin/comprobante_detalle', $data);
     }
 }

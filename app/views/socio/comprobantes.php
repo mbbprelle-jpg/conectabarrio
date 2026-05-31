@@ -1,5 +1,12 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 
+<?php if (!empty($data['success'])): ?>
+    <div class="alert alert-success"><span><?php echo htmlspecialchars($data['success']); ?></span></div>
+<?php endif; ?>
+<?php if (!empty($data['error'])): ?>
+    <div class="alert alert-danger"><span><?php echo htmlspecialchars($data['error']); ?></span></div>
+<?php endif; ?>
+
 <!-- Contenedor Principal de Comprobantes -->
 <div class="card card-primary" style="margin-top: 1rem;">
     
@@ -78,15 +85,11 @@
                                 <?php echo htmlspecialchars($t->admin_nombre ?? 'Sistema'); ?>
                             </td>
                             <td style="text-align: right;">
-                                <?php if ($t->categoria === 'Cuota Socio'): ?>
+                                <?php if (in_array($t->categoria, ['Cuota Socio', 'Cuota Condonada'], true)): ?>
                                     <a href="<?php echo URLROOT; ?>/socio/comprobante/<?php echo $t->id; ?>" target="_blank" class="btn btn-primary btn-sm" style="padding: 0.4rem 0.8rem; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.8rem;">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                                        Ver Recibo
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                        Ver comprobante
                                     </a>
-                                <?php elseif ($t->categoria === 'Cuota Condonada'): ?>
-                                    <span style="font-size: 0.78rem; color: var(--warning); font-weight: 600; font-style: italic;" title="<?php echo htmlspecialchars($t->descripcion); ?>">
-                                        <?php echo htmlspecialchars($t->descripcion); ?>
-                                    </span>
                                 <?php else: ?>
                                     <span style="font-size: 0.78rem; color: var(--text-muted); font-style: italic;">
                                         <?php echo htmlspecialchars($t->descripcion ?? 'Registrado'); ?>

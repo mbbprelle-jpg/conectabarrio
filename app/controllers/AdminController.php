@@ -1001,7 +1001,7 @@ class AdminController extends Controller {
 
     // Visualizar recibo de pago para imprimir
     public function comprobante($id) {
-        $pago = $this->transaccionModel->getPagoById($id);
+        $pago = $this->transaccionModel->getComprobanteById($id);
 
         if (!$pago || $pago->junta_id != $_SESSION['user_junta_id']) {
             die('Comprobante no válido o no pertenece a su Junta de Vecinos.');

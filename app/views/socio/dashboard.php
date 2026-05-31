@@ -171,6 +171,9 @@
                             <?php if ($t->categoria === 'Cuota Condonada'): ?>
                                 <span class="badge badge-warning" style="font-size: 0.7rem; text-transform: uppercase;">Exento</span>
                                 <span style="font-weight: 800; color: var(--warning); font-family: var(--font-heading);">$0</span>
+                                <a href="<?php echo URLROOT; ?>/socio/comprobante/<?php echo $t->id; ?>" target="_blank" class="btn btn-secondary btn-sm" style="padding: 0.35rem 0.5rem; display: flex; align-items: center; gap: 0.25rem;" title="Ver comprobante">
+                                    Comprobante
+                                </a>
                             <?php elseif ($t->categoria === 'Cuota Socio'): ?>
                                 <span style="font-weight: 800; color: var(--success); font-family: var(--font-heading);">$<?php echo number_format($t->monto, 0, ',', '.'); ?></span>
                                 <a href="<?php echo URLROOT; ?>/socio/comprobante/<?php echo $t->id; ?>" target="_blank" class="btn btn-secondary btn-sm" style="padding: 0.35rem 0.5rem; display: flex; align-items: center; gap: 0.25rem;" title="Descargar Recibo">
