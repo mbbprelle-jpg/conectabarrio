@@ -183,6 +183,20 @@ class User extends Model {
         return $this->db->execute();
     }
 
+    public function changePasswordWithCurrent($userId, $currentPassword, $newPassword) {
+        $user = $this->getUserById($userId);
+        if (!$user || !password_verify($currentPassword, $user->password)) {
+            return ['ok' => false, 'error' => 'La contraseña actual no es correcta.'];
+        }
+        if (password_verify($newPassword, $user->password)) {
+            return ['ok' => false, 'error' => 'La nueva contraseña debe ser distinta a la actual.'];
+        }
+        if ($this->resetPassword($userId, $newPassword)) {
+            return ['ok' => true];
+        }
+        return ['ok' => false, 'error' => 'No se pudo guardar la nueva contraseña.'];
+    }
+
 
     // Obtener administradores activos de una organización
     public function getAdminsByJunta($juntaId) {

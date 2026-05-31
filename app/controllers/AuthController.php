@@ -328,4 +328,56 @@ return;
         ]);
     }
 
+    public function changePassword() {
+        if (!isset($_SESSION['user_id'])) {
+            $this->redirect('/auth/login');
+            return;
+        }
+        if (!empty($_SESSION['must_change'])) {
+            $this->redirect('/auth/resetPassword');
+            return;
+        }
+
+        $viewData = [
+            'title' => 'Cambiar Contraseña',
+            'header_title' => 'Cambiar contraseña',
+            'header_subtitle' => 'Actualice su clave de acceso al portal',
+            'active_menu' => 'password',
+            'error' => '',
+            'success' => '',
+        ];
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+            $current = $_POST['current_password'] ?? '';
+            $newPass = trim($_POST['new_password'] ?? '');
+            $confirm = trim($_POST['confirm_password'] ?? '');
+
+            if ($current === '' || $newPass === '' || $confirm === '') {
+                $viewData['error'] = 'Complete todos los campos.';
+                $this->view('auth/change_password', $viewData);
+                return;
+            }
+            if (strlen($newPass) < 8) {
+                $viewData['error'] = 'La nueva contraseña debe tener al menos 8 caracteres.';
+                $this->view('auth/change_password', $viewData);
+                return;
+            }
+            if ($newPass !== $confirm) {
+                $viewData['error'] = 'La confirmación no coincide con la nueva contraseña.';
+                $this->view('auth/change_password', $viewData);
+                return;
+            }
+
+            $result = $this->userModel->changePasswordWithCurrent($_SESSION['user_id'], $current, $newPass);
+            if ($result['ok']) {
+                $viewData['success'] = 'Su contraseña fue actualizada correctamente.';
+                $viewData['error'] = '';
+            } else {
+                $viewData['error'] = $result['error'] ?? 'No se pudo cambiar la contraseña.';
+            }
+        }
+
+        $this->view('auth/change_password', $viewData);
+    }
+
 }

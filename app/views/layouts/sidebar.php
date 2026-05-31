@@ -12,24 +12,50 @@
     </div>
 
     <!-- Perfil de Usuario en Sidebar -->
+    <?php
+    $sidebarNombreRaw = $_SESSION['user_nombre'] ?? '';
+    $sidebarDisplayName = trim(preg_replace('/\s*\([^)]*\)\s*$/', '', $sidebarNombreRaw));
+    if ($sidebarDisplayName === '') {
+        $sidebarDisplayName = $sidebarNombreRaw;
+    }
+
+    $cargoLabels = [
+        'SECRETARIO' => 'Secretario/a',
+        'TESORERO' => 'Tesorero/a',
+        'DIRECTOR' => 'Director/a',
+    ];
+    $sidebarRoleLabel = 'Socio';
+    if ($_SESSION['user_rol'] === 'maestro') {
+        $sidebarRoleLabel = 'Maestro del sistema';
+    } elseif ($_SESSION['user_rol'] === 'admin') {
+        $sidebarRoleLabel = 'Administrador';
+    } elseif (!empty($_SESSION['user_cargo'])) {
+        $cargoKey = strtoupper((string) $_SESSION['user_cargo']);
+        $sidebarRoleLabel = $cargoLabels[$cargoKey] ?? ucfirst(strtolower((string) $_SESSION['user_cargo']));
+    }
+
+    $sidebarInitials = '';
+    foreach (array_slice(preg_split('/\s+/', $sidebarDisplayName), 0, 2) as $part) {
+        if ($part !== '') {
+            $sidebarInitials .= mb_strtoupper(mb_substr($part, 0, 1));
+        }
+    }
+    if ($sidebarInitials === '') {
+        $sidebarInitials = '?';
+    }
+    ?>
     <div class="sidebar-profile">
-        <span class="sidebar-profile-name"><?php echo htmlspecialchars($_SESSION['user_nombre']); ?></span>
-        <span class="sidebar-profile-role">
-            <?php 
-            if ($_SESSION['user_rol'] === 'maestro') echo 'Perfil Maestro';
-            elseif ($_SESSION['user_rol'] === 'admin') echo 'Administrador';
-            else {
-                if (!empty($_SESSION['user_cargo'])) {
-                    echo htmlspecialchars($_SESSION['user_cargo']);
-                } else {
-                    echo 'Socio Vecino';
-                }
-            }
-            if (!empty($_SESSION['user_junta_nombre']) && $_SESSION['user_rol'] !== 'maestro') {
-                echo '<br><small style="opacity:0.75;font-size:0.7rem;">' . htmlspecialchars($_SESSION['user_junta_nombre']) . '</small>';
-            }
-            ?>
-        </span>
+        <div class="sidebar-profile-avatar" aria-hidden="true"><?php echo htmlspecialchars($sidebarInitials); ?></div>
+        <div class="sidebar-profile-body">
+            <div class="sidebar-profile-name"><?php echo htmlspecialchars($sidebarDisplayName); ?></div>
+            <span class="sidebar-profile-badge"><?php echo htmlspecialchars($sidebarRoleLabel); ?></span>
+            <?php if (!empty($_SESSION['user_junta_nombre']) && $_SESSION['user_rol'] !== 'maestro'): ?>
+                <div class="sidebar-profile-org">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    <span><?php echo htmlspecialchars($_SESSION['user_junta_nombre']); ?></span>
+                </div>
+            <?php endif; ?>
+        </div>
     </div>
 
     <ul class="sidebar-menu">
@@ -122,11 +148,21 @@
     </ul>
 
     <div class="sidebar-footer">
-        <li class="sidebar-menu-item" style="list-style: none;">
-            <a href="<?php echo URLROOT; ?>/auth/logout" class="confirm-action" data-confirm-message="¿Estás seguro de que quieres cerrar tu sesión?" style="color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.15);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                <span>Cerrar Sesión</span>
-            </a>
-        </li>
+        <ul class="sidebar-menu sidebar-menu--footer">
+            <?php if (empty($_SESSION['must_change'])): ?>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'password') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/auth/changePassword">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    <span>Cambiar contraseña</span>
+                </a>
+            </li>
+            <?php endif; ?>
+            <li class="sidebar-menu-item sidebar-menu-item--logout">
+                <a href="<?php echo URLROOT; ?>/auth/logout" class="confirm-action" data-confirm-message="¿Estás seguro de que quieres cerrar tu sesión?">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    <span>Cerrar sesión</span>
+                </a>
+            </li>
+        </ul>
     </div>
 </div>
