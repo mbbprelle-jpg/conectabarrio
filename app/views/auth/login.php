@@ -238,7 +238,7 @@
         </form>
         
         <div style="text-align: center; margin-top: 1.5rem; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
-            Desarrollado para Juntas de Vecinos en Chile.
+            Desarrollado para Organizaciones Chilenas.
         </div>
     </div>
 </div>
@@ -252,28 +252,6 @@
         card.style.setProperty('--x', `${x}px`);
         card.style.setProperty('--y', `${y}px`);
     }
-
-    // Cerrar modal solo con botón X o tecla ESC
-    const modalOverlay = document.getElementById('authModalOverlay');
-    const closeBtn = document.getElementById('modalCloseBtn');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            modalOverlay.classList.remove('active');
-        });
-    }
-    // Evitar cierre al hacer click fuera del modal (no hacemos nada)
-    modalOverlay.addEventListener('click', (e) => {
-        if (e.target === modalOverlay) {
-            // No cerrar, simplemente consumir el evento
-            e.stopPropagation();
-        }
-    });
-    // Cerrar con ESC
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalOverlay.classList.contains('active')) {
-            modalOverlay.classList.remove('active');
-        }
-    });
 
     // Cambiar opacidad de la Navbar al hacer Scroll
     window.addEventListener('scroll', function() {

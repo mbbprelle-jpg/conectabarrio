@@ -166,13 +166,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // Cerrar al hacer click en el overlay oscuro
-        authModalOverlay.addEventListener('click', function(e) {
-            if (e.target === authModalOverlay) {
-                authModalOverlay.classList.remove('active');
-            }
-        });
-
         // Cerrar con la tecla Escape
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && authModalOverlay.classList.contains('active')) {
