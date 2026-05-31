@@ -56,6 +56,7 @@
                 <thead>
                     <tr>
                         <th>Organización</th>
+                        <th>Comprobante</th>
                         <th>Período</th>
                         <th>Monto</th>
                         <th>Método</th>
@@ -75,6 +76,9 @@
                         ?>
                         <tr>
                             <td><strong><?php echo htmlspecialchars($p->org_nombre); ?></strong></td>
+                            <td style="font-family: monospace; font-size: 0.8rem; color: var(--primary);">
+                                <?php echo !empty($p->comprobante_correlativo) ? htmlspecialchars($p->comprobante_correlativo) : '—'; ?>
+                            </td>
                             <td><?php echo htmlspecialchars($periodo); ?></td>
                             <td>$<?php echo number_format($p->amount, 0, ',', '.'); ?></td>
                             <td><?php echo $metodo ? htmlspecialchars($metodoLabels[$metodo] ?? $metodo) : '—'; ?></td>

@@ -1,7 +1,7 @@
 <?php
 class PaymentReceiptMail {
 
-    public static function sendToOrgAdmins($junta, array $mesAmounts, $fechaPago, $metodoPago, $metodoLabel) {
+    public static function sendToOrgAdmins($junta, array $mesAmounts, $fechaPago, $metodoPago, $metodoLabel, $correlativo = null) {
         if (!Mailer::isConfigured()) {
             return ['ok' => false, 'error' => 'SMTP no configurado'];
         }
@@ -20,8 +20,10 @@ class PaymentReceiptMail {
                 . '<td style="padding:8px;border-bottom:1px solid #334155;text-align:right;">$' . number_format($amount, 0, ',', '.') . '</td></tr>';
         }
 
-        $subject = 'Comprobante de pago ConectaBarrio - ' . htmlspecialchars($junta->nombre);
-        $html = self::buildHtml($junta->nombre, $mesesHtml, $total, $fechaPago, $metodoLabel);
+        $subject = $correlativo
+            ? 'Comprobante ' . $correlativo . ' - ' . htmlspecialchars($junta->nombre)
+            : 'Comprobante de pago ConectaBarrio - ' . htmlspecialchars($junta->nombre);
+        $html = self::buildHtml($junta->nombre, $mesesHtml, $total, $fechaPago, $metodoLabel, $correlativo);
 
         $sent = 0;
         $errors = [];
@@ -44,8 +46,13 @@ class PaymentReceiptMail {
         return ['ok' => true, 'sent' => $sent, 'errors' => $errors];
     }
 
-    private static function buildHtml($orgNombre, $mesesHtml, $total, $fechaPago, $metodoLabel) {
+    private static function buildHtml($orgNombre, $mesesHtml, $total, $fechaPago, $metodoLabel, $correlativo = null) {
         $fechaFmt = date('d-m-Y', strtotime($fechaPago));
+        $folioBlock = $correlativo
+            ? '<p style="margin:0 0 16px;padding:12px 16px;background:rgba(8,145,178,0.15);border:1px solid rgba(8,145,178,0.35);border-radius:8px;text-align:center;">'
+                . '<span style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;">N° Comprobante interno</span><br>'
+                . '<strong style="font-size:20px;color:#22d3ee;font-family:monospace;">' . htmlspecialchars($correlativo) . '</strong></p>'
+            : '';
         return '<div style="font-family:Arial,sans-serif;background:#0f172a;color:#e2e8f0;padding:24px;">'
             . '<div style="max-width:560px;margin:0 auto;background:#1e293b;border-radius:12px;overflow:hidden;border:1px solid #334155;">'
             . '<div style="background:linear-gradient(135deg,#0891b2,#6366f1);padding:24px;text-align:center;">'
@@ -54,6 +61,7 @@ class PaymentReceiptMail {
             . '<div style="padding:24px;">'
             . '<p>Estimado(a) <strong>{{NOMBRE_ADMIN}}</strong>,</p>'
             . '<p>Confirmamos la recepción del pago de suscripción para <strong>' . htmlspecialchars($orgNombre) . '</strong>.</p>'
+            . $folioBlock
             . '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
             . '<thead><tr><th style="text-align:left;padding:8px;color:#94a3b8;">Período</th>'
             . '<th style="text-align:right;padding:8px;color:#94a3b8;">Monto</th></tr></thead><tbody>'

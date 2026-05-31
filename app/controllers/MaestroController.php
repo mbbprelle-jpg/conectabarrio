@@ -358,12 +358,22 @@ class MaestroController extends Controller {
             }
         }
 
-        $result = $this->paymentModel->registerMonths($orgId, $mesAmounts, $fechaPago, $metodoPago);
+        try {
+            $result = $this->paymentModel->registerMonths($orgId, $mesAmounts, $fechaPago, $metodoPago);
+        } catch (Exception $e) {
+            $_SESSION['error_msg'] = 'Error al registrar el pago: ' . $e->getMessage();
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
 
         if ($result['registered'] > 0) {
             $metodoLabel = Payment::metodoPagoLabels()[$metodoPago];
-            $mailResult = PaymentReceiptMail::sendToOrgAdmins($junta, $mesAmounts, $fechaPago, $metodoPago, $metodoLabel);
+            $correlativo = $result['correlativo'] ?? null;
+            $mailResult = PaymentReceiptMail::sendToOrgAdmins($junta, $mesAmounts, $fechaPago, $metodoPago, $metodoLabel, $correlativo);
             $msg = 'Se registraron ' . $result['registered'] . ' mes(es) de suscripción para "' . $junta->nombre . '" por un total de $' . number_format($result['total'], 0, ',', '.') . ' CLP (' . $metodoLabel . ').';
+            if ($correlativo) {
+                $msg .= ' Comprobante N° ' . $correlativo . '.';
+            }
             if ($mailResult['ok']) {
                 $msg .= ' Comprobante enviado a ' . $mailResult['sent'] . ' administrador(es).';
             } elseif (Mailer::isConfigured()) {
