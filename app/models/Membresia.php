@@ -83,13 +83,43 @@ class Membresia extends Model {
     }
 
     public function getEquipoByJunta($juntaId) {
-        $this->db->query("SELECT u.id, u.nombre, u.apellido_paterno, u.email, u.rut, u.estado,
+        $this->db->query("SELECT u.id, u.nombre, u.apellido_paterno, u.email, u.rut, u.estado, u.rol AS usuario_rol,
             m.id AS membresia_id, m.rol, m.cargo, m.permiso_gestion_socios, m.permiso_registro_pagos, m.permiso_todos
             FROM usuario_membresias m
             INNER JOIN usuarios u ON u.id = m.usuario_id
-            WHERE m.junta_id = :junta_id AND m.estado = 1
+            WHERE m.junta_id = :junta_id AND m.estado = 1 AND u.rol != 'maestro'
             ORDER BY FIELD(m.rol, 'admin', 'socio'), u.nombre ASC");
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->resultSet();
+    }
+
+    public function countActiveAdmins($juntaId) {
+        $this->db->query("SELECT COUNT(*) AS total FROM usuario_membresias
+            WHERE junta_id = :junta_id AND rol = 'admin' AND estado = 1");
+        $this->db->bind(':junta_id', $juntaId);
+        $row = $this->db->single();
+        return $row ? (int)$row->total : 0;
+    }
+
+    public function isOnlyActiveAdmin($usuarioId, $juntaId) {
+        $mem = $this->getByUsuarioJunta($usuarioId, $juntaId);
+        if (!$mem || $mem->rol !== 'admin' || (int)$mem->estado !== 1) {
+            return false;
+        }
+        return $this->countActiveAdmins($juntaId) <= 1;
+    }
+
+    public function deactivate($usuarioId, $juntaId) {
+        $this->db->query("UPDATE usuario_membresias SET estado = 0
+            WHERE usuario_id = :usuario_id AND junta_id = :junta_id");
+        $this->db->bind(':usuario_id', $usuarioId);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->execute();
+    }
+
+    public function deactivateAllForUsuario($usuarioId) {
+        $this->db->query("UPDATE usuario_membresias SET estado = 0 WHERE usuario_id = :usuario_id");
+        $this->db->bind(':usuario_id', $usuarioId);
+        return $this->db->execute();
     }
 }

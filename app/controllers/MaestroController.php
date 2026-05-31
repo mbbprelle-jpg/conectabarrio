@@ -412,6 +412,17 @@ class MaestroController extends Controller {
             $this->redirect('/maestro/dashboard');
             return;
         }
+        $error = $this->validateMemberAction($userId, $orgId);
+        if ($error) {
+            $_SESSION['error_msg'] = $error;
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        if ($nuevoRol === 'socio' && $this->membresiaModel->isOnlyActiveAdmin($userId, $orgId)) {
+            $_SESSION['error_msg'] = 'No puede quitar el rol de administrador al único admin activo de la organización.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
         $this->userModel->db->query('UPDATE usuarios SET rol = :rol, junta_id = :junta_id WHERE id = :id');
         $this->userModel->db->bind(':rol', $nuevoRol);
         $this->userModel->db->bind(':junta_id', $orgId);
@@ -462,6 +473,154 @@ class MaestroController extends Controller {
         }
         $_SESSION['success_msg'] = 'Administrador agregado. Clave inicial: admin123';
         $this->redirect('/maestro/dashboard');
+    }
+
+    public function reasignar_miembro() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $orgId = (int)($post['org_id'] ?? 0);
+        $userId = (int)($post['user_id'] ?? 0);
+        $destOrgId = (int)($post['dest_org_id'] ?? 0);
+
+        if ($orgId <= 0 || $userId <= 0 || $destOrgId <= 0) {
+            $_SESSION['error_msg'] = 'Datos inválidos para reasignar usuario.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        if ($orgId === $destOrgId) {
+            $_SESSION['error_msg'] = 'Seleccione una organización distinta a la actual.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $error = $this->validateMemberAction($userId, $orgId);
+        if ($error) {
+            $_SESSION['error_msg'] = $error;
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        if ($this->membresiaModel->isOnlyActiveAdmin($userId, $orgId)) {
+            $_SESSION['error_msg'] = 'No puede mover al único administrador activo. Asigne otro admin antes.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $destJunta = $this->juntaModel->getJuntaById($destOrgId);
+        if (!$destJunta) {
+            $_SESSION['error_msg'] = 'La organización destino no existe.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $membership = $this->membresiaModel->getByUsuarioJunta($userId, $orgId);
+        $destMembership = $this->membresiaModel->getByUsuarioJunta($userId, $destOrgId);
+        if ($destMembership && (int)$destMembership->estado === 1) {
+            $_SESSION['error_msg'] = 'El usuario ya pertenece activamente a la organización seleccionada.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $rol = $membership->rol ?? 'socio';
+
+        try {
+            $db = new Database();
+            $db->beginTransaction();
+
+            $this->membresiaModel->deactivate($userId, $orgId);
+            $this->membresiaModel->upsert($userId, $destOrgId, $rol);
+
+            $this->userModel->db->query('UPDATE usuarios SET junta_id = :junta_id, rol = :rol, estado = 1,
+                calle_id = NULL, numero_casa = NULL, id_socio = NULL WHERE id = :id');
+            $this->userModel->db->bind(':junta_id', $destOrgId);
+            $this->userModel->db->bind(':rol', $rol);
+            $this->userModel->db->bind(':id', $userId);
+            $this->userModel->db->execute();
+
+            $db->commit();
+            $_SESSION['success_msg'] = 'Usuario reasignado a "' . $destJunta->nombre . '" correctamente.';
+        } catch (Exception $e) {
+            if (isset($db)) {
+                $db->rollBack();
+            }
+            $_SESSION['error_msg'] = 'No se pudo reasignar el usuario.';
+        }
+
+        $this->redirect('/maestro/dashboard');
+    }
+
+    public function eliminar_miembro() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $orgId = (int)($post['org_id'] ?? 0);
+        $userId = (int)($post['user_id'] ?? 0);
+
+        if ($orgId <= 0 || $userId <= 0) {
+            $_SESSION['error_msg'] = 'Datos inválidos para eliminar usuario.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $error = $this->validateMemberAction($userId, $orgId);
+        if ($error) {
+            $_SESSION['error_msg'] = $error;
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $activeMemberships = $this->membresiaModel->getActiveByUsuario($userId);
+        foreach ($activeMemberships as $membership) {
+            if ($this->membresiaModel->isOnlyActiveAdmin($userId, (int)$membership->junta_id)) {
+                $_SESSION['error_msg'] = 'No puede eliminar al único administrador activo de "' . $membership->junta_nombre . '". Asigne otro admin antes.';
+                $this->redirect('/maestro/dashboard');
+                return;
+            }
+        }
+
+        try {
+            $db = new Database();
+            $db->beginTransaction();
+
+            $this->membresiaModel->deactivateAllForUsuario($userId);
+            $this->userModel->delete($userId);
+            $this->userModel->db->query('UPDATE usuarios SET junta_id = NULL WHERE id = :id');
+            $this->userModel->db->bind(':id', $userId);
+            $this->userModel->db->execute();
+
+            $db->commit();
+            $_SESSION['success_msg'] = 'Usuario eliminado del sistema correctamente.';
+        } catch (Exception $e) {
+            if (isset($db)) {
+                $db->rollBack();
+            }
+            $_SESSION['error_msg'] = 'No se pudo eliminar el usuario.';
+        }
+
+        $this->redirect('/maestro/dashboard');
+    }
+
+    private function validateMemberAction($userId, $orgId) {
+        $user = $this->userModel->getUserById($userId);
+        if (!$user) {
+            return 'Usuario no encontrado.';
+        }
+        if ($user->rol === 'maestro') {
+            return 'No se puede modificar un usuario maestro.';
+        }
+        $membership = $this->membresiaModel->getByUsuarioJunta($userId, $orgId);
+        if (!$membership || (int)$membership->estado !== 1) {
+            return 'El usuario no pertenece activamente a esta organización.';
+        }
+        return null;
     }
 
 }

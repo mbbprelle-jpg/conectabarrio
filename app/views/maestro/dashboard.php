@@ -295,7 +295,7 @@
             <h3 style="font-family: var(--font-heading); color: var(--text-main); font-size: 1.35rem; margin-bottom: 0.25rem;">Gestionar Equipo</h3>
             <p id="equipo_modal_org_nombre" style="color: var(--primary); font-weight: bold; font-size: 0.95rem; margin: 0;">Organización</p>
         </div>
-        <div id="equipo_list_container" style="max-height: 240px; overflow-y: auto; margin-bottom: 1.5rem;">
+        <div id="equipo_list_container" style="max-height: 320px; overflow-y: auto; margin-bottom: 1.5rem;">
             <p style="color: var(--text-muted); text-align: center;">Cargando equipo...</p>
         </div>
         <hr style="border-color: var(--border-color); margin: 1.25rem 0;">
@@ -421,6 +421,38 @@
 .badge-pendiente { color: var(--danger); background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); }
 .badge-futuro { color: var(--primary); background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.2); }
 .badge-pagado { color: var(--success); background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); }
+.equipo-member-row {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.65rem;
+    background: rgba(255, 255, 255, 0.02);
+}
+.equipo-member-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.65rem;
+}
+.equipo-member-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+}
+.equipo-member-actions form {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.equipo-reassign-select {
+    max-width: 180px;
+    font-size: 0.72rem;
+    padding: 0.3rem 0.45rem;
+}
 </style>
 
 <script>
@@ -454,6 +486,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const equipoOrgNombre = document.getElementById('equipo_modal_org_nombre');
     const equipoListContainer = document.getElementById('equipo_list_container');
     const URLROOT_JS = '<?php echo URLROOT; ?>';
+    const MAESTRO_ORGS = <?php echo json_encode(array_map(function ($j) {
+        return ['id' => (int)$j->id, 'nombre' => $j->nombre];
+    }, $data['juntas'] ?? []), JSON_UNESCAPED_UNICODE); ?>;
+
+    function escapeHtml(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
 
     function openModal(targetModal) {
         targetModal.style.display = 'flex';
@@ -659,25 +698,54 @@ document.addEventListener('DOMContentLoaded', function() {
             equipoListContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem;">No hay miembros registrados.</p>';
             return;
         }
+
+        const otherOrgs = MAESTRO_ORGS.filter(o => o.id !== parseInt(orgId, 10));
+        const orgOptions = otherOrgs.map(o =>
+            `<option value="${o.id}">${escapeHtml(o.nombre)}</option>`
+        ).join('');
+
         equipoListContainer.innerHTML = equipo.map(m => {
-            const nombre = `${m.nombre || ''} ${m.apellido_paterno || ''}`.trim();
+            const nombre = escapeHtml(`${m.nombre || ''} ${m.apellido_paterno || ''}`.trim());
+            const email = escapeHtml(m.email || '');
             const rolBadge = m.rol === 'admin' ? 'badge-info' : 'badge-secondary';
             const rolLabel = m.rol === 'admin' ? 'Administrador' : 'Socio';
-            const cargo = m.cargo ? `<span class="badge badge-warning" style="margin-left:0.35rem;font-size:0.65rem;">${m.cargo}</span>` : '';
+            const cargo = m.cargo ? `<span class="badge badge-warning" style="margin-left:0.35rem;font-size:0.65rem;">${escapeHtml(m.cargo)}</span>` : '';
             const otherRol = m.rol === 'admin' ? 'socio' : 'admin';
             const otherLabel = m.rol === 'admin' ? 'Pasar a Socio' : 'Hacer Admin';
-            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.6rem 0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);margin-bottom:0.5rem;gap:0.5rem;flex-wrap:wrap;">
-                <div>
-                    <strong style="font-size:0.85rem;">${nombre}</strong>
-                    <div style="font-size:0.72rem;color:var(--text-muted);">${m.email || ''}</div>
-                    <span class="badge ${rolBadge}" style="margin-top:0.25rem;">${rolLabel}</span>${cargo}
+            const reassignBlock = otherOrgs.length
+                ? `<form action="${URLROOT_JS}/maestro/reasignar_miembro" method="POST" onsubmit="return confirm('¿Mover a ${nombre} a la organización seleccionada?');">
+                        <input type="hidden" name="org_id" value="${orgId}">
+                        <input type="hidden" name="user_id" value="${m.id}">
+                        <select name="dest_org_id" class="form-control equipo-reassign-select" required>
+                            <option value="">Mover a...</option>
+                            ${orgOptions}
+                        </select>
+                        <button type="submit" class="btn btn-secondary btn-sm" style="font-size:0.72rem;padding:0.25rem 0.5rem;">Mover</button>
+                   </form>`
+                : '';
+
+            return `<div class="equipo-member-row">
+                <div class="equipo-member-head">
+                    <div>
+                        <strong style="font-size:0.85rem;">${nombre}</strong>
+                        <div style="font-size:0.72rem;color:var(--text-muted);">${email}</div>
+                        <span class="badge ${rolBadge}" style="margin-top:0.25rem;">${rolLabel}</span>${cargo}
+                    </div>
+                    <form action="${URLROOT_JS}/maestro/cambiar_rol_miembro" method="POST" style="margin:0;" onsubmit="return confirm('¿Cambiar rol de ${nombre} a ${otherLabel}?');">
+                        <input type="hidden" name="org_id" value="${orgId}">
+                        <input type="hidden" name="user_id" value="${m.id}">
+                        <input type="hidden" name="rol" value="${otherRol}">
+                        <button type="submit" class="btn btn-secondary btn-sm" style="font-size:0.72rem;padding:0.25rem 0.5rem;">${otherLabel}</button>
+                    </form>
                 </div>
-                <form action="${URLROOT_JS}/maestro/cambiar_rol_miembro" method="POST" style="margin:0;" onsubmit="return confirm('¿Cambiar rol de ${nombre} a ${otherLabel}?');">
-                    <input type="hidden" name="org_id" value="${orgId}">
-                    <input type="hidden" name="user_id" value="${m.id}">
-                    <input type="hidden" name="rol" value="${otherRol}">
-                    <button type="submit" class="btn btn-secondary btn-sm" style="font-size:0.72rem;padding:0.25rem 0.5rem;">${otherLabel}</button>
-                </form>
+                <div class="equipo-member-actions">
+                    ${reassignBlock}
+                    <form action="${URLROOT_JS}/maestro/eliminar_miembro" method="POST" onsubmit="return confirm('¿Eliminar a ${nombre} del sistema? Esta acción desactiva su cuenta y membresías.');">
+                        <input type="hidden" name="org_id" value="${orgId}">
+                        <input type="hidden" name="user_id" value="${m.id}">
+                        <button type="submit" class="btn btn-sm" style="font-size:0.72rem;padding:0.25rem 0.5rem;color:var(--danger);border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.08);">Eliminar usuario</button>
+                    </form>
+                </div>
             </div>`;
         }).join('');
     }
