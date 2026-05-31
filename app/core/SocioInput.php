@@ -12,30 +12,55 @@ class SocioInput {
     ];
 
     public const NACIONALIDADES = [
-        'Chile',
         'Argentina',
-        'Belice',
-        'Bolivia',
-        'Brasil',
-        'Colombia',
-        'Costa Rica',
-        'Cuba',
-        'Ecuador',
-        'El Salvador',
-        'Guatemala',
-        'Guyana',
-        'Haití',
-        'Honduras',
-        'México',
-        'Nicaragua',
-        'Panamá',
-        'Paraguay',
-        'Perú',
-        'Puerto Rico',
-        'República Dominicana',
-        'Surinam',
-        'Uruguay',
-        'Venezuela',
+        'Boliviana',
+        'Brasileña',
+        'Chilena',
+        'Colombiana',
+        'Costarricense',
+        'Cubana',
+        'Dominicana',
+        'Ecuatoriana',
+        'Salvadoreña',
+        'Guatemalteca',
+        'Haitiana',
+        'Hondureña',
+        'Mexicana',
+        'Nicaragüense',
+        'Panameña',
+        'Paraguaya',
+        'Peruana',
+        'Uruguaya',
+        'Venezolana',
+    ];
+
+    /** Valores antiguos (nombre de país) → forma actual del listado */
+    private const NACIONALIDAD_ALIASES = [
+        'chile' => 'Chilena',
+        'argentina' => 'Argentina',
+        'bolivia' => 'Boliviana',
+        'brasil' => 'Brasileña',
+        'colombia' => 'Colombiana',
+        'costa rica' => 'Costarricense',
+        'cuba' => 'Cubana',
+        'república dominicana' => 'Dominicana',
+        'republica dominicana' => 'Dominicana',
+        'ecuador' => 'Ecuatoriana',
+        'el salvador' => 'Salvadoreña',
+        'guatemala' => 'Guatemalteca',
+        'haití' => 'Haitiana',
+        'haiti' => 'Haitiana',
+        'honduras' => 'Hondureña',
+        'méxico' => 'Mexicana',
+        'mexico' => 'Mexicana',
+        'nicaragua' => 'Nicaragüense',
+        'panamá' => 'Panameña',
+        'panama' => 'Panameña',
+        'paraguay' => 'Paraguaya',
+        'perú' => 'Peruana',
+        'peru' => 'Peruana',
+        'uruguay' => 'Uruguaya',
+        'venezuela' => 'Venezolana',
     ];
 
     public static function normalizeTextFields(array $data, array $skipKeys = []) {
@@ -69,6 +94,10 @@ class SocioInput {
             if (mb_strtolower($pais, 'UTF-8') === mb_strtolower($value, 'UTF-8')) {
                 return $pais;
             }
+        }
+        $key = mb_strtolower($value, 'UTF-8');
+        if (isset(self::NACIONALIDAD_ALIASES[$key])) {
+            return self::NACIONALIDAD_ALIASES[$key];
         }
         return null;
     }
