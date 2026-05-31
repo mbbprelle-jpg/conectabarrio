@@ -122,6 +122,13 @@
             </div>
             <?php endif; ?>
 
+            <?php if (!empty($data['socio']->profesion)): ?>
+            <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Profesión u oficio</span>
+                <span style="font-size: 1rem; color: var(--text-color);"><?php echo htmlspecialchars($data['socio']->profesion); ?></span>
+            </div>
+            <?php endif; ?>
+
             <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem;">
                 <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Dirección Jurisdicción</span>
                 <span style="font-size: 1rem; color: var(--text-color);">

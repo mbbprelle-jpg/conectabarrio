@@ -21,6 +21,7 @@ class SocioApprovalMail {
         $fechaNac = !empty($user->fecha_nacimiento) ? date('d-m-Y', strtotime($user->fecha_nacimiento)) : '—';
         $estadoCivil = SocioInput::estadoCivilLabel($user->estado_civil ?? '');
         $nacionalidad = htmlspecialchars($user->nacionalidad ?? '—');
+        $profesion = htmlspecialchars($user->profesion ?? '—');
         $generoHtml = htmlspecialchars($genero ?: '—');
         $fechaNacHtml = htmlspecialchars($fechaNac);
         $estadoCivilHtml = htmlspecialchars($estadoCivil ?: '—');
@@ -44,6 +45,7 @@ class SocioApprovalMail {
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Fecha nacimiento</td><td style="padding:6px 0;text-align:right;">' . $fechaNacHtml . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Estado civil</td><td style="padding:6px 0;text-align:right;">' . $estadoCivilHtml . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Nacionalidad</td><td style="padding:6px 0;text-align:right;">' . $nacionalidad . '</td></tr>'
+            . '<tr><td style="padding:6px 0;color:#94a3b8;">Profesión u oficio</td><td style="padding:6px 0;text-align:right;">' . $profesion . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Teléfono</td><td style="padding:6px 0;text-align:right;">' . $telefono . '</td></tr>'
             . '<tr><td style="padding:6px 0;color:#94a3b8;">Correo</td><td style="padding:6px 0;text-align:right;">' . htmlspecialchars($user->email) . '</td></tr>'
             . '</table>'

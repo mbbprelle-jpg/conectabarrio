@@ -4,6 +4,7 @@ class User extends Model {
     private static $hasStatusColumn = null;
     private static $hasGeneroColumn = null;
     private static $hasEstadoCivilColumn = null;
+    private static $hasProfesionColumn = null;
 
     private function hasCalleIdColumn() {
         if (self::$hasCalleIdColumn === null) {
@@ -57,6 +58,19 @@ class User extends Model {
         return self::$hasEstadoCivilColumn;
     }
 
+    private function hasProfesionColumn() {
+        if (self::$hasProfesionColumn === null) {
+            try {
+                $this->db->query('SELECT profesion FROM usuarios LIMIT 1');
+                $this->db->execute();
+                self::$hasProfesionColumn = true;
+            } catch (Exception $e) {
+                self::$hasProfesionColumn = false;
+            }
+        }
+        return self::$hasProfesionColumn;
+    }
+
     private function appendProfileInsertColumns(&$cols, &$vals) {
         if ($this->hasGeneroColumn()) {
             $cols .= ', genero, fecha_nacimiento';
@@ -65,6 +79,10 @@ class User extends Model {
         if ($this->hasEstadoCivilColumn()) {
             $cols .= ', estado_civil, nacionalidad';
             $vals .= ', :estado_civil, :nacionalidad';
+        }
+        if ($this->hasProfesionColumn()) {
+            $cols .= ', profesion';
+            $vals .= ', :profesion';
         }
     }
 
@@ -77,6 +95,9 @@ class User extends Model {
             $this->db->bind(':estado_civil', $data['estado_civil'] ?? null);
             $this->db->bind(':nacionalidad', $data['nacionalidad'] ?? null);
         }
+        if ($this->hasProfesionColumn()) {
+            $this->db->bind(':profesion', !empty($data['profesion']) ? $data['profesion'] : null);
+        }
     }
 
     private function profileUpdateSqlSet() {
@@ -86,6 +107,9 @@ class User extends Model {
         }
         if ($this->hasEstadoCivilColumn()) {
             $sql .= ', estado_civil = :estado_civil, nacionalidad = :nacionalidad';
+        }
+        if ($this->hasProfesionColumn()) {
+            $sql .= ', profesion = :profesion';
         }
         return $sql;
     }

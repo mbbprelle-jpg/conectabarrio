@@ -148,6 +148,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                     data-fecha-nacimiento="<?php echo !empty($pend->fecha_nacimiento) ? substr($pend->fecha_nacimiento, 0, 10) : ''; ?>"
                                     data-estado-civil="<?php echo htmlspecialchars($pend->estado_civil ?? ''); ?>"
                                     data-nacionalidad="<?php echo htmlspecialchars($pend->nacionalidad ?? ''); ?>"
+                                    data-profesion="<?php echo htmlspecialchars($pend->profesion ?? ''); ?>"
                                     data-calle-id="<?php echo (int)($pend->calle_id ?? 0); ?>"
                                     data-numero-casa="<?php echo htmlspecialchars($pend->numero_casa ?? ''); ?>"
                                     style="font-size: 0.75rem;">
@@ -255,6 +256,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                                 data-fecha-nacimiento="<?php echo !empty($socio->fecha_nacimiento) ? substr($socio->fecha_nacimiento, 0, 10) : ''; ?>"
                                                 data-estado-civil="<?php echo htmlspecialchars($socio->estado_civil ?? ''); ?>"
                                                 data-nacionalidad="<?php echo htmlspecialchars($socio->nacionalidad ?? ''); ?>"
+                                                data-profesion="<?php echo htmlspecialchars($socio->profesion ?? ''); ?>"
                                                 data-fecha-inicio="<?php echo htmlspecialchars(cbFechaSocioInput($socio)); ?>"
                                                 data-calle-id="<?php echo (int)($socio->calle_id ?? 0); ?>"
                                                 data-numero-casa="<?php echo htmlspecialchars($socio->numero_casa ?? ''); ?>"
@@ -718,6 +720,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <input type="hidden" name="fecha_nacimiento" id="pend_aprobar_fecha_nacimiento">
                 <input type="hidden" name="estado_civil" id="pend_aprobar_estado_civil">
                 <input type="hidden" name="nacionalidad" id="pend_aprobar_nacionalidad">
+                <input type="hidden" name="profesion" id="pend_aprobar_profesion">
                 <input type="hidden" name="telefono" id="pend_aprobar_telefono">
                 <input type="hidden" name="fecha_inicio" id="pend_aprobar_fecha_inicio">
                 <input type="hidden" name="calle_id" id="pend_aprobar_calle_id">
@@ -832,6 +835,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
             document.getElementById('edit_estado_civil').value = this.dataset.estadoCivil || '';
             document.getElementById('edit_nacionalidad').value = this.dataset.nacionalidad || '';
+            document.getElementById('edit_profesion').value = this.dataset.profesion || '';
             document.getElementById('edit_fecha_inicio').value = this.dataset.fechaInicio || '';
             document.getElementById('edit_calle_id').value = this.dataset.calleId || '';
             document.getElementById('edit_numero_casa').value = this.dataset.numeroCasa || '';
@@ -855,6 +859,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('pend_aprobar_fecha_nacimiento').value = document.getElementById('pend_fecha_nacimiento').value;
         document.getElementById('pend_aprobar_estado_civil').value = document.getElementById('pend_estado_civil').value;
         document.getElementById('pend_aprobar_nacionalidad').value = document.getElementById('pend_nacionalidad').value;
+        document.getElementById('pend_aprobar_profesion').value = document.getElementById('pend_profesion').value;
         document.getElementById('pend_aprobar_telefono').value = document.getElementById('pend_telefono').value;
         document.getElementById('pend_aprobar_fecha_inicio').value = document.getElementById('pend_fecha_inicio').value;
         document.getElementById('pend_aprobar_calle_id').value = document.getElementById('pend_calle_id').value;
@@ -876,6 +881,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('pend_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
             document.getElementById('pend_estado_civil').value = this.dataset.estadoCivil || '';
             document.getElementById('pend_nacionalidad').value = this.dataset.nacionalidad || '';
+            document.getElementById('pend_profesion').value = this.dataset.profesion || '';
             document.getElementById('pend_calle_id').value = this.dataset.calleId || '';
             document.getElementById('pend_numero_casa').value = this.dataset.numeroCasa || '';
             document.getElementById('formPendienteRechazar').action = '<?php echo URLROOT; ?>/admin/socio_pendiente_rechazar/' + id;

@@ -314,6 +314,7 @@ class AdminController extends Controller {
             'fecha_nacimiento' => $profile['fecha_nacimiento'],
             'estado_civil' => $profile['estado_civil'],
             'nacionalidad' => $profile['nacionalidad'],
+            'profesion' => $profile['profesion'],
         ];
         return SocioInput::normalizeTextFields($data);
     }

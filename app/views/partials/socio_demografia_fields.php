@@ -50,3 +50,14 @@ $reqAttr = $required ? 'required' : '';
         </select>
     </div>
 </div>
+<div class="form-group">
+    <label for="<?php echo htmlspecialchars($prefix); ?>profesion" class="form-label">Profesión u oficio<?php echo $required ? ' *' : ''; ?></label>
+    <input type="text"
+           name="profesion"
+           id="<?php echo htmlspecialchars($prefix); ?>profesion"
+           class="form-control cb-uppercase"
+           placeholder="EJ: ENFERMERA, COMERCIANTE, TÉCNICO EN MINERÍA"
+           maxlength="120"
+           value="<?php echo htmlspecialchars($values['profesion'] ?? ''); ?>"
+           <?php echo $reqAttr; ?>>
+</div>

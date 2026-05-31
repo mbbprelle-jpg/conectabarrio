@@ -145,12 +145,18 @@ class SocioInput {
         return '+56 ' . $digits;
     }
 
+    public static function normalizeProfesion($profesion) {
+        $value = trim((string)$profesion);
+        return $value === '' ? '' : mb_strtoupper($value, 'UTF-8');
+    }
+
     public static function parseProfileFromPost(array $post) {
         return [
             'genero' => self::normalizeGenero($post['genero'] ?? ''),
             'fecha_nacimiento' => !empty($post['fecha_nacimiento']) ? $post['fecha_nacimiento'] : null,
             'estado_civil' => self::normalizeEstadoCivil($post['estado_civil'] ?? ''),
             'nacionalidad' => self::normalizeNacionalidad($post['nacionalidad'] ?? ''),
+            'profesion' => self::normalizeProfesion($post['profesion'] ?? ''),
             'telefono' => self::normalizeTelefono($post['telefono'] ?? ''),
         ];
     }
@@ -168,6 +174,9 @@ class SocioInput {
             }
             if (empty($data['nacionalidad'])) {
                 return 'Seleccione la nacionalidad.';
+            }
+            if (empty($data['profesion'])) {
+                return 'Indique su profesión u oficio.';
             }
         }
         if (!self::isValidTelefono($data['telefono'] ?? '')) {

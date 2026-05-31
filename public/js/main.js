@@ -186,6 +186,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Texto en mayúsculas mientras el usuario escribe
+    document.querySelectorAll('.cb-uppercase').forEach(function(input) {
+        input.addEventListener('input', function() {
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            this.value = this.value.toUpperCase();
+            this.setSelectionRange(start, end);
+        });
+    });
+
     // Mostrar / ocultar contraseña en campos con .password-toggle-btn
     document.querySelectorAll('.password-toggle-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {

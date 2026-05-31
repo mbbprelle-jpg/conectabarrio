@@ -77,7 +77,8 @@ class InviteController extends Controller {
             || $dataSocio['apellido_materno'] === '' || $dataSocio['email'] === ''
             || empty($dataSocio['calle_id']) || $dataSocio['numero_casa'] === ''
             || empty($dataSocio['genero']) || empty($dataSocio['fecha_nacimiento'])
-            || empty($dataSocio['estado_civil']) || empty($dataSocio['nacionalidad'])) {
+            || empty($dataSocio['estado_civil']) || empty($dataSocio['nacionalidad'])
+            || empty($dataSocio['profesion'])) {
             $renderForm('Complete todos los campos obligatorios.');
             return;
         }
@@ -185,6 +186,7 @@ class InviteController extends Controller {
             'fecha_nacimiento' => $profile['fecha_nacimiento'],
             'estado_civil' => $profile['estado_civil'],
             'nacionalidad' => $profile['nacionalidad'],
+            'profesion' => $profile['profesion'],
         ];
 
         return SocioInput::normalizeTextFields($data);
