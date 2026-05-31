@@ -4,12 +4,10 @@ class SocioInput {
     public const GENEROS = ['MASCULINO', 'FEMENINO', 'NO ESPECIFICAR'];
 
     public const ESTADOS_CIVILES = [
-        'CASADO' => 'Casado/a',
-        'CONVIVIENTE_CIVIL' => 'Conviviente civil',
-        'DIVORCIADO' => 'Divorciado/a',
-        'SEPARADO' => 'Separado/a',
         'SOLTERO' => 'Soltero/a',
-        'UNION_CIVIL' => 'Unión civil',
+        'CASADO' => 'Casado/a',
+        'CONVIVIENTE_CIVIL' => 'Conviviente Civil',
+        'DIVORCIADO' => 'Divorciado/a',
         'VIUDO' => 'Viudo/a',
     ];
 
