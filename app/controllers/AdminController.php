@@ -398,16 +398,18 @@ class AdminController extends Controller {
         $this->redirect('/admin/socios');
     }
 
-    // Resetear contraseña de un socio a la inicial ("socio123") (POST)
+    // Resetear contraseña: clave temporal aleatoria enviada al correo del socio (POST)
     public function socio_reset_password($id) {
         $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $socio = $this->userModel->getSocioById($id);
             if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
-                if ($this->userModel->resetPassword($id, 'socio123')) {
-                    $_SESSION['success_msg'] = 'Contraseña del socio "' . $socio->nombre . '" reseteada correctamente a: socio123';
+                $result = TempPassword::issueToUser($socio);
+                if ($result['ok']) {
+                    $_SESSION['success_msg'] = 'Se envió una contraseña temporal al correo de "' . $socio->nombre . '" (' . $socio->email . '). '
+                        . 'El socio deberá cambiarla al ingresar. Por seguridad, usted no puede ver la clave generada.';
                 } else {
-                    $_SESSION['error_msg'] = 'Error al resetear la contraseña.';
+                    $_SESSION['error_msg'] = $result['error'] ?? 'Error al restablecer la contraseña.';
                 }
             } else {
                 $_SESSION['error_msg'] = 'Socio no encontrado o no pertenece a tu Junta.';

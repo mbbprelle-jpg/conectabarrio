@@ -30,14 +30,93 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 4000); // 4 segundos y se desvanece
     });
 
-    // 3. Confirmaciones para acciones críticas
+    // 3. Confirmaciones para acciones críticas (modal moderno)
+    const confirmOverlay = document.getElementById('cbConfirmModal');
+    const confirmTitle = document.getElementById('cbConfirmTitle');
+    const confirmMessage = document.getElementById('cbConfirmMessage');
+    const confirmIcon = document.getElementById('cbConfirmIcon');
+    const confirmOk = document.getElementById('cbConfirmOk');
+    const confirmCancel = document.getElementById('cbConfirmCancel');
+    let pendingConfirmAction = null;
+
+    function closeConfirmModal() {
+        if (!confirmOverlay) return;
+        confirmOverlay.classList.remove('is-open');
+        confirmOverlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        pendingConfirmAction = null;
+    }
+
+    function openConfirmModal(options) {
+        if (!confirmOverlay) {
+            if (options.onConfirm) options.onConfirm();
+            return;
+        }
+        confirmTitle.textContent = options.title || 'Confirmar acción';
+        confirmMessage.textContent = options.message || '¿Está seguro de continuar?';
+        const variant = options.variant || 'info';
+        confirmIcon.className = 'cb-confirm-icon ' + variant;
+        if (variant === 'danger') {
+            confirmOk.className = 'btn btn-danger';
+            confirmOk.textContent = options.confirmLabel || 'Eliminar';
+        } else if (variant === 'warning') {
+            confirmOk.className = 'btn btn-warning';
+            confirmOk.textContent = options.confirmLabel || 'Continuar';
+        } else {
+            confirmOk.className = 'btn btn-primary';
+            confirmOk.textContent = options.confirmLabel || 'Confirmar';
+        }
+        pendingConfirmAction = options.onConfirm || null;
+        confirmOverlay.classList.add('is-open');
+        confirmOverlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        confirmOk.focus();
+    }
+
+    if (confirmOk) {
+        confirmOk.addEventListener('click', function() {
+            const action = pendingConfirmAction;
+            closeConfirmModal();
+            if (typeof action === 'function') action();
+        });
+    }
+    if (confirmCancel) {
+        confirmCancel.addEventListener('click', closeConfirmModal);
+    }
+    if (confirmOverlay) {
+        confirmOverlay.addEventListener('click', function(e) {
+            if (e.target === confirmOverlay) closeConfirmModal();
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && confirmOverlay.classList.contains('is-open')) {
+                closeConfirmModal();
+            }
+        });
+    }
+
     const confirmButtons = document.querySelectorAll('.confirm-action');
     confirmButtons.forEach(function(button) {
         button.addEventListener('click', function(e) {
-            const message = this.getAttribute('data-confirm-message') || '¿Estás seguro de realizar esta acción?';
-            if (!confirm(message)) {
-                e.preventDefault();
-            }
+            e.preventDefault();
+            const message = this.getAttribute('data-confirm-message') || '¿Está seguro de realizar esta acción?';
+            const title = this.getAttribute('data-confirm-title') || 'Confirmar acción';
+            const variant = this.getAttribute('data-confirm-variant') || 'info';
+            const confirmLabel = this.getAttribute('data-confirm-label');
+            const form = this.closest('form');
+            const href = this.getAttribute('href');
+            openConfirmModal({
+                title: title,
+                message: message,
+                variant: variant,
+                confirmLabel: confirmLabel,
+                onConfirm: function() {
+                    if (form) {
+                        form.submit();
+                    } else if (href) {
+                        window.location.href = href;
+                    }
+                }
+            });
         });
     });
 

@@ -148,8 +148,10 @@ function cbFechaSocioInput($socio) {
                                         <form action="<?php echo URLROOT; ?>/admin/socio_reset_password/<?php echo $socio->id; ?>" method="POST" style="margin: 0;">
                                             <button type="submit" 
                                                     class="btn btn-secondary btn-sm confirm-action" 
-                                                    data-confirm-message="¿Estás seguro de que quieres resetear la contraseña del socio '<?php echo htmlspecialchars($socio->nombre); ?>' a la contraseña por defecto (socio123)?"
-                                                    title="Resetear Contraseña"
+                                                    data-confirm-title="Restablecer contraseña"
+                                                    data-confirm-variant="warning"
+                                                    data-confirm-message="Se generará una clave temporal aleatoria y se enviará al correo de <?php echo htmlspecialchars($socio->nombre); ?>. Por seguridad, usted no podrá ver la contraseña."
+                                                    title="Enviar clave temporal por correo"
                                                     style="padding: 0.4rem 0.6rem;">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                                                 Resetear
