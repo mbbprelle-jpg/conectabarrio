@@ -272,7 +272,6 @@ return;
 
     // Mostrar formulario para cambiar contraseña temporal
     public function resetPassword() {
-        // Verificar que el usuario esté logueado y deba cambiar
         if (!isset($_SESSION['user_id']) || empty($_SESSION['must_change'])) {
             $this->redirect('/auth/login');
             return;
@@ -280,21 +279,43 @@ return;
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newPass = trim($_POST['new_password'] ?? '');
             $confirm = trim($_POST['confirm_password'] ?? '');
-            if (empty($newPass) || $newPass !== $confirm) {
-                $data = ['title' => 'Cambiar Contraseña', 'error' => 'Las contraseñas no coinciden o están vacías.'];
-                $this->view('auth/reset_password', $data);
+            if (strlen($newPass) < 8) {
+                $this->view('auth/reset_password', [
+                    'title' => 'Cambiar Contraseña',
+                    'header_title' => 'Cambio de contraseña obligatorio',
+                    'header_subtitle' => 'Ingrese una clave segura para continuar en el portal',
+                    'error' => 'La contraseña debe tener al menos 8 caracteres.',
+                ]);
                 return;
             }
-            // Guardar nueva contraseña y quitar flag
-            $hash = password_hash($newPass, PASSWORD_DEFAULT);
-            $this->userModel->resetPassword($_SESSION['user_id'], $hash);
-            unset($_SESSION['must_change']);
-            $data = ['title' => 'Cambiar Contraseña', 'success' => 'Contraseña actualizada correctamente.'];
-            $this->view('auth/reset_password', $data);
+            if ($newPass !== $confirm) {
+                $this->view('auth/reset_password', [
+                    'title' => 'Cambiar Contraseña',
+                    'header_title' => 'Cambio de contraseña obligatorio',
+                    'header_subtitle' => 'Ingrese una clave segura para continuar en el portal',
+                    'error' => 'Las contraseñas no coinciden.',
+                ]);
+                return;
+            }
+            if ($this->userModel->resetPassword($_SESSION['user_id'], $newPass)) {
+                $_SESSION['must_change'] = 0;
+                $_SESSION['success_msg'] = 'Contraseña actualizada correctamente.';
+                $this->redirectByRole($_SESSION['user_rol']);
+                return;
+            }
+            $this->view('auth/reset_password', [
+                'title' => 'Cambiar Contraseña',
+                'header_title' => 'Cambio de contraseña obligatorio',
+                'header_subtitle' => 'Ingrese una clave segura para continuar en el portal',
+                'error' => 'No se pudo guardar la nueva contraseña. Intente nuevamente.',
+            ]);
             return;
         }
-        $data = ['title' => 'Cambiar Contraseña'];
-        $this->view('auth/reset_password', $data);
+        $this->view('auth/reset_password', [
+            'title' => 'Cambiar Contraseña',
+            'header_title' => 'Cambio de contraseña obligatorio',
+            'header_subtitle' => 'Ingrese una clave segura para continuar en el portal',
+        ]);
     }
 
 }

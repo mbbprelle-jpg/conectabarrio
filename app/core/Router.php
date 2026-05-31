@@ -77,8 +77,20 @@ class Router {
             exit;
         }
 
+        if ($isLoggedIn && !empty($_SESSION['must_change'])) {
+            $allowedWithMustChange = ['resetPassword', 'logout'];
+            if ($controllerClass !== 'AuthController' || !in_array($method, $allowedWithMustChange, true)) {
+                header('location: ' . URLROOT . '/auth/resetPassword');
+                exit;
+            }
+        }
+
         // Si está logueado e intenta entrar al login, redirigir a su dashboard correspondiente
         if ($isLoggedIn && $controllerClass === 'AuthController' && $method === 'login') {
+            if (!empty($_SESSION['must_change'])) {
+                header('location: ' . URLROOT . '/auth/resetPassword');
+                exit;
+            }
             $this->redirectByUserRole($userRole);
         }
 
