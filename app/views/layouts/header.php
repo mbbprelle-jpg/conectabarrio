@@ -6,7 +6,8 @@
     <title><?php echo SITENAME; ?></title>
     <!-- Estilos Premium con Cache Buster -->
     <link rel="stylesheet" href="<?php echo URLROOT; ?>/css/style.css?v=<?php echo time(); ?>">
-    <link rel="icon" href="<?php echo URLROOT; ?>/cbb_favicon.png" type="image/png">
+    <link rel="icon" href="<?php echo URLROOT; ?>/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="<?php echo URLROOT; ?>/favicon.svg">
 </head>
 <body>
 
