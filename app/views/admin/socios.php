@@ -2,7 +2,32 @@
 <?php
 require_once APPROOT . '/core/AuthContext.php';
 $isFullAdmin = AuthContext::isFullAdmin();
+$canManageSocios = AuthContext::canManageSocios();
 $membresiasMap = $data['membresias_map'] ?? [];
+
+function cbFormatFechaSocio($socio) {
+    $raw = null;
+    if (isset($socio->fecha_inicio) && $socio->fecha_inicio) {
+        $raw = $socio->fecha_inicio;
+    } elseif (!empty($socio->created_at)) {
+        $raw = substr($socio->created_at, 0, 10);
+    }
+    if (!$raw) {
+        return 'Sin registrar';
+    }
+    $ts = strtotime($raw);
+    return ($ts !== false) ? date('d-m-Y', $ts) : 'Sin registrar';
+}
+
+function cbFechaSocioInput($socio) {
+    if (!empty($socio->fecha_inicio)) {
+        return substr($socio->fecha_inicio, 0, 10);
+    }
+    if (!empty($socio->created_at)) {
+        return substr($socio->created_at, 0, 10);
+    }
+    return date('Y-m-d');
+}
 ?>
 
 <!-- Mensajes Flash de Éxito / Error -->
@@ -64,7 +89,7 @@ $membresiasMap = $data['membresias_map'] ?? [];
                                     <div style="font-size: 0.8rem; color: var(--text-muted);"><?php echo htmlspecialchars($socio->telefono ?? 'Sin Fono'); ?></div>
                                     <div style="font-size: 0.75rem; color: var(--primary); font-weight: 500; margin-top: 0.15rem; display: flex; align-items: center; gap: 0.25rem;">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                                        Socio desde: <?php echo date('d-m-Y', strtotime($socio->fecha_inicio)); ?>
+                                        Socio desde: <?php echo cbFormatFechaSocio($socio); ?>
                                     </div>
                                 </td>
                                 <?php if ($isFullAdmin):
@@ -98,7 +123,26 @@ $membresiasMap = $data['membresias_map'] ?? [];
                                 </td>
                                 <?php endif; ?>
                                 <td>
-                                    <div style="display: flex; gap: 0.5rem;">
+                                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                        <?php if ($canManageSocios): ?>
+                                        <button type="button"
+                                                class="btn btn-primary btn-sm btn-editar-socio"
+                                                title="Editar datos del socio"
+                                                data-id="<?php echo (int)$socio->id; ?>"
+                                                data-id-socio="<?php echo (int)($socio->id_socio ?? 0); ?>"
+                                                data-nombres="<?php echo htmlspecialchars($socio->nombre ?? ''); ?>"
+                                                data-apellido-paterno="<?php echo htmlspecialchars($socio->apellido_paterno ?? ''); ?>"
+                                                data-apellido-materno="<?php echo htmlspecialchars($socio->apellido_materno ?? ''); ?>"
+                                                data-rut="<?php echo htmlspecialchars($socio->rut ?? ''); ?>"
+                                                data-email="<?php echo htmlspecialchars($socio->email ?? ''); ?>"
+                                                data-telefono="<?php echo htmlspecialchars($socio->telefono ?? ''); ?>"
+                                                data-fecha-inicio="<?php echo htmlspecialchars(cbFechaSocioInput($socio)); ?>"
+                                                data-calle-id="<?php echo (int)($socio->calle_id ?? 0); ?>"
+                                                data-numero-casa="<?php echo htmlspecialchars($socio->numero_casa ?? ''); ?>"
+                                                style="padding: 0.4rem 0.6rem;">
+                                            Editar
+                                        </button>
+                                        <?php endif; ?>
                                         
                                         <!-- Formulario Reseteo de Contraseña -->
                                         <form action="<?php echo URLROOT; ?>/admin/socio_reset_password/<?php echo $socio->id; ?>" method="POST" style="margin: 0;">
@@ -161,7 +205,7 @@ $membresiasMap = $data['membresias_map'] ?? [];
                                             <?php echo htmlspecialchars($s_inact->nombre); ?>
                                         </td>
                                         <td style="font-family: monospace; color: var(--text-muted);"><?php echo htmlspecialchars($s_inact->rut); ?></td>
-                                        <td style="color: var(--text-muted); font-size: 0.8rem;"><?php echo date('d-m-Y', strtotime($s_inact->fecha_inicio)); ?></td>
+                                        <td style="color: var(--text-muted); font-size: 0.8rem;"><?php echo cbFormatFechaSocio($s_inact); ?></td>
                                         <td>
                                             <form action="<?php echo URLROOT; ?>/admin/socio_reactivar/<?php echo $s_inact->id; ?>" method="POST" style="margin: 0;">
                                                 <button type="submit" 
@@ -371,6 +415,73 @@ $membresiasMap = $data['membresias_map'] ?? [];
 
 </div>
 
+<?php if ($canManageSocios): ?>
+<div id="editarSocioModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 520px;">
+        <button type="button" id="closeEditarSocioModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 1.25rem;">Editar datos del socio</h3>
+        <form action="<?php echo URLROOT; ?>/admin/socio_actualizar" method="POST">
+            <input type="hidden" name="socio_id" id="edit_socio_id">
+            <div class="form-group">
+                <label class="form-label">ID Socio *</label>
+                <input type="number" name="id_socio" id="edit_id_socio" class="form-control" min="1" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nombres *</label>
+                <input type="text" name="nombres" id="edit_nombres" class="form-control" required>
+            </div>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Apellido Paterno *</label>
+                    <input type="text" name="apellido_paterno" id="edit_apellido_paterno" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Apellido Materno *</label>
+                    <input type="text" name="apellido_materno" id="edit_apellido_materno" class="form-control" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">RUT *</label>
+                <input type="text" name="rut" id="edit_rut" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Correo *</label>
+                <input type="email" name="email" id="edit_email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Teléfono</label>
+                <input type="text" name="telefono" id="edit_telefono" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha inicio como socio *</label>
+                <input type="date" name="fecha_inicio" id="edit_fecha_inicio" class="form-control" required>
+            </div>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Calle *</label>
+                    <select name="calle_id" id="edit_calle_id" class="form-control" required>
+                        <option value="">-- Seleccionar --</option>
+                        <?php foreach ($data['calles'] as $calle): ?>
+                            <option value="<?php echo (int)$calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">N° Casa *</label>
+                    <input type="text" name="numero_casa" id="edit_numero_casa" class="form-control" required>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary" id="cancelEditarSocioModal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if ($isFullAdmin): ?>
 <div id="delegacionModal" class="glass-modal-overlay">
     <div class="glass-modal-container" style="max-width: 480px;">
@@ -415,11 +526,37 @@ $membresiasMap = $data['membresias_map'] ?? [];
         </form>
     </div>
 </div>
+<?php endif; ?>
+
+<?php if ($canManageSocios): ?>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const modal = document.getElementById('delegacionModal');
-    const open = m => { if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; } };
-    const close = m => { if (m) { m.style.display = 'none'; document.body.style.overflow = ''; } };
+    const openModal = (el) => { if (el) { el.classList.add('is-open'); document.body.style.overflow = 'hidden'; } };
+    const closeModal = (el) => { if (el) { el.classList.remove('is-open'); document.body.style.overflow = ''; } };
+
+    const editModal = document.getElementById('editarSocioModal');
+    document.querySelectorAll('.btn-editar-socio').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('edit_socio_id').value = this.dataset.id;
+            document.getElementById('edit_id_socio').value = this.dataset.idSocio || '';
+            document.getElementById('edit_nombres').value = this.dataset.nombres || '';
+            document.getElementById('edit_apellido_paterno').value = this.dataset.apellidoPaterno || '';
+            document.getElementById('edit_apellido_materno').value = this.dataset.apellidoMaterno || '';
+            document.getElementById('edit_rut').value = this.dataset.rut || '';
+            document.getElementById('edit_email').value = this.dataset.email || '';
+            document.getElementById('edit_telefono').value = this.dataset.telefono || '';
+            document.getElementById('edit_fecha_inicio').value = this.dataset.fechaInicio || '';
+            document.getElementById('edit_calle_id').value = this.dataset.calleId || '';
+            document.getElementById('edit_numero_casa').value = this.dataset.numeroCasa || '';
+            openModal(editModal);
+        });
+    });
+    document.getElementById('closeEditarSocioModal')?.addEventListener('click', () => closeModal(editModal));
+    document.getElementById('cancelEditarSocioModal')?.addEventListener('click', () => closeModal(editModal));
+    editModal?.addEventListener('click', e => { if (e.target === editModal) closeModal(editModal); });
+
+    <?php if ($isFullAdmin): ?>
+    const delegacionModal = document.getElementById('delegacionModal');
     document.querySelectorAll('.btn-delegar-socio').forEach(btn => {
         btn.addEventListener('click', function() {
             document.getElementById('delegacion_usuario_id').value = this.dataset.id;
@@ -428,17 +565,18 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_socios').checked = this.dataset.permSocios === '1';
             document.getElementById('delegacion_perm_pagos').checked = this.dataset.permPagos === '1';
             document.getElementById('delegacion_perm_todos').checked = this.dataset.permTodos === '1';
-            open(modal);
+            openModal(delegacionModal);
         });
     });
-    document.getElementById('closeDelegacionModal')?.addEventListener('click', () => close(modal));
-    document.getElementById('cancelDelegacionModal')?.addEventListener('click', () => close(modal));
-    modal?.addEventListener('click', e => { if (e.target === modal) close(modal); });
+    document.getElementById('closeDelegacionModal')?.addEventListener('click', () => closeModal(delegacionModal));
+    document.getElementById('cancelDelegacionModal')?.addEventListener('click', () => closeModal(delegacionModal));
+    delegacionModal?.addEventListener('click', e => { if (e.target === delegacionModal) closeModal(delegacionModal); });
     document.getElementById('delegacion_cargo')?.addEventListener('change', function() {
         if (this.value === 'SECRETARIO') document.getElementById('delegacion_perm_socios').checked = true;
         if (this.value === 'TESORERO') document.getElementById('delegacion_perm_pagos').checked = true;
         if (this.value === 'DIRECTOR') document.getElementById('delegacion_perm_todos').checked = true;
     });
+    <?php endif; ?>
 });
 </script>
 <?php endif; ?>

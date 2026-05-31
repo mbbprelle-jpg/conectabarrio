@@ -55,7 +55,7 @@ class AuthContext {
     public static function adminMethodsForSocioDelegado() {
         $methods = [];
         if (self::canManageSocios()) {
-            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion']);
+            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_actualizar', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion']);
         }
         if (self::canRegisterPayments()) {
             $methods = array_merge($methods, ['finanzas', 'registrar_pago_cuota', 'registrar_transaccion', 'get_socio_cuotas']);

@@ -85,6 +85,33 @@ class User extends Model {
         return $this->db->execute();
     }
 
+    public function updateSocio($data) {
+        $this->db->query("UPDATE usuarios SET
+            id_socio = :id_socio,
+            rut = :rut,
+            nombre = :nombre,
+            apellido_paterno = :apellido_paterno,
+            apellido_materno = :apellido_materno,
+            email = :email,
+            telefono = :telefono,
+            calle_id = :calle_id,
+            numero_casa = :numero_casa,
+            fecha_inicio = :fecha_inicio
+            WHERE id = :id AND rol = 'socio'");
+        $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombre', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':telefono', $data['telefono'] ?? '');
+        $this->db->bind(':calle_id', !empty($data['calle_id']) ? $data['calle_id'] : null);
+        $this->db->bind(':numero_casa', !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':fecha_inicio', !empty($data['fecha_inicio']) ? $data['fecha_inicio'] : date('Y-m-d'));
+        $this->db->bind(':id', $data['id']);
+        return $this->db->execute();
+    }
+
     // Establecer contraseña temporal y marcar para cambio obligatorio
     public function setTempPassword($userId, $hash) {
         $this->db->query("UPDATE usuarios SET password = :pwd, must_change = 1 WHERE id = :id");

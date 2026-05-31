@@ -261,6 +261,74 @@ class AdminController extends Controller {
         $this->redirect('/admin/socios');
     }
 
+    public function socio_actualizar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $socioId = (int)($post['socio_id'] ?? 0);
+        $juntaId = $_SESSION['user_junta_id'];
+        $socio = $this->userModel->getSocioById($socioId);
+        if (!$socio || (int)$socio->junta_id !== (int)$juntaId) {
+            $_SESSION['error_msg'] = 'Socio no encontrado en su organización.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $idSocio = (int)($post['id_socio'] ?? 0);
+        $data = [
+            'id' => $socioId,
+            'id_socio' => $idSocio,
+            'rut' => trim($post['rut'] ?? ''),
+            'nombres' => trim($post['nombres'] ?? ''),
+            'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
+            'apellido_materno' => trim($post['apellido_materno'] ?? ''),
+            'email' => trim($post['email'] ?? ''),
+            'telefono' => trim($post['telefono'] ?? ''),
+            'calle_id' => $post['calle_id'] ?? null,
+            'numero_casa' => trim($post['numero_casa'] ?? ''),
+            'fecha_inicio' => $post['fecha_inicio'] ?? date('Y-m-d'),
+        ];
+        if ($idSocio <= 0 || $data['rut'] === '' || $data['nombres'] === '' || $data['apellido_paterno'] === '' || $data['apellido_materno'] === '' || $data['email'] === '' || empty($data['calle_id']) || $data['numero_casa'] === '') {
+            $_SESSION['error_msg'] = 'Complete todos los campos obligatorios del socio.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $this->db->query("SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio AND id != :id LIMIT 1");
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':id_socio', $idSocio);
+        $this->db->bind(':id', $socioId);
+        if ($this->db->single()) {
+            $_SESSION['error_msg'] = 'El ID Socio #' . $idSocio . ' ya está en uso por otro vecino.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $existingRut = $this->userModel->findUserByRut($data['rut']);
+        if ($existingRut && (int)$existingRut->id !== $socioId) {
+            $_SESSION['error_msg'] = 'El RUT ya pertenece a otro usuario del sistema.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $existingEmail = $this->userModel->findUserByEmail($data['email']);
+        if ($existingEmail && (int)$existingEmail->id !== $socioId) {
+            $_SESSION['error_msg'] = 'El correo ya pertenece a otro usuario del sistema.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->userModel->updateSocio($data)) {
+            try {
+                $this->membresiaModel->upsert($socioId, $juntaId, 'socio', ['id_socio' => $idSocio]);
+            } catch (Exception $e) {
+                // Tabla de membresías opcional hasta migración SQL
+            }
+            $_SESSION['success_msg'] = 'Datos del socio "' . $data['nombres'] . '" actualizados correctamente.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudieron guardar los cambios del socio.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
     // Crear una nueva calle en la jurisdicción de la junta (POST)
     public function calle_crear() {
         $this->requireManageSocios();
@@ -1456,14 +1524,22 @@ class AdminController extends Controller {
     }
 
     private function buildMembresiasMap($juntaId) {
-        $equipo = $this->membresiaModel->getEquipoByJunta($juntaId);
-        $map = [];
-        foreach ($equipo as $m) {
-            if ($m->rol === 'socio') {
-                $map[$m->id] = $m;
+        try {
+            $socios = $this->userModel->getSociosByJunta($juntaId);
+            foreach ($socios as $s) {
+                $this->membresiaModel->upsert($s->id, $juntaId, 'socio', ['id_socio' => $s->id_socio ?? null]);
             }
+            $equipo = $this->membresiaModel->getEquipoByJunta($juntaId);
+            $map = [];
+            foreach ($equipo as $m) {
+                if ($m->rol === 'socio') {
+                    $map[$m->id] = $m;
+                }
+            }
+            return $map;
+        } catch (Exception $e) {
+            return [];
         }
-        return $map;
     }
 
     public function socio_delegacion() {
@@ -1477,36 +1553,40 @@ class AdminController extends Controller {
             $this->redirect('/admin/socios');
             return;
         }
-        $post = $this->sanitizePost();
-        $usuarioId = (int)($post['usuario_id'] ?? 0);
-        $juntaId = $_SESSION['user_junta_id'];
-        $membresia = $this->membresiaModel->getByUsuarioJunta($usuarioId, $juntaId);
-        if (!$membresia) {
-            $user = $this->userModel->getUserById($usuarioId);
-            if ($user && (int)$user->junta_id === (int)$juntaId && $user->rol === 'socio') {
-                $this->membresiaModel->upsert($usuarioId, $juntaId, 'socio', ['id_socio' => $user->id_socio]);
-                $membresia = $this->membresiaModel->getByUsuarioJunta($usuarioId, $juntaId);
+        try {
+            $post = $this->sanitizePost();
+            $usuarioId = (int)($post['usuario_id'] ?? 0);
+            $juntaId = $_SESSION['user_junta_id'];
+            $membresia = $this->membresiaModel->getByUsuarioJunta($usuarioId, $juntaId);
+            if (!$membresia) {
+                $user = $this->userModel->getUserById($usuarioId);
+                if ($user && (int)$user->junta_id === (int)$juntaId && $user->rol === 'socio') {
+                    $this->membresiaModel->upsert($usuarioId, $juntaId, 'socio', ['id_socio' => $user->id_socio]);
+                    $membresia = $this->membresiaModel->getByUsuarioJunta($usuarioId, $juntaId);
+                }
             }
+            if (!$membresia || $membresia->rol !== 'socio') {
+                $_SESSION['error_msg'] = 'Socio no válido para delegación.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+            $cargo = $post['cargo'] ?? '';
+            $validCargos = ['', 'SECRETARIO', 'TESORERO', 'DIRECTOR'];
+            if (!in_array($cargo, $validCargos, true)) {
+                $_SESSION['error_msg'] = 'Cargo inválido.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+            $this->membresiaModel->updateDelegacion($membresia->id, [
+                'cargo' => $cargo ?: null,
+                'permiso_gestion_socios' => !empty($post['permiso_gestion_socios']),
+                'permiso_registro_pagos' => !empty($post['permiso_registro_pagos']),
+                'permiso_todos' => !empty($post['permiso_todos']),
+            ]);
+            $_SESSION['success_msg'] = 'Cargo y permisos del socio actualizados correctamente.';
+        } catch (Exception $e) {
+            $_SESSION['error_msg'] = 'No se pudo guardar la delegación. Verifique que ejecutó la migración sql/create_membresias_and_permisos.sql en la base de datos.';
         }
-        if (!$membresia || $membresia->rol !== 'socio') {
-            $_SESSION['error_msg'] = 'Socio no válido para delegación.';
-            $this->redirect('/admin/socios');
-            return;
-        }
-        $cargo = $post['cargo'] ?? '';
-        $validCargos = ['', 'SECRETARIO', 'TESORERO', 'DIRECTOR'];
-        if (!in_array($cargo, $validCargos, true)) {
-            $_SESSION['error_msg'] = 'Cargo inválido.';
-            $this->redirect('/admin/socios');
-            return;
-        }
-        $this->membresiaModel->updateDelegacion($membresia->id, [
-            'cargo' => $cargo ?: null,
-            'permiso_gestion_socios' => !empty($post['permiso_gestion_socios']),
-            'permiso_registro_pagos' => !empty($post['permiso_registro_pagos']),
-            'permiso_todos' => !empty($post['permiso_todos']),
-        ]);
-        $_SESSION['success_msg'] = 'Cargo y permisos del socio actualizados correctamente.';
         $this->redirect('/admin/socios');
     }
 }
