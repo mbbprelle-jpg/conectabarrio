@@ -48,6 +48,8 @@ function cbFechaSocioInput($socio) {
 <?php
 $sociosPendientes = $data['socios_pendientes'] ?? [];
 $invitacionesActivas = $data['invitaciones_activas'] ?? [];
+$cuotaVigente = !empty($data['cuotas_historial']) ? $data['cuotas_historial'][0] : null;
+$cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',', '.') : '0';
 ?>
 
 <?php if (!empty($sociosPendientes) && $canManageSocios): ?>
@@ -57,9 +59,45 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
     </div>
 <?php endif; ?>
 
-<div class="grid-2col">
-    
-    <!-- SECCIÓN DE SOCIOS (IZQUIERDA) -->
+<div class="socios-page">
+
+    <?php if ($canManageSocios): ?>
+    <div class="socios-action-bar">
+        <button type="button" class="socios-action-btn socios-action-btn--primary" data-open-modal="inscribirSocioModal">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+            Inscribir socio
+        </button>
+        <button type="button" class="socios-action-btn socios-action-btn--accent" data-open-modal="cuotaModal">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+            Cuota ($<?php echo $cuotaVigenteMonto; ?>)
+        </button>
+        <button type="button" class="socios-action-btn" data-open-modal="callesModal">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon></svg>
+            Calles (<?php echo count($data['calles'] ?? []); ?>)
+        </button>
+        <button type="button" class="socios-action-btn" data-open-modal="invitacionModal">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            Link invitación
+            <?php if (!empty($invitacionesActivas)): ?>
+                <span class="action-badge"><?php echo count($invitacionesActivas); ?> activo<?php echo count($invitacionesActivas) > 1 ? 's' : ''; ?></span>
+            <?php endif; ?>
+        </button>
+    </div>
+
+    <?php if (!empty($data['link_invitacion']) || !empty($invitacionesActivas)): ?>
+    <div class="socios-invite-strip">
+        <span>
+            <?php if (!empty($invitacionesActivas)): ?>
+                <?php echo count($invitacionesActivas); ?> enlace(s) de invitación vigente(s).
+            <?php else: ?>
+                Enlace recién generado — cópielo y compártalo.
+            <?php endif; ?>
+        </span>
+        <button type="button" class="btn btn-secondary btn-sm" data-open-modal="invitacionModal">Ver / copiar links</button>
+    </div>
+    <?php endif; ?>
+    <?php endif; ?>
+
     <div class="card card-primary" style="display: flex; flex-direction: column; gap: 1.5rem;">
 
         <?php if ($canManageSocios && !empty($sociosPendientes)): ?>
@@ -132,7 +170,7 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
         </div>
 
         <?php if (empty($data['socios'])): ?>
-            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">Aún no ha inscrito ningún socio en su Junta. Utilice el formulario de la derecha.</p>
+            <p style="color: var(--text-muted); text-align: center; padding: 2rem;">Aún no ha inscrito ningún socio en su organización.<?php if ($canManageSocios): ?> Use el botón <strong>Inscribir socio</strong> arriba.<?php endif; ?></p>
         <?php else: ?>
             <div class="table-responsive">
                 <table class="table table-searchable">
@@ -302,244 +340,201 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
 
     </div>
 
-    <!-- ACCIONES DE FORMULARIOS (DERECHA) -->
-    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-
-        <?php if ($canManageSocios): ?>
-        <div class="card card-primary">
-            <h3 class="card-title">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                Link de invitación (24 h)
-            </h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
-                Genere un enlace para que nuevos vecinos completen su solicitud de registro. Las solicitudes quedan pendientes hasta que usted las apruebe.
-            </p>
-
-            <?php if (!empty($data['link_invitacion'])): ?>
-                <div class="form-group">
-                    <label class="form-label">Enlace generado (copie y comparta)</label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" id="linkInvitacionInput" class="form-control" readonly value="<?php echo htmlspecialchars($data['link_invitacion']); ?>" style="font-size: 0.75rem; font-family: monospace;">
-                        <button type="button" class="btn btn-secondary" id="btnCopiarLink" style="white-space: nowrap;">Copiar</button>
-                    </div>
-                </div>
-            <?php endif; ?>
-
-            <?php if (!empty($invitacionesActivas)): ?>
-                <div style="margin-bottom: 1rem;">
-                    <h4 style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Enlaces activos</h4>
-                    <?php foreach ($invitacionesActivas as $inv):
-                        $linkInv = URLROOT . '/invite/registro/' . $inv->token;
-                    ?>
-                        <div style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 0.4rem; font-size: 0.75rem;">
-                            <div style="margin-bottom: 0.35rem; color: var(--text-muted);">
-                                Vence: <?php echo date('d-m-Y H:i', strtotime($inv->expires_at)); ?>
-                            </div>
-                            <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
-                                <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($linkInv); ?>"
-                                       style="flex: 1; min-width: 0; font-size: 0.68rem; font-family: monospace; padding: 0.35rem 0.5rem;">
-                                <button type="button" class="btn btn-secondary btn-sm btn-copiar-invitacion" data-link="<?php echo htmlspecialchars($linkInv); ?>"
-                                        style="padding: 0.25rem 0.5rem; font-size: 0.7rem; white-space: nowrap;">Copiar link</button>
-                                <form action="<?php echo URLROOT; ?>/admin/invitacion_revocar/<?php echo (int)$inv->id; ?>" method="POST" style="margin: 0;">
-                                    <button type="submit" class="btn btn-danger btn-sm confirm-action" data-confirm-message="¿Revocar este enlace de invitación?" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; white-space: nowrap;">Revocar</button>
-                                </form>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-
-            <form action="<?php echo URLROOT; ?>/admin/generar_invitacion" method="POST">
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Generar nuevo enlace (24 horas)</button>
-            </form>
-        </div>
-        <?php endif; ?>
-        
-        <!-- CARD 1: INSCRIBIR SOCIO VECINO -->
-        <div class="card card-warning">
-            <h3 class="card-title">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="16" y1="11" x2="22" y2="11"></line></svg>
-                Inscribir Socio Vecino
-            </h3>
-            
-            <form action="<?php echo URLROOT; ?>/admin/socio_crear" method="POST">
-                
-                <div class="form-group">
-                    <label for="id_socio" class="form-label">ID Socio (Sugerido o Personalizado) *</label>
-                    <input type="number" name="id_socio" id="id_socio" class="form-control" placeholder="Ej: 1" value="<?php echo htmlspecialchars($data['proposed_id_socio']); ?>" min="1" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="nombres" class="form-label">Nombres *</label>
-                    <input type="text" name="nombres" id="nombres" class="form-control" placeholder="Ej: Juan Antonio" required>
-                </div>
-
-                <div class="grid-2col" style="margin-bottom: 1rem; gap: 1rem;">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="apellido_paterno" class="form-label">Apellido Paterno *</label>
-                        <input type="text" name="apellido_paterno" id="apellido_paterno" class="form-control" placeholder="Ej: Pérez" required>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label for="apellido_materno" class="form-label">Apellido Materno *</label>
-                        <input type="text" name="apellido_materno" id="apellido_materno" class="form-control" placeholder="Ej: Muñoz" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="rut" class="form-label">RUT del Socio *</label>
-                    <input type="text" name="rut" id="rut" class="form-control" placeholder="Ej: 12.345.678-9" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="email" class="form-label">Correo Electrónico *</label>
-                    <input type="email" name="email" id="email" class="form-control" placeholder="Ej: juan@gmail.com" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="telefono" class="form-label">Teléfono de Contacto</label>
-                    <input type="text" name="telefono" id="telefono" class="form-control" placeholder="Ej: +56912345678">
-                </div>
-
-                <div class="form-group">
-                    <label for="fecha_inicio" class="form-label">Fecha de Inicio como Socio *</label>
-                    <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="calle_id" class="form-label">Calle (Jurisdicción) *</label>
-                    <?php if (empty($data['calles'])): ?>
-                        <div class="alert alert-danger" style="padding: 0.5rem; font-size: 0.75rem; margin-bottom: 0.5rem;">
-                            ⚠️ No hay calles registradas en esta junta. Agréguelas en la sección inferior de la derecha antes de inscribir al socio.
-                        </div>
-                        <select name="calle_id" id="calle_id" class="form-control" disabled required>
-                            <option value="">-- Cree una calle primero --</option>
-                        </select>
-                    <?php else: ?>
-                        <select name="calle_id" id="calle_id" class="form-control" required>
-                            <option value="">-- Seleccionar Calle --</option>
-                            <?php foreach ($data['calles'] as $calle): ?>
-                                <option value="<?php echo $calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    <?php endif; ?>
-                </div>
-
-                <div class="form-group">
-                    <label for="numero_casa" class="form-label">Número de Casa *</label>
-                    <input type="text" name="numero_casa" id="numero_casa" class="form-control" placeholder="Ej: 405-B" required>
-                </div>
-
-                <div class="alert alert-success" style="padding: 0.8rem; background-color: rgba(245,158,11,0.05); color: var(--warning); border-left-color: var(--warning); font-size: 0.75rem; margin-bottom: 1.5rem;">
-                    La contraseña inicial asignada será: <strong>socio123</strong>. El socio podrá ingresar al sistema para ver sus comprobantes.
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="width: 100%;">
-                    Inscribir Socio
-                </button>
-            </form>
-        </div>
-
-        <!-- CARD 2: CONFIGURAR / AJUSTAR VALOR DE CUOTA -->
-        <div class="card card-primary">
-            <h3 class="card-title">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                Ajustar Valor de Cuota
-            </h3>
-
-            <!-- Cuota Actual Informativa -->
-            <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.85rem; color: var(--text-muted);">Cuota Vigente:</span>
-                <strong style="font-size: 1.2rem; color: var(--primary); font-family: var(--font-heading);">
-                    $<?php 
-                    $cuotaVigente = !empty($data['cuotas_historial']) ? $data['cuotas_historial'][0] : null;
-                    echo $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',', '.') : '0';
-                    ?>
-                </strong>
-            </div>
-            
-            <form action="<?php echo URLROOT; ?>/admin/cuota_ajustar" method="POST">
-                
-                <div class="form-group">
-                    <label for="monto" class="form-label">Nuevo Monto de Cuota ($) *</label>
-                    <input type="number" name="monto" id="monto" class="form-control" placeholder="Ej: 6000" min="0" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="mes_inicio" class="form-label">Aplicar Desde el Mes *</label>
-                    <input type="month" name="mes_inicio" id="mes_inicio" class="form-control" value="<?php echo date('Y-m'); ?>" required>
-                </div>
-
-                <button type="submit" class="btn btn-success" style="width: 100%;">
-                    Programar Reajuste
-                </button>
-            </form>
-            
-            <!-- Historial de Cuotas Ajustadas -->
-            <div style="margin-top: 1.5rem;">
-                <h4 style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Historial de Valores</h4>
-                <div style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-right: 0.25rem;">
-                    <?php foreach ($data['cuotas_historial'] as $cuota): ?>
-                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <span>Desde <?php echo htmlspecialchars($cuota->mes_inicio); ?>:</span>
-                            <strong style="color: var(--text-main);">$<?php echo number_format($cuota->monto, 0, ',', '.'); ?></strong>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- CARD 3: GESTIÓN DE CALLES DE LA JURISDICCIÓN -->
-        <div class="card card-warning">
-            <h3 class="card-title">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon><line x1="9" y1="3" x2="9" y2="18"></line><line x1="15" y1="6" x2="15" y2="21"></line></svg>
-                Calles de la Jurisdicción
-            </h3>
-
-            <!-- Formulario Rápido Crear Calle -->
-            <form action="<?php echo URLROOT; ?>/admin/calle_crear" method="POST" style="margin-bottom: 1.5rem;">
-                <div class="form-group" style="margin-bottom: 0.75rem;">
-                    <label for="calle_nombre_nuevo" class="form-label">Nueva Calle *</label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <input type="text" name="nombre" id="calle_nombre_nuevo" class="form-control" placeholder="Ej: Manuel Rodríguez" required style="flex: 1;">
-                        <button type="submit" class="btn btn-primary" style="padding: 0 1rem; white-space: nowrap;">
-                            Añadir
-                        </button>
-                    </div>
-                </div>
-            </form>
-
-            <!-- Listado de Calles Existentes -->
-            <div>
-                <h4 style="font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em;">Calles Registradas</h4>
-                <?php if (empty($data['calles'])): ?>
-                    <p style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 1rem 0;">Aún no hay calles creadas. Añada una calle arriba.</p>
-                <?php else: ?>
-                    <div style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; padding-right: 0.25rem;">
-                        <?php foreach ($data['calles'] as $calle): ?>
-                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.85rem;">
-                                <span style="font-weight: 600; color: var(--text-main);"><?php echo htmlspecialchars($calle->nombre); ?></span>
-                                
-                                <form action="<?php echo URLROOT; ?>/admin/calle_eliminar/<?php echo $calle->id; ?>" method="POST" style="margin: 0;">
-                                    <button type="submit" 
-                                            class="btn btn-danger btn-sm confirm-action" 
-                                            data-confirm-message="¿Estás seguro de que quieres eliminar la calle '<?php echo htmlspecialchars($calle->nombre); ?>'? Los socios de esta calle quedarán sin calle asociada."
-                                            style="padding: 0.25rem 0.4rem; font-size: 0.75rem; display: flex; align-items: center;"
-                                            title="Eliminar Calle">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                    </button>
-                                </form>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-
-    </div>
-
 </div>
 
 <?php if ($canManageSocios): ?>
+
+<!-- Modal: Inscribir Socio -->
+<div id="inscribirSocioModal" class="glass-modal-overlay">
+    <div class="glass-modal-container glass-modal-container--wide glass-modal-container--scroll">
+        <button type="button" class="modal-close-btn" data-close-modal="inscribirSocioModal" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 1.25rem;">Inscribir Socio Vecino</h3>
+        <form action="<?php echo URLROOT; ?>/admin/socio_crear" method="POST">
+            <div class="form-group">
+                <label for="id_socio" class="form-label">ID Socio (Sugerido o Personalizado) *</label>
+                <input type="number" name="id_socio" id="id_socio" class="form-control" placeholder="Ej: 1" value="<?php echo htmlspecialchars($data['proposed_id_socio']); ?>" min="1" required>
+            </div>
+            <div class="form-group">
+                <label for="nombres" class="form-label">Nombres *</label>
+                <input type="text" name="nombres" id="nombres" class="form-control" placeholder="Ej: Juan Antonio" required>
+            </div>
+            <div class="grid-2col" style="margin-bottom: 1rem; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="apellido_paterno" class="form-label">Apellido Paterno *</label>
+                    <input type="text" name="apellido_paterno" id="apellido_paterno" class="form-control" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="apellido_materno" class="form-label">Apellido Materno *</label>
+                    <input type="text" name="apellido_materno" id="apellido_materno" class="form-control" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="rut" class="form-label">RUT del Socio *</label>
+                <input type="text" name="rut" id="rut" class="form-control cb-rut-chile" placeholder="126667777-6" maxlength="12" required>
+            </div>
+            <div class="form-group">
+                <label for="email" class="form-label">Correo Electrónico *</label>
+                <input type="email" name="email" id="email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="telefono" class="form-label">Teléfono de Contacto</label>
+                <input type="text" name="telefono" id="telefono" class="form-control">
+            </div>
+            <div class="form-group">
+                <label for="fecha_inicio" class="form-label">Fecha de Inicio como Socio *</label>
+                <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+            </div>
+            <div class="form-group">
+                <label for="calle_id" class="form-label">Calle (Jurisdicción) *</label>
+                <?php if (empty($data['calles'])): ?>
+                    <div class="alert alert-danger" style="padding: 0.5rem; font-size: 0.75rem; margin-bottom: 0.5rem;">
+                        No hay calles registradas. Agréguelas desde el botón <strong>Calles</strong>.
+                    </div>
+                    <select name="calle_id" id="calle_id" class="form-control" disabled required><option value="">-- Cree una calle primero --</option></select>
+                <?php else: ?>
+                    <select name="calle_id" id="calle_id" class="form-control" required>
+                        <option value="">-- Seleccionar Calle --</option>
+                        <?php foreach ($data['calles'] as $calle): ?>
+                            <option value="<?php echo $calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                <?php endif; ?>
+            </div>
+            <div class="form-group">
+                <label for="numero_casa" class="form-label">Número de Casa *</label>
+                <input type="text" name="numero_casa" id="numero_casa" class="form-control" required>
+            </div>
+            <div class="alert alert-success" style="padding: 0.8rem; font-size: 0.75rem; margin-bottom: 1rem;">
+                La contraseña inicial asignada será: <strong>socio123</strong>.
+            </div>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" data-close-modal="inscribirSocioModal">Cancelar</button>
+                <button type="submit" class="btn btn-primary" <?php echo empty($data['calles']) ? 'disabled' : ''; ?>>Inscribir Socio</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Ajustar Cuota -->
+<div id="cuotaModal" class="glass-modal-overlay">
+    <div class="glass-modal-container glass-modal-container--scroll">
+        <button type="button" class="modal-close-btn" data-close-modal="cuotaModal" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 1rem;">Ajustar Valor de Cuota</h3>
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem 1rem; margin-bottom: 1.25rem; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Cuota vigente:</span>
+            <strong style="font-size: 1.2rem; color: var(--primary);">$<?php echo $cuotaVigenteMonto; ?></strong>
+        </div>
+        <form action="<?php echo URLROOT; ?>/admin/cuota_ajustar" method="POST">
+            <div class="form-group">
+                <label for="monto" class="form-label">Nuevo Monto de Cuota ($) *</label>
+                <input type="number" name="monto" id="monto" class="form-control" placeholder="Ej: 6000" min="0" required>
+            </div>
+            <div class="form-group">
+                <label for="mes_inicio" class="form-label">Aplicar Desde el Mes *</label>
+                <input type="month" name="mes_inicio" id="mes_inicio" class="form-control" value="<?php echo date('Y-m'); ?>" required>
+            </div>
+            <button type="submit" class="btn btn-success" style="width: 100%; margin-bottom: 1.25rem;">Programar Reajuste</button>
+        </form>
+        <?php if (!empty($data['cuotas_historial'])): ?>
+        <h4 style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Historial de valores</h4>
+        <div style="max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem;">
+            <?php foreach ($data['cuotas_historial'] as $cuota): ?>
+                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; padding: 0.35rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span>Desde <?php echo htmlspecialchars($cuota->mes_inicio); ?></span>
+                    <strong>$<?php echo number_format($cuota->monto, 0, ',', '.'); ?></strong>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- Modal: Calles -->
+<div id="callesModal" class="glass-modal-overlay">
+    <div class="glass-modal-container glass-modal-container--scroll">
+        <button type="button" class="modal-close-btn" data-close-modal="callesModal" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 1.25rem;">Calles de la Jurisdicción</h3>
+        <form action="<?php echo URLROOT; ?>/admin/calle_crear" method="POST" style="margin-bottom: 1.25rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label for="calle_nombre_nuevo" class="form-label">Nueva Calle *</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" name="nombre" id="calle_nombre_nuevo" class="form-control" placeholder="Ej: Manuel Rodríguez" required style="flex: 1;">
+                    <button type="submit" class="btn btn-primary" style="white-space: nowrap;">Añadir</button>
+                </div>
+            </div>
+        </form>
+        <?php if (empty($data['calles'])): ?>
+            <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem 0;">Aún no hay calles creadas.</p>
+        <?php else: ?>
+            <div style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                <?php foreach ($data['calles'] as $calle): ?>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.65rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.85rem;">
+                        <span style="font-weight: 600;"><?php echo htmlspecialchars($calle->nombre); ?></span>
+                        <form action="<?php echo URLROOT; ?>/admin/calle_eliminar/<?php echo $calle->id; ?>" method="POST" style="margin: 0;">
+                            <button type="submit" class="btn btn-danger btn-sm confirm-action"
+                                    data-confirm-message="¿Eliminar la calle '<?php echo htmlspecialchars($calle->nombre); ?>'? Los socios quedarán sin calle asociada."
+                                    style="padding: 0.25rem 0.4rem; font-size: 0.72rem;">Eliminar</button>
+                        </form>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<!-- Modal: Link de invitación -->
+<div id="invitacionModal" class="glass-modal-overlay">
+    <div class="glass-modal-container glass-modal-container--wide glass-modal-container--scroll">
+        <button type="button" class="modal-close-btn" data-close-modal="invitacionModal" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.35rem;">Link de invitación (24 h)</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+            Comparta el enlace para que nuevos vecinos soliciten su registro. Usted aprueba cada solicitud.
+        </p>
+
+        <?php if (!empty($data['link_invitacion'])): ?>
+            <div class="form-group">
+                <label class="form-label">Enlace recién generado</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="linkInvitacionInput" class="form-control" readonly value="<?php echo htmlspecialchars($data['link_invitacion']); ?>" style="font-size: 0.75rem; font-family: monospace;">
+                    <button type="button" class="btn btn-secondary" id="btnCopiarLink" style="white-space: nowrap;">Copiar</button>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <?php if (!empty($invitacionesActivas)): ?>
+            <h4 style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Enlaces activos</h4>
+            <?php foreach ($invitacionesActivas as $inv):
+                $linkInv = URLROOT . '/invite/registro/' . $inv->token;
+            ?>
+                <div style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 0.5rem; font-size: 0.75rem;">
+                    <div style="margin-bottom: 0.35rem; color: var(--text-muted);">Vence: <?php echo date('d-m-Y H:i', strtotime($inv->expires_at)); ?></div>
+                    <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+                        <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($linkInv); ?>" style="flex: 1; min-width: 0; font-size: 0.68rem; font-family: monospace; padding: 0.35rem 0.5rem;">
+                        <button type="button" class="btn btn-secondary btn-sm btn-copiar-invitacion" data-link="<?php echo htmlspecialchars($linkInv); ?>" style="white-space: nowrap;">Copiar link</button>
+                        <form action="<?php echo URLROOT; ?>/admin/invitacion_revocar/<?php echo (int)$inv->id; ?>" method="POST" style="margin: 0;">
+                            <button type="submit" class="btn btn-danger btn-sm confirm-action" data-confirm-message="¿Revocar este enlace?" style="white-space: nowrap;">Revocar</button>
+                        </form>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        <?php elseif (empty($data['link_invitacion'])): ?>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No hay enlaces activos. Genere uno nuevo abajo.</p>
+        <?php endif; ?>
+
+        <form action="<?php echo URLROOT; ?>/admin/generar_invitacion" method="POST">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Generar nuevo enlace (24 horas)</button>
+        </form>
+    </div>
+</div>
+
 <div id="editarSocioModal" class="glass-modal-overlay">
     <div class="glass-modal-container" style="max-width: 520px;">
         <button type="button" id="closeEditarSocioModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
@@ -763,6 +758,27 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
 document.addEventListener('DOMContentLoaded', function() {
     const openModal = (el) => { if (el) { el.classList.add('is-open'); document.body.style.overflow = 'hidden'; } };
     const closeModal = (el) => { if (el) { el.classList.remove('is-open'); document.body.style.overflow = ''; } };
+
+    document.querySelectorAll('[data-open-modal]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openModal(document.getElementById(this.getAttribute('data-open-modal')));
+        });
+    });
+    document.querySelectorAll('[data-close-modal]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            closeModal(document.getElementById(this.getAttribute('data-close-modal')));
+        });
+    });
+
+    document.querySelectorAll('.glass-modal-overlay').forEach(function(overlay) {
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeModal(overlay);
+        });
+    });
+
+    <?php if (!empty($data['link_invitacion'])): ?>
+    openModal(document.getElementById('invitacionModal'));
+    <?php endif; ?>
 
     const editModal = document.getElementById('editarSocioModal');
     document.querySelectorAll('.btn-editar-socio').forEach(btn => {
