@@ -2,6 +2,7 @@
 class User extends Model {
     private static $hasCalleIdColumn = null;
     private static $hasStatusColumn = null;
+    private static $hasGeneroColumn = null;
 
     private function hasCalleIdColumn() {
         if (self::$hasCalleIdColumn === null) {
@@ -27,6 +28,19 @@ class User extends Model {
             }
         }
         return self::$hasStatusColumn;
+    }
+
+    private function hasGeneroColumn() {
+        if (self::$hasGeneroColumn === null) {
+            try {
+                $this->db->query('SELECT genero FROM usuarios LIMIT 1');
+                $this->db->execute();
+                self::$hasGeneroColumn = true;
+            } catch (Exception $e) {
+                self::$hasGeneroColumn = false;
+            }
+        }
+        return self::$hasGeneroColumn;
     }
     
     // Buscar usuario por correo electrónico
@@ -236,6 +250,10 @@ class User extends Model {
         if (!$this->hasStatusColumn()) {
             return false;
         }
+        $extra = '';
+        if ($this->hasGeneroColumn()) {
+            $extra = ', genero = :genero, fecha_nacimiento = :fecha_nacimiento';
+        }
         $this->db->query("UPDATE usuarios SET
             id_socio = :id_socio,
             rut = :rut,
@@ -247,6 +265,7 @@ class User extends Model {
             calle_id = :calle_id,
             numero_casa = :numero_casa,
             fecha_inicio = :fecha_inicio
+            {$extra}
             WHERE id = :id AND rol = 'socio' AND status = 'pending'");
         $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
         $this->db->bind(':rut', $data['rut']);
@@ -258,6 +277,10 @@ class User extends Model {
         $this->db->bind(':calle_id', !empty($data['calle_id']) ? $data['calle_id'] : null);
         $this->db->bind(':numero_casa', !empty($data['numero_casa']) ? $data['numero_casa'] : null);
         $this->db->bind(':fecha_inicio', !empty($data['fecha_inicio']) ? $data['fecha_inicio'] : date('Y-m-d'));
+        if ($this->hasGeneroColumn()) {
+            $this->db->bind(':genero', $data['genero'] ?? null);
+            $this->db->bind(':fecha_nacimiento', !empty($data['fecha_nacimiento']) ? $data['fecha_nacimiento'] : null);
+        }
         $this->db->bind(':id', $data['id']);
         return $this->db->execute();
     }
@@ -340,10 +363,16 @@ class User extends Model {
         if (!$this->hasStatusColumn()) {
             throw new Exception('La columna status no existe. Ejecute sql/create_invitations_and_user_updates.sql');
         }
-        $this->db->query("INSERT INTO usuarios (junta_id, id_socio, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio, status, invitation_id) VALUES (:junta_id, :id_socio, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio, 'pending', :invitation_id)");
+        $cols = 'junta_id, id_socio, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio, status, invitation_id';
+        $vals = ':junta_id, :id_socio, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio, \'pending\', :invitation_id';
+        if ($this->hasGeneroColumn()) {
+            $cols .= ', genero, fecha_nacimiento';
+            $vals .= ', :genero, :fecha_nacimiento';
+        }
+        $this->db->query("INSERT INTO usuarios ({$cols}) VALUES ({$vals})");
         $hashed = password_hash($data['password'], PASSWORD_BCRYPT);
         $this->db->bind(':junta_id', $data['junta_id']);
-        $this->db->bind(':id_socio', $data['id_socio'] ?? null);
+        $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
         $this->db->bind(':rut', $data['rut']);
         $this->db->bind(':nombre', $data['nombres']);
         $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
@@ -357,6 +386,10 @@ class User extends Model {
         $this->db->bind(':numero_casa', $data['numero_casa'] ?? null);
         $this->db->bind(':fecha_inicio', $data['fecha_inicio'] ?? date('Y-m-d'));
         $this->db->bind(':invitation_id', $invitationId);
+        if ($this->hasGeneroColumn()) {
+            $this->db->bind(':genero', $data['genero'] ?? null);
+            $this->db->bind(':fecha_nacimiento', !empty($data['fecha_nacimiento']) ? $data['fecha_nacimiento'] : null);
+        }
         if ($this->db->execute()) {
             return $this->db->lastInsertId();
         }

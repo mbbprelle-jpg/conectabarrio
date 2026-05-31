@@ -302,21 +302,26 @@ class AdminController extends Controller {
     }
 
     private function parseSocioFormData($post) {
-        return [
+        require_once APPROOT . '/core/SocioInput.php';
+        $data = [
             'id_socio' => (int)($post['id_socio'] ?? 0),
             'rut' => trim($post['rut'] ?? ''),
             'nombres' => trim($post['nombres'] ?? ''),
             'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
             'apellido_materno' => trim($post['apellido_materno'] ?? ''),
-            'email' => trim($post['email'] ?? ''),
+            'email' => mb_strtolower(trim($post['email'] ?? ''), 'UTF-8'),
             'telefono' => trim($post['telefono'] ?? ''),
             'calle_id' => $post['calle_id'] ?? null,
             'numero_casa' => trim($post['numero_casa'] ?? ''),
             'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d'),
+            'genero' => SocioInput::normalizeGenero($post['genero'] ?? ''),
+            'fecha_nacimiento' => !empty($post['fecha_nacimiento']) ? $post['fecha_nacimiento'] : null,
         ];
+        return SocioInput::normalizeTextFields($data);
     }
 
     private function validateSocioFormData(array $data, $requireIdSocio = true) {
+        require_once APPROOT . '/core/RutChile.php';
         if ($requireIdSocio && $data['id_socio'] <= 0) {
             return 'El ID Socio debe ser mayor a 0.';
         }
@@ -325,7 +330,19 @@ class AdminController extends Controller {
             || empty($data['calle_id']) || $data['numero_casa'] === '') {
             return 'Complete todos los campos obligatorios.';
         }
+        $rutOk = RutChile::normalize($data['rut']);
+        if ($rutOk === false) {
+            return 'El RUT no es válido. Use el formato 126667777-6 (sin puntos ni espacios).';
+        }
         return null;
+    }
+
+    private function applyRutNormalization(array &$data) {
+        require_once APPROOT . '/core/RutChile.php';
+        $rutOk = RutChile::normalize($data['rut']);
+        if ($rutOk !== false) {
+            $data['rut'] = $rutOk;
+        }
     }
 
     public function socio_pendiente_actualizar() {
@@ -351,6 +368,7 @@ class AdminController extends Controller {
             $this->redirect('/admin/socios');
             return;
         }
+        $this->applyRutNormalization($data);
         if ($this->emailOrRutTaken($data['email'], $data['rut'], $socioId)) {
             $_SESSION['error_msg'] = 'El RUT o correo ya está en uso por otro usuario.';
             $this->redirect('/admin/socios');
@@ -402,6 +420,7 @@ class AdminController extends Controller {
             $this->redirect('/admin/socios');
             return;
         }
+        $this->applyRutNormalization($data);
         if ($this->emailOrRutTaken($data['email'], $data['rut'], $socioId)) {
             $_SESSION['error_msg'] = 'El RUT o correo ya está en uso por otro usuario.';
             $this->redirect('/admin/socios');

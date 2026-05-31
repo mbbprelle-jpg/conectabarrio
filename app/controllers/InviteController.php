@@ -2,10 +2,12 @@
 class InviteController extends Controller {
     private $invitationModel;
     private $userModel;
+    private $db;
 
     public function __construct() {
         $this->invitationModel = $this->model('Invitation');
         $this->userModel = $this->model('User');
+        $this->db = new Database();
     }
 
     public function registro($token = '') {
@@ -21,16 +23,14 @@ class InviteController extends Controller {
             return;
         }
 
-        $db = new Database();
-        $db->query('SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC');
-        $db->bind(':junta_id', $invitation->junta_id);
-        $calles = $db->resultSet();
+        $calles = $this->getCalles($invitation->junta_id);
 
         $this->view('auth/registro_invitacion', [
             'title' => 'Registro de Socio',
             'invitation' => $invitation,
             'token' => $token,
             'calles' => $calles,
+            'proposed_id_socio' => $this->getProposedIdSocio($invitation->junta_id),
             'error' => '',
             'success' => '',
         ]);
@@ -41,6 +41,9 @@ class InviteController extends Controller {
             $this->redirect('/auth/login');
             return;
         }
+        require_once APPROOT . '/core/RutChile.php';
+        require_once APPROOT . '/core/SocioInput.php';
+
         $post = $this->sanitizePost();
         $token = trim($post['token'] ?? '');
         $invitation = $this->invitationModel->getValidByToken($token);
@@ -54,27 +57,8 @@ class InviteController extends Controller {
             return;
         }
 
-        $dataSocio = [
-            'junta_id' => $invitation->junta_id,
-            'id_socio' => null,
-            'rut' => trim($post['rut'] ?? ''),
-            'nombres' => trim($post['nombres'] ?? ''),
-            'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
-            'apellido_materno' => trim($post['apellido_materno'] ?? ''),
-            'email' => trim($post['email'] ?? ''),
-            'password' => bin2hex(random_bytes(16)),
-            'rol' => 'socio',
-            'telefono' => trim($post['telefono'] ?? ''),
-            'estado' => 1,
-            'calle_id' => $post['calle_id'] ?? null,
-            'numero_casa' => trim($post['numero_casa'] ?? ''),
-            'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d'),
-        ];
-
-        $db = new Database();
-        $db->query('SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC');
-        $db->bind(':junta_id', $invitation->junta_id);
-        $calles = $db->resultSet();
+        $calles = $this->getCalles($invitation->junta_id);
+        $dataSocio = $this->parseRegistrationPost($post, $invitation->junta_id);
 
         $renderForm = function ($error) use ($invitation, $token, $calles, $dataSocio) {
             $this->view('auth/registro_invitacion', [
@@ -82,6 +66,7 @@ class InviteController extends Controller {
                 'invitation' => $invitation,
                 'token' => $token,
                 'calles' => $calles,
+                'proposed_id_socio' => $this->getProposedIdSocio($invitation->junta_id),
                 'error' => $error,
                 'success' => '',
                 'old' => $dataSocio,
@@ -90,9 +75,32 @@ class InviteController extends Controller {
 
         if ($dataSocio['rut'] === '' || $dataSocio['nombres'] === '' || $dataSocio['apellido_paterno'] === ''
             || $dataSocio['apellido_materno'] === '' || $dataSocio['email'] === ''
-            || empty($dataSocio['calle_id']) || $dataSocio['numero_casa'] === '') {
+            || empty($dataSocio['calle_id']) || $dataSocio['numero_casa'] === ''
+            || empty($dataSocio['genero']) || empty($dataSocio['fecha_nacimiento'])) {
             $renderForm('Complete todos los campos obligatorios.');
             return;
+        }
+
+        $rutNormalizado = RutChile::normalize($dataSocio['rut']);
+        if ($rutNormalizado === false) {
+            $renderForm('El RUT ingresado no es válido. Use el formato 126667777-6 (sin puntos ni espacios).');
+            return;
+        }
+        $dataSocio['rut'] = $rutNormalizado;
+
+        if (!filter_var($dataSocio['email'], FILTER_VALIDATE_EMAIL)) {
+            $renderForm('Ingrese un correo electrónico válido.');
+            return;
+        }
+
+        if (!empty($dataSocio['id_socio'])) {
+            $this->db->query('SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio LIMIT 1');
+            $this->db->bind(':junta_id', $invitation->junta_id);
+            $this->db->bind(':id_socio', (int)$dataSocio['id_socio']);
+            if ($this->db->single()) {
+                $renderForm('El ID Socio #' . (int)$dataSocio['id_socio'] . ' ya está en uso en esta organización.');
+                return;
+            }
         }
 
         if ($this->userModel->findUserByRut($dataSocio['rut'])) {
@@ -121,5 +129,46 @@ class InviteController extends Controller {
             'error' => '',
             'success' => 'Su solicitud fue enviada correctamente. La directiva revisará sus datos y le notificará por correo cuando sea aprobada.',
         ]);
+    }
+
+    private function getCalles($juntaId) {
+        $this->db->query('SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC');
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
+    private function getProposedIdSocio($juntaId) {
+        $this->db->query('SELECT MAX(id_socio) as max_id FROM usuarios WHERE junta_id = :junta_id');
+        $this->db->bind(':junta_id', $juntaId);
+        $row = $this->db->single();
+        return ($row && $row->max_id) ? (int)$row->max_id + 1 : 1;
+    }
+
+    private function parseRegistrationPost(array $post, $juntaId) {
+        require_once APPROOT . '/core/SocioInput.php';
+
+        $idSocioRaw = trim($post['id_socio'] ?? '');
+        $idSocio = ($idSocioRaw !== '') ? (int)$idSocioRaw : null;
+
+        $data = [
+            'junta_id' => $juntaId,
+            'id_socio' => ($idSocio && $idSocio > 0) ? $idSocio : null,
+            'rut' => trim($post['rut'] ?? ''),
+            'nombres' => trim($post['nombres'] ?? ''),
+            'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
+            'apellido_materno' => trim($post['apellido_materno'] ?? ''),
+            'email' => mb_strtolower(trim($post['email'] ?? ''), 'UTF-8'),
+            'password' => bin2hex(random_bytes(16)),
+            'rol' => 'socio',
+            'telefono' => trim($post['telefono'] ?? ''),
+            'estado' => 1,
+            'calle_id' => $post['calle_id'] ?? null,
+            'numero_casa' => trim($post['numero_casa'] ?? ''),
+            'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d'),
+            'genero' => SocioInput::normalizeGenero($post['genero'] ?? ''),
+            'fecha_nacimiento' => !empty($post['fecha_nacimiento']) ? $post['fecha_nacimiento'] : null,
+        ];
+
+        return SocioInput::normalizeTextFields($data);
     }
 }

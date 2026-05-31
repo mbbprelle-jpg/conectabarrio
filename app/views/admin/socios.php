@@ -105,6 +105,8 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
                                     data-email="<?php echo htmlspecialchars($pend->email); ?>"
                                     data-telefono="<?php echo htmlspecialchars($pend->telefono ?? ''); ?>"
                                     data-fecha-inicio="<?php echo cbFechaSocioInput($pend); ?>"
+                                    data-genero="<?php echo htmlspecialchars($pend->genero ?? ''); ?>"
+                                    data-fecha-nacimiento="<?php echo !empty($pend->fecha_nacimiento) ? substr($pend->fecha_nacimiento, 0, 10) : ''; ?>"
                                     data-calle-id="<?php echo (int)($pend->calle_id ?? 0); ?>"
                                     data-numero-casa="<?php echo htmlspecialchars($pend->numero_casa ?? ''); ?>"
                                     style="font-size: 0.75rem;">
@@ -625,7 +627,22 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
             </div>
             <div class="form-group">
                 <label class="form-label">RUT *</label>
-                <input type="text" name="rut" id="pend_rut" class="form-control" required>
+                <input type="text" name="rut" id="pend_rut" class="form-control cb-rut-chile" required maxlength="12">
+            </div>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Género</label>
+                    <select name="genero" id="pend_genero" class="form-control">
+                        <option value="">-- Sin indicar --</option>
+                        <option value="MASCULINO">Masculino</option>
+                        <option value="FEMENINO">Femenino</option>
+                        <option value="NO ESPECIFICAR">No especificar</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fecha nacimiento</label>
+                    <input type="date" name="fecha_nacimiento" id="pend_fecha_nacimiento" class="form-control" max="<?php echo date('Y-m-d'); ?>">
+                </div>
             </div>
             <div class="form-group">
                 <label class="form-label">Correo *</label>
@@ -672,6 +689,8 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
                 <input type="hidden" name="apellido_materno" id="pend_aprobar_apellido_materno">
                 <input type="hidden" name="rut" id="pend_aprobar_rut">
                 <input type="hidden" name="email" id="pend_aprobar_email">
+                <input type="hidden" name="genero" id="pend_aprobar_genero">
+                <input type="hidden" name="fecha_nacimiento" id="pend_aprobar_fecha_nacimiento">
                 <input type="hidden" name="telefono" id="pend_aprobar_telefono">
                 <input type="hidden" name="fecha_inicio" id="pend_aprobar_fecha_inicio">
                 <input type="hidden" name="calle_id" id="pend_aprobar_calle_id">
@@ -765,6 +784,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('pend_aprobar_apellido_materno').value = document.getElementById('pend_apellido_materno').value;
         document.getElementById('pend_aprobar_rut').value = document.getElementById('pend_rut').value;
         document.getElementById('pend_aprobar_email').value = document.getElementById('pend_email').value;
+        document.getElementById('pend_aprobar_genero').value = document.getElementById('pend_genero').value;
+        document.getElementById('pend_aprobar_fecha_nacimiento').value = document.getElementById('pend_fecha_nacimiento').value;
         document.getElementById('pend_aprobar_telefono').value = document.getElementById('pend_telefono').value;
         document.getElementById('pend_aprobar_fecha_inicio').value = document.getElementById('pend_fecha_inicio').value;
         document.getElementById('pend_aprobar_calle_id').value = document.getElementById('pend_calle_id').value;
@@ -782,6 +803,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('pend_email').value = this.dataset.email || '';
             document.getElementById('pend_telefono').value = this.dataset.telefono || '';
             document.getElementById('pend_fecha_inicio').value = this.dataset.fechaInicio || '';
+            document.getElementById('pend_genero').value = this.dataset.genero || '';
+            document.getElementById('pend_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
             document.getElementById('pend_calle_id').value = this.dataset.calleId || '';
             document.getElementById('pend_numero_casa').value = this.dataset.numeroCasa || '';
             document.getElementById('formPendienteRechazar').action = '<?php echo URLROOT; ?>/admin/socio_pendiente_rechazar/' + id;
@@ -801,6 +824,20 @@ document.addEventListener('DOMContentLoaded', function() {
         navigator.clipboard?.writeText(input.value).then(() => {
             this.textContent = 'Copiado';
             setTimeout(() => { this.textContent = 'Copiar'; }, 2000);
+        });
+    });
+
+    function formatRutChile(raw) {
+        let v = String(raw).replace(/[^0-9kK]/g, '').toUpperCase();
+        if (v.length <= 1) return v;
+        return v.slice(0, -1) + '-' + v.slice(-1);
+    }
+    document.querySelectorAll('.cb-rut-chile').forEach(function(input) {
+        input.addEventListener('input', function() {
+            this.value = formatRutChile(this.value);
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === ' ' || e.key === '.') e.preventDefault();
         });
     });
 
