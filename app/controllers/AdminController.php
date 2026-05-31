@@ -27,7 +27,7 @@ class AdminController extends Controller {
     private function requireManageSocios() {
         require_once APPROOT . '/core/AuthContext.php';
         if (!AuthContext::canManageSocios()) {
-            $_SESSION['error_msg'] = 'No tiene permisos para gestionar socios.';
+            $_SESSION['error_msg'] = 'No tiene permisos para gestionar socios ni calles.';
             $this->redirect('/admin/dashboard');
             exit;
         }

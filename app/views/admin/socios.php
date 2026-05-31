@@ -454,6 +454,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
 </div>
 
 <!-- Modal: Calles -->
+<?php if ($canManageSocios): ?>
 <div id="callesModal" class="glass-modal-overlay">
     <div class="glass-modal-container glass-modal-container--scroll">
         <button type="button" class="modal-close-btn" data-close-modal="callesModal" aria-label="Cerrar">
@@ -487,6 +488,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
         <?php endif; ?>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Modal: Link de invitación -->
 <div id="invitacionModal" class="glass-modal-overlay">
@@ -730,7 +732,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <label class="form-label">Permisos delegados</label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
                     <input type="checkbox" name="permiso_gestion_socios" id="delegacion_perm_socios" value="1">
-                    Gestionar socios (incorporar, editar padrón)
+                    Gestionar socios y calles (padrón, calles de jurisdicción, invitaciones)
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
                     <input type="checkbox" name="permiso_registro_pagos" id="delegacion_perm_pagos" value="1">
@@ -742,7 +744,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 </label>
             </div>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
-                Los permisos solo aplican si usted los otorga explícitamente. El secretario y tesorero pueden recibir permisos acordes a su cargo.
+                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa la gestión de socios y calles; al asignar <strong>Tesorero</strong>, el registro de pagos.
             </p>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" id="cancelDelegacionModal">Cancelar</button>

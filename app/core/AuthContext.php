@@ -41,6 +41,7 @@ class AuthContext {
     }
 
     public static function canManageSocios() {
+        // Incluye padrón de socios, calles de jurisdicción, cuotas e invitaciones.
         if (self::isFullAdmin()) return true;
         if (!empty($_SESSION['permiso_todos'])) return true;
         return !empty($_SESSION['permiso_gestion_socios']);
