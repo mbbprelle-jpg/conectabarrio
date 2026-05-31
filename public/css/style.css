@@ -743,7 +743,175 @@ select.form-control {
     color: var(--danger);
 }
 
-/* Grid de dos columnas */
+.alert-warning {
+    background-color: var(--warning-bg);
+    border-left-color: var(--warning);
+    color: #fcd34d;
+}
+
+.alert-info {
+    background-color: var(--info-bg);
+    border-left-color: var(--info);
+    color: #67e8f9;
+}
+
+.alert-block {
+    align-items: flex-start;
+    line-height: 1.55;
+}
+
+.alert-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-top: 0.05rem;
+}
+
+.alert-icon svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+    fill: none;
+}
+
+.alert-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.form-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+@media (max-width: 600px) {
+    .form-grid-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Registro por invitación (página pública) */
+.invite-registro-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.invite-registro-main {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 6rem 1.25rem 2.5rem;
+}
+
+.invite-registro-card {
+    width: 100%;
+}
+
+.invite-registro-header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.invite-registro-header h1 {
+    font-size: 1.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.invite-registro-org {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    font-size: 0.88rem;
+    color: var(--text-muted);
+}
+
+.invite-registro-org strong {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.invite-registro-org-sep {
+    opacity: 0.45;
+}
+
+.invite-registro-form .form-group:last-of-type {
+    margin-bottom: 0;
+}
+
+.invite-registro-notice {
+    margin-top: 1.25rem;
+    margin-bottom: 1.25rem;
+}
+
+.invite-registro-submit {
+    width: 100%;
+    margin-top: 0.25rem;
+    padding: 0.85rem;
+}
+
+.invite-registro-state {
+    text-align: center;
+    padding: 0.5rem 0;
+}
+
+.invite-registro-state-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.invite-registro-state-icon.success {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: var(--success);
+}
+
+.invite-registro-state-icon.error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: var(--danger);
+}
+
+.invite-registro-state h2 {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.invite-registro-state p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+.invite-registro-footer {
+    text-align: center;
+    padding: 1.25rem 1.5rem 1.75rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-color);
+    margin-top: auto;
+}
+
+@media (max-width: 600px) {
+    .invite-registro-main {
+        padding: 5.25rem 1rem 2rem;
+    }
+}
+
 .grid-2col {
     display: grid;
     grid-template-columns: 2fr 1fr;

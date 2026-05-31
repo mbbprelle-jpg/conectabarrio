@@ -14,7 +14,7 @@ class InviteController extends Controller {
         $token = trim((string)$token);
         $invitation = $this->invitationModel->getValidByToken($token);
         if (!$invitation) {
-            $this->view('auth/registro_invitacion', [
+            $this->viewRegistro([
                 'title' => 'Invitación no válida',
                 'error' => 'El enlace de invitación expiró, fue revocado o no es válido. Solicite uno nuevo a la directiva de su organización.',
                 'invitation' => null,
@@ -25,7 +25,7 @@ class InviteController extends Controller {
 
         $calles = $this->getCalles($invitation->junta_id);
 
-        $this->view('auth/registro_invitacion', [
+        $this->viewRegistro([
             'title' => 'Registro de Socio',
             'invitation' => $invitation,
             'token' => $token,
@@ -48,7 +48,7 @@ class InviteController extends Controller {
         $token = trim($post['token'] ?? '');
         $invitation = $this->invitationModel->getValidByToken($token);
         if (!$invitation) {
-            $this->view('auth/registro_invitacion', [
+            $this->viewRegistro([
                 'title' => 'Invitación no válida',
                 'error' => 'El enlace ya no es válido.',
                 'invitation' => null,
@@ -61,7 +61,7 @@ class InviteController extends Controller {
         $dataSocio = $this->parseRegistrationPost($post, $invitation->junta_id);
 
         $renderForm = function ($error) use ($invitation, $token, $calles, $dataSocio) {
-            $this->view('auth/registro_invitacion', [
+            $this->viewRegistro([
                 'title' => 'Registro de Socio',
                 'invitation' => $invitation,
                 'token' => $token,
@@ -122,13 +122,18 @@ class InviteController extends Controller {
             return;
         }
 
-        $this->view('auth/registro_invitacion', [
+        $this->viewRegistro([
             'title' => 'Solicitud enviada',
             'invitation' => null,
             'calles' => [],
             'error' => '',
             'success' => 'Su solicitud fue enviada correctamente. La directiva revisará sus datos y le notificará por correo cuando sea aprobada.',
         ]);
+    }
+
+    private function viewRegistro(array $data) {
+        $data['public_layout'] = true;
+        $this->view('auth/registro_invitacion', $data);
     }
 
     private function getCalles($juntaId) {

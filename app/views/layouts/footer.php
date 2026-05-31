@@ -1,4 +1,4 @@
-<?php if (isset($_SESSION['user_id'])): ?>
+<?php if (isset($_SESSION['user_id']) && empty($data['public_layout'] ?? false)): ?>
     </div> <!-- Cierre de main-content -->
 </div> <!-- Cierre de app-container -->
 <?php endif; ?>

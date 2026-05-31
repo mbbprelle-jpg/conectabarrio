@@ -1,6 +1,6 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 
-<div class="landing-wrapper" style="min-height: 100vh; display: flex; flex-direction: column;">
+<div class="invite-registro-page">
     <nav class="landing-navbar">
         <div class="landing-logo">
             <div class="landing-logo-icon">
@@ -13,36 +13,76 @@
         <a href="<?php echo URLROOT; ?>/auth/login" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Volver al inicio</a>
     </nav>
 
-    <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 2rem 1rem;">
-        <div class="card card-primary" style="width: 100%; max-width: 580px; margin: 0 auto;">
+    <main class="invite-registro-main">
+        <div class="card card-primary invite-registro-card">
 
             <?php if (!empty($data['success'])): ?>
-                <div class="alert alert-success" style="margin-bottom: 1.5rem;">
-                    <?php echo htmlspecialchars($data['success']); ?>
+                <div class="invite-registro-state">
+                    <div class="invite-registro-state-icon success" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    </div>
+                    <h2>Solicitud enviada</h2>
+                    <div class="alert alert-success alert-block" style="text-align: left; margin: 1.25rem 0 0;">
+                        <span class="alert-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        </span>
+                        <div class="alert-content"><?php echo htmlspecialchars($data['success']); ?></div>
+                    </div>
+                    <p style="margin-top: 1rem;">
+                        Cuando la directiva apruebe su solicitud, recibirá un correo con sus datos y clave de acceso.
+                    </p>
+                    <a href="<?php echo URLROOT; ?>/auth/login" class="btn btn-primary" style="margin-top: 1.5rem; display: inline-flex;">Ir al inicio de sesión</a>
                 </div>
-                <p style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">
-                    Cuando la directiva apruebe su solicitud, recibirá un correo con sus datos y clave de acceso.
-                </p>
+
             <?php elseif (!empty($data['error']) && empty($data['invitation'])): ?>
-                <h2 style="margin-bottom: 1rem;">Invitación no válida</h2>
-                <div class="alert alert-danger"><?php echo htmlspecialchars($data['error']); ?></div>
+                <div class="invite-registro-state">
+                    <div class="invite-registro-state-icon error" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    </div>
+                    <h2>Invitación no válida</h2>
+                    <div class="alert alert-danger alert-block" style="text-align: left; margin-top: 1.25rem;">
+                        <span class="alert-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        </span>
+                        <div class="alert-content"><?php echo htmlspecialchars($data['error']); ?></div>
+                    </div>
+                    <a href="<?php echo URLROOT; ?>/auth/login" class="btn btn-secondary" style="margin-top: 1.5rem; display: inline-flex;">Volver al inicio</a>
+                </div>
+
             <?php elseif (!empty($data['invitation'])): ?>
                 <?php $inv = $data['invitation']; $old = $data['old'] ?? []; ?>
-                <h2 style="margin-bottom: 0.25rem;">Registro de Socio</h2>
-                <p style="color: var(--text-muted); margin-bottom: 1rem; font-size: 0.9rem;">
-                    Solicitud para <strong style="color: var(--primary);"><?php echo htmlspecialchars($inv->junta_nombre); ?></strong>
-                    <?php if (!empty($inv->comuna)): ?> · <?php echo htmlspecialchars($inv->comuna); ?><?php endif; ?>
-                </p>
 
-                <div class="alert alert-warning" style="font-size: 0.85rem; line-height: 1.55; margin-bottom: 1.25rem;">
-                    <strong>Estimado Socio,</strong> es importante que pueda completar la información correctamente, en especial con su <strong>NOMBRE COMPLETO</strong> y los siguientes datos. Cabe mencionar que estos datos serán posteriormente validados con los registros que tenga la organización.
+                <header class="invite-registro-header">
+                    <h1>Registro de Socio</h1>
+                    <div class="invite-registro-org">
+                        <span>Solicitud para</span>
+                        <strong><?php echo htmlspecialchars($inv->junta_nombre); ?></strong>
+                        <?php if (!empty($inv->comuna)): ?>
+                            <span class="invite-registro-org-sep">·</span>
+                            <span><?php echo htmlspecialchars($inv->comuna); ?></span>
+                        <?php endif; ?>
+                    </div>
+                </header>
+
+                <div class="alert alert-warning alert-block" role="status">
+                    <span class="alert-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </span>
+                    <div class="alert-content">
+                        <strong>Estimado socio,</strong> complete la información con su <strong>nombre completo</strong> y datos personales correctos. Esta información será validada posteriormente con los registros de la organización.
+                    </div>
                 </div>
 
                 <?php if (!empty($data['error'])): ?>
-                    <div class="alert alert-danger" style="margin-bottom: 1rem;"><?php echo htmlspecialchars($data['error']); ?></div>
+                    <div class="alert alert-danger alert-block">
+                        <span class="alert-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        </span>
+                        <div class="alert-content"><?php echo htmlspecialchars($data['error']); ?></div>
+                    </div>
                 <?php endif; ?>
 
-                <form id="formRegistroInvitacion" action="<?php echo URLROOT; ?>/invite/registrar" method="POST" autocomplete="off">
+                <form id="formRegistroInvitacion" class="invite-registro-form" action="<?php echo URLROOT; ?>/invite/registrar" method="POST" autocomplete="off">
                     <input type="hidden" name="token" value="<?php echo htmlspecialchars($data['token']); ?>">
 
                     <div class="form-group">
@@ -59,19 +99,19 @@
                                placeholder="NOMBRE(S) COMPLETO(S)" value="<?php echo htmlspecialchars($old['nombres'] ?? ''); ?>">
                     </div>
 
-                    <div class="grid-2col" style="gap: 1rem; margin-bottom: 1rem;">
-                        <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
                             <label class="form-label">Apellido Paterno *</label>
                             <input type="text" name="apellido_paterno" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['apellido_paterno'] ?? ''); ?>">
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
+                        <div class="form-group">
                             <label class="form-label">Apellido Materno *</label>
                             <input type="text" name="apellido_materno" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['apellido_materno'] ?? ''); ?>">
                         </div>
                     </div>
 
-                    <div class="grid-2col" style="gap: 1rem; margin-bottom: 1rem;">
-                        <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-grid-2">
+                        <div class="form-group">
                             <label class="form-label">Género *</label>
                             <select name="genero" class="form-control" required>
                                 <option value="">-- Seleccionar --</option>
@@ -80,7 +120,7 @@
                                 <option value="NO ESPECIFICAR" <?php echo (($old['genero'] ?? '') === 'NO ESPECIFICAR') ? 'selected' : ''; ?>>No especificar</option>
                             </select>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
+                        <div class="form-group">
                             <label class="form-label">Fecha de Nacimiento *</label>
                             <input type="date" name="fecha_nacimiento" class="form-control" required
                                    max="<?php echo date('Y-m-d'); ?>"
@@ -114,7 +154,12 @@
                     <div class="form-group">
                         <label class="form-label">Calle (Jurisdicción) *</label>
                         <?php if (empty($data['calles'])): ?>
-                            <div class="alert alert-danger" style="font-size: 0.8rem;">No hay calles configuradas. Contacte a la directiva.</div>
+                            <div class="alert alert-danger alert-block" style="font-size: 0.85rem; margin-bottom: 0.75rem;">
+                                <span class="alert-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                                </span>
+                                <div class="alert-content">No hay calles configuradas. Contacte a la directiva.</div>
+                            </div>
                             <select name="calle_id" class="form-control" disabled required><option value="">—</option></select>
                         <?php else: ?>
                             <select name="calle_id" class="form-control" required>
@@ -133,17 +178,27 @@
                         <input type="text" name="numero_casa" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['numero_casa'] ?? ''); ?>">
                     </div>
 
-                    <div class="alert alert-success" style="font-size: 0.8rem; margin-bottom: 1.25rem;">
-                        Su solicitud quedará <strong>pendiente</strong> hasta que un administrador la revise y apruebe. Recibirá un correo con sus datos y clave de acceso al ser confirmado.
+                    <div class="alert alert-info alert-block invite-registro-notice">
+                        <span class="alert-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        </span>
+                        <div class="alert-content">
+                            Su solicitud quedará <strong>pendiente</strong> hasta que un administrador la revise. Al ser aprobada, recibirá un correo con sus datos y clave de acceso.
+                        </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="width: 100%;" <?php echo empty($data['calles']) ? 'disabled' : ''; ?>>
+                    <button type="submit" class="btn btn-primary invite-registro-submit" <?php echo empty($data['calles']) ? 'disabled' : ''; ?>>
                         Enviar solicitud de registro
                     </button>
                 </form>
             <?php endif; ?>
+
         </div>
-    </div>
+    </main>
+
+    <footer class="invite-registro-footer">
+        Desarrollado para Organizaciones Chilenas · ConectaBarrio
+    </footer>
 </div>
 
 <script>

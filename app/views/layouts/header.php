@@ -9,9 +9,12 @@
     <link rel="icon" href="<?php echo URLROOT; ?>/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="<?php echo URLROOT; ?>/favicon.svg">
 </head>
-<body>
+<body<?php echo !empty($data['public_layout'] ?? false) ? ' class="landing-body"' : ''; ?>>
 
-<?php if (isset($_SESSION['user_id'])): ?>
+<?php
+$useDashboardLayout = isset($_SESSION['user_id']) && empty($data['public_layout'] ?? false);
+?>
+<?php if ($useDashboardLayout): ?>
 <div class="app-container">
     
     <!-- Botón Menú Móvil -->
