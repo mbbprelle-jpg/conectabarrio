@@ -22,7 +22,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                     </div>
                     <h2>Solicitud enviada</h2>
-                    <div class="alert alert-success alert-block" style="text-align: left; margin: 1.25rem 0 0;">
+                    <div class="alert alert-success alert-block alert-persistent" style="text-align: left; margin: 1.25rem 0 0;">
                         <span class="alert-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                         </span>
@@ -40,7 +40,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                     </div>
                     <h2>Invitación no válida</h2>
-                    <div class="alert alert-danger alert-block" style="text-align: left; margin-top: 1.25rem;">
+                    <div class="alert alert-danger alert-block alert-persistent" style="text-align: left; margin-top: 1.25rem;">
                         <span class="alert-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                         </span>
@@ -64,7 +64,7 @@
                     </div>
                 </header>
 
-                <div class="alert alert-warning alert-block" role="status">
+                <div class="alert alert-warning alert-block alert-persistent" role="status">
                     <span class="alert-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                     </span>
@@ -74,7 +74,7 @@
                 </div>
 
                 <?php if (!empty($data['error'])): ?>
-                    <div class="alert alert-danger alert-block">
+                    <div class="alert alert-danger alert-block alert-persistent">
                         <span class="alert-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                         </span>
@@ -154,7 +154,7 @@
                     <div class="form-group">
                         <label class="form-label">Calle (Jurisdicción) *</label>
                         <?php if (empty($data['calles'])): ?>
-                            <div class="alert alert-danger alert-block" style="font-size: 0.85rem; margin-bottom: 0.75rem;">
+                            <div class="alert alert-danger alert-block alert-persistent" style="font-size: 0.85rem; margin-bottom: 0.75rem;">
                                 <span class="alert-icon" aria-hidden="true">
                                     <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                                 </span>
@@ -178,7 +178,7 @@
                         <input type="text" name="numero_casa" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['numero_casa'] ?? ''); ?>">
                     </div>
 
-                    <div class="alert alert-info alert-block invite-registro-notice">
+                    <div class="alert alert-info alert-block invite-registro-notice alert-persistent">
                         <span class="alert-icon" aria-hidden="true">
                             <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                         </span>

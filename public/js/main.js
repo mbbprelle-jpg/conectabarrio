@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 2. Desvanecimiento automático de Alertas
-    const alerts = document.querySelectorAll('.alert');
+    // 2. Desvanecimiento automático de Alertas (excepto las marcadas como persistentes)
+    const alerts = document.querySelectorAll('.alert:not(.alert-persistent)');
     alerts.forEach(function(alert) {
         setTimeout(function() {
             alert.style.transition = 'opacity 0.6s ease';
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
                 alert.remove();
             }, 600);
-        }, 4000); // 4 segundos y se desvanece
+        }, 4000);
     });
 
     // 3. Confirmaciones para acciones críticas (modal moderno)
