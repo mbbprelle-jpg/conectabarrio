@@ -566,6 +566,60 @@ select.form-control {
     max-width: 440px;
 }
 
+.password-input-wrap {
+    position: relative;
+}
+
+.password-input-wrap .form-control {
+    padding-right: 2.85rem;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    right: 0.55rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.password-toggle-btn:hover {
+    color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.password-toggle-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.password-toggle-btn .icon-eye-off {
+    display: none;
+}
+
+.password-toggle-btn.is-visible .icon-eye {
+    display: none;
+}
+
+.password-toggle-btn.is-visible .icon-eye-off {
+    display: block;
+}
+
 .login-header {
     text-align: center;
     margin-bottom: 2rem;

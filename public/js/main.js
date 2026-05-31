@@ -173,6 +173,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Mostrar / ocultar contraseña en campos con .password-toggle-btn
+    document.querySelectorAll('.password-toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const wrap = this.closest('.password-input-wrap');
+            const input = wrap ? wrap.querySelector('input') : null;
+            if (!input) return;
+
+            const visible = input.type === 'text';
+            input.type = visible ? 'password' : 'text';
+            this.classList.toggle('is-visible', !visible);
+            this.setAttribute('aria-pressed', visible ? 'false' : 'true');
+            this.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+            this.setAttribute('title', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+            input.focus();
+        });
+    });
 });
 
 // 5. Animación interactiva de la simulación de digitalización y transmisión municipal
