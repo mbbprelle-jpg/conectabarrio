@@ -50,7 +50,13 @@
                 </div>
 
             <?php elseif (!empty($data['invitation'])): ?>
-                <?php $inv = $data['invitation']; $old = $data['old'] ?? []; ?>
+                <?php
+                $inv = $data['invitation'];
+                $old = $data['old'] ?? [];
+                $step = $data['step'] ?? 'rut';
+                $rutCheck = $data['rut_check'] ?? null;
+                require_once APPROOT . '/core/InviteRutCheck.php';
+                ?>
 
                 <header class="invite-registro-header">
                     <h1>Registro de Socio</h1>
@@ -64,12 +70,64 @@
                     </div>
                 </header>
 
+                <?php if ($step === 'rut'): ?>
+                    <div class="alert alert-info alert-block alert-persistent" role="status">
+                        <span class="alert-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        </span>
+                        <div class="alert-content">
+                            <strong>Paso 1:</strong> Ingrese su RUT para verificar si ya está registrado en esta organización.
+                        </div>
+                    </div>
+
+                    <?php if (!empty($data['error'])): ?>
+                        <div class="alert alert-danger alert-block alert-persistent">
+                            <div class="alert-content"><?php echo htmlspecialchars($data['error']); ?></div>
+                        </div>
+                    <?php endif; ?>
+
+                    <form class="invite-registro-form" action="<?php echo URLROOT; ?>/invite/verificar_rut" method="POST" autocomplete="off">
+                        <input type="hidden" name="token" value="<?php echo htmlspecialchars($data['token']); ?>">
+                        <div class="form-group">
+                            <label class="form-label">RUT *</label>
+                            <input type="text" name="rut" id="inputRutInvitacion" class="form-control cb-rut-chile"
+                                   placeholder="126667777-6" required maxlength="12" inputmode="numeric" autofocus
+                                   value="<?php echo htmlspecialchars($old['rut'] ?? ''); ?>">
+                            <small style="color: var(--text-muted); font-size: 0.75rem;">Sin puntos ni espacios. Ejemplo: 126667777-6</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary invite-registro-submit">Verificar RUT y continuar</button>
+                    </form>
+
+                <?php elseif ($step === 'status' && $rutCheck): ?>
+                    <div class="invite-registro-state" style="padding: 0;">
+                        <div class="invite-registro-state-icon <?php echo ($rutCheck['title'] ?? '') === 'RUT inválido' ? 'error' : 'warning'; ?>" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                        </div>
+                        <h2 style="margin-top: 1rem;"><?php echo htmlspecialchars($rutCheck['title'] ?? 'Estado de su registro'); ?></h2>
+                        <p style="color: var(--text-muted); margin: 0.75rem 0 0;">RUT: <strong style="font-family: monospace;"><?php echo htmlspecialchars($rutCheck['rut'] ?? ''); ?></strong></p>
+                        <div class="alert alert-warning alert-block alert-persistent" style="text-align: left; margin-top: 1.25rem;">
+                            <div class="alert-content"><?php echo htmlspecialchars($rutCheck['detail'] ?? ''); ?></div>
+                        </div>
+                        <?php if (($rutCheck['title'] ?? '') === 'Ya está registrado como socio activo'): ?>
+                            <a href="<?php echo URLROOT; ?>/auth/login" class="btn btn-primary" style="margin-top: 1.5rem; display: inline-flex;">Ir a iniciar sesión</a>
+                        <?php else: ?>
+                            <a href="<?php echo URLROOT; ?>/invite/registro/<?php echo htmlspecialchars($data['token']); ?>" class="btn btn-secondary" style="margin-top: 1.5rem; display: inline-flex;">Verificar otro RUT</a>
+                        <?php endif; ?>
+                    </div>
+
+                <?php else: ?>
+                <?php /* Paso 2: formulario completo */ ?>
+
                 <div class="alert alert-warning alert-block alert-persistent" role="status">
                     <span class="alert-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                     </span>
                     <div class="alert-content">
-                        <strong>Estimado socio,</strong> complete la información con su <strong>nombre completo</strong> y datos personales correctos. Esta información será validada posteriormente con los registros de la organización.
+                        <?php if ($rutCheck && ($rutCheck['action'] ?? '') === InviteRutCheck::ACTION_COMPLETE_PREVALIDAR): ?>
+                            <strong>Paso 2:</strong> Revise los datos cargados por la directiva, complete lo que falte y envíe su solicitud.
+                        <?php else: ?>
+                            <strong>Paso 2:</strong> Complete la información con su <strong>nombre completo</strong> y datos personales correctos.
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -84,6 +142,19 @@
 
                 <form id="formRegistroInvitacion" class="invite-registro-form" action="<?php echo URLROOT; ?>/invite/registrar" method="POST" autocomplete="off">
                     <input type="hidden" name="token" value="<?php echo htmlspecialchars($data['token']); ?>">
+                    <?php if (!empty($old['prevalidar_user_id'])): ?>
+                        <input type="hidden" name="prevalidar_user_id" value="<?php echo (int)$old['prevalidar_user_id']; ?>">
+                    <?php endif; ?>
+
+                    <div class="form-group">
+                        <label class="form-label">RUT verificado</label>
+                        <input type="text" name="rut" class="form-control" readonly
+                               value="<?php echo htmlspecialchars($old['rut'] ?? ($rutCheck['rut'] ?? '')); ?>"
+                               style="opacity: 0.85; cursor: not-allowed;">
+                        <small style="color: var(--text-muted); font-size: 0.75rem;">
+                            <a href="<?php echo URLROOT; ?>/invite/registro/<?php echo htmlspecialchars($data['token']); ?>">Cambiar RUT</a>
+                        </small>
+                    </div>
 
                     <div class="form-group">
                         <label class="form-label">ID Socio (opcional)</label>
@@ -118,16 +189,8 @@
                     ?>
 
                     <div class="form-group">
-                        <label class="form-label">RUT *</label>
-                        <input type="text" name="rut" id="inputRutInvitacion" class="form-control cb-rut-chile"
-                               placeholder="126667777-6" required maxlength="12" inputmode="numeric"
-                               autocomplete="off" value="<?php echo htmlspecialchars($old['rut'] ?? ''); ?>">
-                        <small style="color: var(--text-muted); font-size: 0.75rem;">Sin puntos ni espacios. Ejemplo: 126667777-6</small>
-                    </div>
-
-                    <div class="form-group">
                         <label class="form-label">Correo Electrónico *</label>
-                        <input type="email" name="email" class="form-control" required value="<?php echo htmlspecialchars($old['email'] ?? ''); ?>">
+                        <input type="email" name="email" class="form-control" required value="<?php echo htmlspecialchars(InviteRutCheck::displayEmail($old['email'] ?? '')); ?>">
                     </div>
 
                     <?php
@@ -148,9 +211,6 @@
                         <label class="form-label">Calle (Jurisdicción) *</label>
                         <?php if (empty($data['calles'])): ?>
                             <div class="alert alert-danger alert-block alert-persistent" style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-                                <span class="alert-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                                </span>
                                 <div class="alert-content">No hay calles configuradas. Contacte a la directiva.</div>
                             </div>
                             <select name="calle_id" class="form-control" disabled required><option value="">—</option></select>
@@ -172,9 +232,6 @@
                     </div>
 
                     <div class="alert alert-info alert-block invite-registro-notice alert-persistent">
-                        <span class="alert-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                        </span>
                         <div class="alert-content">
                             Su solicitud quedará <strong>pendiente</strong> hasta que un administrador la revise. Al ser aprobada, recibirá un correo con sus datos y clave de acceso.
                         </div>
@@ -184,7 +241,7 @@
                         Enviar solicitud de registro
                     </button>
                 </form>
-            <?php endif; ?>
+                <?php endif; ?>
 
         </div>
     </main>

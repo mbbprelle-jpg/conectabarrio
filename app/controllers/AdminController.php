@@ -169,6 +169,7 @@ class AdminController extends Controller {
             'socios' => $this->userModel->getSociosByJunta($juntaId),
             'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
             'socios_pendientes' => $this->userModel->getPendingByJunta($juntaId),
+            'socios_prevalidar' => $this->userModel->getPrevalidarByJunta($juntaId),
             'invitaciones_activas' => $this->invitationModel->getActiveByJunta($juntaId),
             'cuotas_historial' => $cuotasHistorial,
             'calles' => $calles,
@@ -177,6 +178,7 @@ class AdminController extends Controller {
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
             'link_invitacion' => $_SESSION['link_invitacion'] ?? '',
+            'bulk_import_preview' => $_SESSION['bulk_import_preview'] ?? null,
         ];
 
         unset($_SESSION['success_msg']);
@@ -491,6 +493,286 @@ class AdminController extends Controller {
             $_SESSION['success_msg'] = 'Solicitud de "' . $socio->nombre . '" rechazada y eliminada.';
         } else {
             $_SESSION['error_msg'] = 'No se pudo rechazar la solicitud.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    public function socio_importar_validar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        require_once APPROOT . '/core/SocioBulkImport.php';
+        require_once APPROOT . '/core/RutChile.php';
+
+        $post = $this->sanitizePost();
+        $raw = trim($post['bulk_data'] ?? '');
+        $juntaId = (int)$_SESSION['user_junta_id'];
+
+        $this->db->query('SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC');
+        $this->db->bind(':junta_id', $juntaId);
+        $calles = $this->db->resultSet();
+
+        $result = SocioBulkImport::parse($raw, $calles, $juntaId);
+        $validRows = [];
+        $validCount = 0;
+        $errorCount = 0;
+        foreach ($result['rows'] as $idx => $row) {
+            if (!$row['valid']) {
+                $errorCount++;
+                continue;
+            }
+            $data = $row['data'];
+            $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
+            $rowErrors = [];
+            $existing = $this->userModel->findUserByRut($data['rut']);
+            if ($existing) {
+                if (($existing->status ?? '') !== 'prevalidar' || (int)$existing->junta_id !== $juntaId) {
+                    $rowErrors[] = 'RUT ya registrado';
+                }
+            }
+            if (!empty($data['email']) && !str_contains($data['email'], '@prevalidar.conectabarrio')) {
+                $byEmail = $this->userModel->findUserByEmail($data['email']);
+                if ($byEmail && (($byEmail->status ?? '') !== 'prevalidar' || (int)$byEmail->junta_id !== $juntaId)) {
+                    $rowErrors[] = 'Correo ya registrado';
+                }
+            }
+            if (!empty($data['id_socio'])) {
+                $this->db->query('SELECT id, status FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio LIMIT 1');
+                $this->db->bind(':junta_id', $juntaId);
+                $this->db->bind(':id_socio', (int)$data['id_socio']);
+                $taken = $this->db->single();
+                if ($taken && ($taken->status ?? '') !== 'prevalidar') {
+                    $rowErrors[] = 'ID socio en uso';
+                }
+            }
+            if (!empty($rowErrors)) {
+                $result['rows'][$idx]['valid'] = false;
+                $result['rows'][$idx]['errors'] = array_merge($row['errors'], $rowErrors);
+                $errorCount++;
+            } else {
+                $validRows[] = $data;
+                $validCount++;
+            }
+        }
+        $result['valid_count'] = $validCount;
+        $result['error_count'] = $errorCount;
+
+        $_SESSION['bulk_import_preview'] = [
+            'junta_id' => $juntaId,
+            'created_at' => time(),
+            'valid_rows' => $validRows,
+            'result' => $result,
+        ];
+
+        $_SESSION['success_msg'] = 'Validación completada: ' . (int)$result['valid_count'] . ' fila(s) válida(s), '
+            . (int)$result['error_count'] . ' con errores.';
+        $this->redirect('/admin/socios');
+    }
+
+    public function socio_importar_confirmar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        require_once APPROOT . '/core/RutChile.php';
+
+        $preview = $_SESSION['bulk_import_preview'] ?? null;
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        if (!$preview || (int)($preview['junta_id'] ?? 0) !== $juntaId || empty($preview['valid_rows'])) {
+            $_SESSION['error_msg'] = 'No hay datos validados para importar. Valide la planilla primero.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $inserted = 0;
+        $skipped = 0;
+        foreach ($preview['valid_rows'] as $data) {
+            $data['junta_id'] = $juntaId;
+            $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
+            $existing = $this->userModel->findUserByRut($data['rut']);
+            if ($existing) {
+                if (($existing->status ?? '') === 'prevalidar' && (int)$existing->junta_id === $juntaId) {
+                    $data['id'] = (int)$existing->id;
+                    if ($this->userModel->updatePrevalidar($data)) {
+                        $inserted++;
+                    } else {
+                        $skipped++;
+                    }
+                } else {
+                    $skipped++;
+                }
+                continue;
+            }
+            if ($this->userModel->createPrevalidar($data)) {
+                $inserted++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        unset($_SESSION['bulk_import_preview']);
+        $_SESSION['success_msg'] = $inserted . ' socio(s) quedaron en estado PRE-VALIDAR.'
+            . ($skipped > 0 ? ' ' . $skipped . ' fila(s) omitida(s).' : '');
+        $this->redirect('/admin/socios');
+    }
+
+    public function socio_prevalidar_actualizar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        require_once APPROOT . '/core/RutChile.php';
+        $post = $this->sanitizePost();
+        $socioId = (int)($post['socio_id'] ?? 0);
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $socio = $this->userModel->getPrevalidarById($socioId, $juntaId);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Registro pre-validado no encontrado.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $data = $this->parseSocioFormData($post);
+        $data['id'] = $socioId;
+        $err = $this->validateSocioFormData($data, false, false);
+        if ($err) {
+            $_SESSION['error_msg'] = $err;
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $this->applyRutNormalization($data);
+        if (empty($data['email'])) {
+            require_once APPROOT . '/core/InviteRutCheck.php';
+            $data['email'] = InviteRutCheck::placeholderEmail($data['rut'], $juntaId);
+        }
+        if ($this->emailOrRutTaken($data['email'], $data['rut'], $socioId)) {
+            $_SESSION['error_msg'] = 'El RUT o correo ya está en uso por otro usuario.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (!empty($data['id_socio'])) {
+            $this->db->query('SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio AND id != :id LIMIT 1');
+            $this->db->bind(':junta_id', $juntaId);
+            $this->db->bind(':id_socio', (int)$data['id_socio']);
+            $this->db->bind(':id', $socioId);
+            if ($this->db->single()) {
+                $_SESSION['error_msg'] = 'El ID Socio ya está en uso.';
+                $this->redirect('/admin/socios');
+                return;
+            }
+        }
+        if ($this->userModel->updatePrevalidar($data)) {
+            $_SESSION['success_msg'] = 'Datos pre-validados actualizados.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudieron guardar los cambios.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    public function socio_prevalidar_aprobar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        require_once APPROOT . '/core/SocioApprovalMail.php';
+        require_once APPROOT . '/core/InviteRutCheck.php';
+
+        $post = $this->sanitizePost();
+        $socioId = (int)($post['socio_id'] ?? 0);
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $socio = $this->userModel->getPrevalidarById($socioId, $juntaId);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Registro pre-validado no encontrado.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $plan = $_SESSION['user_junta_plan'] ?? 'basico';
+        $maxSocios = ($plan === 'basico') ? 50 : (($plan === 'mediano') ? 200 : PHP_INT_MAX);
+        if ($maxSocios !== PHP_INT_MAX && $this->userModel->getSociosCountByJunta($juntaId) >= $maxSocios) {
+            $_SESSION['error_msg'] = 'Límite de socios activos alcanzado para su plan.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $data = $this->parseSocioFormData($post);
+        $data['id'] = $socioId;
+        if (empty($data['email'])) {
+            $_SESSION['error_msg'] = 'Indique un correo electrónico válido antes de activar al socio.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (str_contains($data['email'], '@prevalidar.conectabarrio')) {
+            $_SESSION['error_msg'] = 'El socio debe tener un correo real antes de activar la cuenta.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (empty($data['id_socio']) || $data['id_socio'] <= 0) {
+            $this->db->query('SELECT MAX(id_socio) as max_id FROM usuarios WHERE junta_id = :junta_id');
+            $this->db->bind(':junta_id', $juntaId);
+            $row = $this->db->single();
+            $data['id_socio'] = ($row && $row->max_id) ? (int)$row->max_id + 1 : 1;
+        }
+        $err = $this->validateSocioFormData($data, true, false);
+        if ($err) {
+            $_SESSION['error_msg'] = $err;
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $this->applyRutNormalization($data);
+        if ($this->emailOrRutTaken($data['email'], $data['rut'], $socioId)) {
+            $_SESSION['error_msg'] = 'El RUT o correo ya está en uso por otro usuario.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (!$this->userModel->updatePrevalidar($data)) {
+            $_SESSION['error_msg'] = 'No se pudieron actualizar los datos antes de activar.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $tempPwd = $this->userModel->approvePending($socioId, $juntaId, (int)$data['id_socio']);
+        if (!$tempPwd) {
+            $_SESSION['error_msg'] = 'Error al activar la cuenta del socio.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $this->membresiaModel->upsert($socioId, $juntaId, 'socio', ['id_socio' => (int)$data['id_socio']]);
+        $socioActivo = $this->userModel->getSocioById($socioId);
+        $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Su organización';
+        $mailResult = SocioApprovalMail::send($socioActivo, $juntaNombre, $tempPwd);
+        unset($tempPwd);
+
+        if ($mailResult['ok']) {
+            $_SESSION['success_msg'] = 'Socio "' . $data['nombres'] . '" activado. Se envió correo con sus datos y clave temporal.';
+        } else {
+            $_SESSION['success_msg'] = 'Socio activado, pero no se pudo enviar el correo: ' . ($mailResult['error'] ?? 'error desconocido');
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    public function socio_prevalidar_eliminar($id) {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $socio = $this->userModel->getPrevalidarById((int)$id, $_SESSION['user_junta_id']);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Registro pre-validado no encontrado.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->userModel->rejectPrevalidar((int)$id, $_SESSION['user_junta_id'])) {
+            $_SESSION['success_msg'] = 'Registro pre-validado de "' . $socio->nombre . '" eliminado.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo eliminar el registro.';
         }
         $this->redirect('/admin/socios');
     }

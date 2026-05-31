@@ -2,11 +2,13 @@
 class InviteController extends Controller {
     private $invitationModel;
     private $userModel;
+    private $membresiaModel;
     private $db;
 
     public function __construct() {
         $this->invitationModel = $this->model('Invitation');
         $this->userModel = $this->model('User');
+        $this->membresiaModel = $this->model('Membresia');
         $this->db = new Database();
     }
 
@@ -23,26 +25,26 @@ class InviteController extends Controller {
             return;
         }
 
-        $calles = $this->getCalles($invitation->junta_id);
-
         $this->viewRegistro([
             'title' => 'Registro de Socio',
             'invitation' => $invitation,
             'token' => $token,
-            'calles' => $calles,
+            'calles' => $this->getCalles($invitation->junta_id),
             'proposed_id_socio' => $this->getProposedIdSocio($invitation->junta_id),
+            'step' => 'rut',
+            'rut_check' => null,
             'error' => '',
             'success' => '',
         ]);
     }
 
-    public function registrar() {
+    public function verificar_rut() {
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             $this->redirect('/auth/login');
             return;
         }
         require_once APPROOT . '/core/RutChile.php';
-        require_once APPROOT . '/core/SocioInput.php';
+        require_once APPROOT . '/core/InviteRutCheck.php';
 
         $post = $this->sanitizePost();
         $token = trim($post['token'] ?? '');
@@ -58,7 +60,61 @@ class InviteController extends Controller {
         }
 
         $calles = $this->getCalles($invitation->junta_id);
-        $dataSocio = $this->parseRegistrationPost($post, $invitation->junta_id);
+        $rutCheck = InviteRutCheck::evaluate(
+            $this->userModel,
+            $this->membresiaModel,
+            trim($post['rut'] ?? ''),
+            (int)$invitation->junta_id
+        );
+
+        if ($rutCheck['action'] === InviteRutCheck::ACTION_REGISTER
+            || $rutCheck['action'] === InviteRutCheck::ACTION_COMPLETE_PREVALIDAR) {
+            $step = 'form';
+        } elseif ($rutCheck['action'] === InviteRutCheck::ACTION_BLOCKED) {
+            $step = (($rutCheck['title'] ?? '') === 'RUT inválido') ? 'rut' : 'status';
+        }
+
+        $this->viewRegistro([
+            'title' => 'Registro de Socio',
+            'invitation' => $invitation,
+            'token' => $token,
+            'calles' => $calles,
+            'proposed_id_socio' => $this->getProposedIdSocio($invitation->junta_id),
+            'step' => $step,
+            'rut_check' => $rutCheck,
+            'old' => $rutCheck['prefill'] ?? [],
+            'error' => $rutCheck['action'] === InviteRutCheck::ACTION_BLOCKED && ($rutCheck['title'] ?? '') === 'RUT inválido'
+                ? ($rutCheck['detail'] ?? 'RUT inválido')
+                : '',
+            'success' => '',
+        ]);
+    }
+
+    public function registrar() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/auth/login');
+            return;
+        }
+        require_once APPROOT . '/core/RutChile.php';
+        require_once APPROOT . '/core/SocioInput.php';
+        require_once APPROOT . '/core/InviteRutCheck.php';
+
+        $post = $this->sanitizePost();
+        $token = trim($post['token'] ?? '');
+        $invitation = $this->invitationModel->getValidByToken($token);
+        if (!$invitation) {
+            $this->viewRegistro([
+                'title' => 'Invitación no válida',
+                'error' => 'El enlace ya no es válido.',
+                'invitation' => null,
+                'calles' => [],
+            ]);
+            return;
+        }
+
+        $juntaId = (int)$invitation->junta_id;
+        $calles = $this->getCalles($juntaId);
+        $dataSocio = $this->parseRegistrationPost($post, $juntaId);
 
         $renderForm = function ($error) use ($invitation, $token, $calles, $dataSocio) {
             $this->viewRegistro([
@@ -67,6 +123,8 @@ class InviteController extends Controller {
                 'token' => $token,
                 'calles' => $calles,
                 'proposed_id_socio' => $this->getProposedIdSocio($invitation->junta_id),
+                'step' => 'form',
+                'rut_check' => ['action' => InviteRutCheck::ACTION_REGISTER, 'prefill' => $dataSocio],
                 'error' => $error,
                 'success' => '',
                 'old' => $dataSocio,
@@ -104,29 +162,55 @@ class InviteController extends Controller {
             return;
         }
 
+        $rutStatus = InviteRutCheck::evaluate($this->userModel, $this->membresiaModel, $dataSocio['rut'], $juntaId);
+        if ($rutStatus['action'] === InviteRutCheck::ACTION_BLOCKED) {
+            $renderForm($rutStatus['detail'] ?? 'No puede registrarse con este RUT.');
+            return;
+        }
+
         if (!empty($dataSocio['id_socio'])) {
             $this->db->query('SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio LIMIT 1');
-            $this->db->bind(':junta_id', $invitation->junta_id);
+            $this->db->bind(':junta_id', $juntaId);
             $this->db->bind(':id_socio', (int)$dataSocio['id_socio']);
-            if ($this->db->single()) {
+            $existingIdSocio = $this->db->single();
+            $prevalidarId = (int)($post['prevalidar_user_id'] ?? 0);
+            if ($existingIdSocio && (int)$existingIdSocio->id !== $prevalidarId) {
                 $renderForm('El ID Socio #' . (int)$dataSocio['id_socio'] . ' ya está en uso en esta organización.');
                 return;
             }
         }
 
-        if ($this->userModel->findUserByRut($dataSocio['rut'])) {
-            $renderForm('El RUT ya está registrado en el sistema.');
-            return;
-        }
-        if ($this->userModel->findUserByEmail($dataSocio['email'])) {
-            $renderForm('El correo electrónico ya está registrado en el sistema.');
-            return;
-        }
+        $prevalidarUser = $this->userModel->getPrevalidarByRutAndJunta($dataSocio['rut'], $juntaId);
+        $prevalidarId = (int)($post['prevalidar_user_id'] ?? 0);
 
         try {
-            if (!$this->userModel->createPending($dataSocio, (int)$invitation->id)) {
-                $renderForm('No se pudo enviar la solicitud. Intente nuevamente.');
-                return;
+            if ($prevalidarUser) {
+                if ($prevalidarId > 0 && (int)$prevalidarUser->id !== $prevalidarId) {
+                    $renderForm('Los datos no coinciden con la ficha pre-validada.');
+                    return;
+                }
+                $otherEmail = $this->userModel->findUserByEmail($dataSocio['email']);
+                if ($otherEmail && (int)$otherEmail->id !== (int)$prevalidarUser->id) {
+                    $renderForm('El correo electrónico ya está registrado en el sistema.');
+                    return;
+                }
+                if (!$this->userModel->promotePrevalidarToPending((int)$prevalidarUser->id, $dataSocio, (int)$invitation->id)) {
+                    $renderForm('No se pudo enviar la solicitud. Intente nuevamente.');
+                    return;
+                }
+            } else {
+                if ($this->userModel->findUserByRut($dataSocio['rut'])) {
+                    $renderForm('El RUT ya está registrado en el sistema.');
+                    return;
+                }
+                if ($this->userModel->findUserByEmail($dataSocio['email'])) {
+                    $renderForm('El correo electrónico ya está registrado en el sistema.');
+                    return;
+                }
+                if (!$this->userModel->createPending($dataSocio, (int)$invitation->id)) {
+                    $renderForm('No se pudo enviar la solicitud. Intente nuevamente.');
+                    return;
+                }
             }
         } catch (Exception $e) {
             $renderForm('Error al registrar la solicitud. Contacte a la directiva.');

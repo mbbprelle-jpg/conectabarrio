@@ -493,7 +493,7 @@ class User extends Model {
             $idSocio = ($row && $row->max_id) ? (int)$row->max_id + 1 : 1;
         }
 
-        $this->db->query("UPDATE usuarios SET password = :pwd, status = 'active', id_socio = :id_socio, must_change = 1 WHERE id = :id AND status = 'pending'");
+        $this->db->query("UPDATE usuarios SET password = :pwd, status = 'active', id_socio = :id_socio, must_change = 1 WHERE id = :id AND status IN ('pending', 'prevalidar')");
         $this->db->bind(':pwd', $hashed);
         $this->db->bind(':id_socio', $idSocio);
         $this->db->bind(':id', $userId);
@@ -508,6 +508,163 @@ class User extends Model {
             return false;
         }
         $this->db->query("DELETE FROM usuarios WHERE id = :id AND junta_id = :junta_id AND status = 'pending'");
+        $this->db->bind(':id', $userId);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->execute();
+    }
+
+    public function getPrevalidarByJunta($juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return [];
+        }
+        if ($this->hasCalleIdColumn()) {
+            $this->db->query("SELECT u.*, c.nombre AS calle_nombre FROM usuarios u
+                LEFT JOIN calles c ON u.calle_id = c.id
+                WHERE u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'prevalidar'
+                ORDER BY u.nombre ASC, u.apellido_paterno ASC");
+        } else {
+            $this->db->query("SELECT u.* FROM usuarios u
+                WHERE u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'prevalidar'
+                ORDER BY u.nombre ASC, u.apellido_paterno ASC");
+        }
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
+    public function getPrevalidarByRutAndJunta(string $rut, int $juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return null;
+        }
+        $this->db->query("SELECT * FROM usuarios WHERE rut = :rut AND junta_id = :junta_id AND rol = 'socio' AND status = 'prevalidar' LIMIT 1");
+        $this->db->bind(':rut', $rut);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->single();
+    }
+
+    public function getPrevalidarById($userId, $juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return null;
+        }
+        if ($this->hasCalleIdColumn()) {
+            $this->db->query("SELECT u.*, c.nombre AS calle_nombre FROM usuarios u
+                LEFT JOIN calles c ON u.calle_id = c.id
+                WHERE u.id = :id AND u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'prevalidar'");
+        } else {
+            $this->db->query("SELECT u.* FROM usuarios u
+                WHERE u.id = :id AND u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'prevalidar'");
+        }
+        $this->db->bind(':id', $userId);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->single();
+    }
+
+    public function createPrevalidar(array $data) {
+        if (!$this->hasStatusColumn()) {
+            throw new Exception('La columna status no existe.');
+        }
+        $cols = 'junta_id, id_socio, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio, status';
+        $vals = ':junta_id, :id_socio, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio, \'prevalidar\'';
+        $this->appendProfileInsertColumns($cols, $vals);
+        $this->db->query("INSERT INTO usuarios ({$cols}) VALUES ({$vals})");
+        $hashed = password_hash($data['password'], PASSWORD_BCRYPT);
+        $this->db->bind(':junta_id', $data['junta_id']);
+        $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombre', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':password', $hashed);
+        $this->db->bind(':rol', $data['rol'] ?? 'socio');
+        $this->db->bind(':telefono', $data['telefono'] ?? '');
+        $this->db->bind(':estado', $data['estado'] ?? 1);
+        $this->db->bind(':calle_id', $data['calle_id'] ?? null);
+        $this->db->bind(':numero_casa', !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':fecha_inicio', $data['fecha_inicio'] ?? date('Y-m-d'));
+        $this->bindProfileFields($data);
+        if ($this->db->execute()) {
+            return $this->db->lastInsertId();
+        }
+        return false;
+    }
+
+    public function updatePrevalidar($data) {
+        if (!$this->hasStatusColumn()) {
+            return false;
+        }
+        $extra = $this->profileUpdateSqlSet();
+        $this->db->query("UPDATE usuarios SET
+            id_socio = :id_socio,
+            rut = :rut,
+            nombre = :nombre,
+            apellido_paterno = :apellido_paterno,
+            apellido_materno = :apellido_materno,
+            email = :email,
+            telefono = :telefono,
+            calle_id = :calle_id,
+            numero_casa = :numero_casa,
+            fecha_inicio = :fecha_inicio
+            {$extra}
+            WHERE id = :id AND rol = 'socio' AND status = 'prevalidar'");
+        $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombre', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':telefono', $data['telefono'] ?? '');
+        $this->db->bind(':calle_id', !empty($data['calle_id']) ? $data['calle_id'] : null);
+        $this->db->bind(':numero_casa', !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':fecha_inicio', !empty($data['fecha_inicio']) ? $data['fecha_inicio'] : date('Y-m-d'));
+        $this->bindProfileFields($data);
+        $this->db->bind(':id', $data['id']);
+        return $this->db->execute();
+    }
+
+    public function promotePrevalidarToPending(int $userId, array $data, int $invitationId) {
+        if (!$this->hasStatusColumn()) {
+            return false;
+        }
+        $extra = $this->profileUpdateSqlSet();
+        $this->db->query("UPDATE usuarios SET
+            id_socio = :id_socio,
+            rut = :rut,
+            nombre = :nombre,
+            apellido_paterno = :apellido_paterno,
+            apellido_materno = :apellido_materno,
+            email = :email,
+            telefono = :telefono,
+            calle_id = :calle_id,
+            numero_casa = :numero_casa,
+            fecha_inicio = :fecha_inicio,
+            password = :password,
+            status = 'pending',
+            invitation_id = :invitation_id
+            {$extra}
+            WHERE id = :id AND rol = 'socio' AND status = 'prevalidar'");
+        $hashed = password_hash($data['password'], PASSWORD_BCRYPT);
+        $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombre', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':telefono', $data['telefono'] ?? '');
+        $this->db->bind(':calle_id', !empty($data['calle_id']) ? $data['calle_id'] : null);
+        $this->db->bind(':numero_casa', !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':fecha_inicio', !empty($data['fecha_inicio']) ? $data['fecha_inicio'] : date('Y-m-d'));
+        $this->db->bind(':password', $hashed);
+        $this->db->bind(':invitation_id', $invitationId);
+        $this->bindProfileFields($data);
+        $this->db->bind(':id', $userId);
+        return $this->db->execute();
+    }
+
+    public function rejectPrevalidar(int $userId, int $juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return false;
+        }
+        $this->db->query("DELETE FROM usuarios WHERE id = :id AND junta_id = :junta_id AND status = 'prevalidar'");
         $this->db->bind(':id', $userId);
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->execute();

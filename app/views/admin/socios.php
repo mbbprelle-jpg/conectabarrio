@@ -2,6 +2,7 @@
 <?php
 require_once APPROOT . '/core/AuthContext.php';
 require_once APPROOT . '/core/SocioInput.php';
+require_once APPROOT . '/core/InviteRutCheck.php';
 $isFullAdmin = AuthContext::isFullAdmin();
 $canManageSocios = AuthContext::canManageSocios();
 $membresiasMap = $data['membresias_map'] ?? [];
@@ -48,6 +49,8 @@ function cbFechaSocioInput($socio) {
 
 <?php
 $sociosPendientes = $data['socios_pendientes'] ?? [];
+$sociosPrevalidar = $data['socios_prevalidar'] ?? [];
+$bulkPreview = $data['bulk_import_preview'] ?? null;
 $invitacionesActivas = $data['invitaciones_activas'] ?? [];
 $cuotaVigente = !empty($data['cuotas_historial']) ? $data['cuotas_historial'][0] : null;
 $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',', '.') : '0';
@@ -67,6 +70,10 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
         <button type="button" class="socios-action-btn socios-action-btn--primary" data-open-modal="inscribirSocioModal">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
             Inscribir socio
+        </button>
+        <button type="button" class="socios-action-btn" data-open-modal="cargaMasivaModal">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+            Carga masiva
         </button>
         <button type="button" class="socios-action-btn socios-action-btn--accent" data-open-modal="cuotaModal">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
@@ -153,6 +160,73 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                     data-numero-casa="<?php echo htmlspecialchars($pend->numero_casa ?? ''); ?>"
                                     style="font-size: 0.75rem;">
                                     Revisar / Aprobar
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($canManageSocios && !empty($sociosPrevalidar)): ?>
+        <div style="border: 1px solid rgba(99, 102, 241, 0.35); border-radius: var(--radius-sm); padding: 1rem; background: rgba(99, 102, 241, 0.05); margin-bottom: 0;">
+            <h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                Pre-validados (carga masiva o planilla)
+            </h4>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1rem;">
+                Estos registros esperan que el socio complete datos vía link de invitación, o que la directiva los active directamente.
+            </p>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Socio</th>
+                            <th>RUT / Contacto</th>
+                            <th>Domicilio</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($sociosPrevalidar as $prev): ?>
+                        <tr>
+                            <td style="font-weight: 600;">
+                                <?php echo htmlspecialchars($prev->nombre . ' ' . $prev->apellido_paterno); ?>
+                                <?php if (!empty($prev->id_socio)): ?>
+                                    <span style="font-size: 0.75rem; color: var(--primary);"> #<?php echo (int)$prev->id_socio; ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <div style="font-family: monospace;"><?php echo htmlspecialchars($prev->rut); ?></div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);"><?php
+                                    $emailShow = InviteRutCheck::displayEmail($prev->email ?? '');
+                                    echo $emailShow !== '' ? htmlspecialchars($emailShow) : 'Sin correo';
+                                ?></div>
+                            </td>
+                            <td style="font-size: 0.85rem;">
+                                <?php echo htmlspecialchars($prev->calle_nombre ?? '—'); ?> #<?php echo htmlspecialchars($prev->numero_casa ?? '—'); ?>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-primary btn-sm btn-revisar-prevalidar"
+                                    data-id="<?php echo (int)$prev->id; ?>"
+                                    data-id-socio="<?php echo htmlspecialchars($prev->id_socio ?? ''); ?>"
+                                    data-nombres="<?php echo htmlspecialchars($prev->nombre); ?>"
+                                    data-apellido-paterno="<?php echo htmlspecialchars($prev->apellido_paterno); ?>"
+                                    data-apellido-materno="<?php echo htmlspecialchars($prev->apellido_materno); ?>"
+                                    data-rut="<?php echo htmlspecialchars($prev->rut); ?>"
+                                    data-email="<?php echo htmlspecialchars(InviteRutCheck::displayEmail($prev->email ?? '')); ?>"
+                                    data-telefono="<?php echo htmlspecialchars($prev->telefono ?? ''); ?>"
+                                    data-fecha-inicio="<?php echo cbFechaSocioInput($prev); ?>"
+                                    data-genero="<?php echo htmlspecialchars($prev->genero ?? ''); ?>"
+                                    data-fecha-nacimiento="<?php echo !empty($prev->fecha_nacimiento) ? substr($prev->fecha_nacimiento, 0, 10) : ''; ?>"
+                                    data-estado-civil="<?php echo htmlspecialchars($prev->estado_civil ?? ''); ?>"
+                                    data-nacionalidad="<?php echo htmlspecialchars($prev->nacionalidad ?? ''); ?>"
+                                    data-profesion="<?php echo htmlspecialchars($prev->profesion ?? ''); ?>"
+                                    data-calle-id="<?php echo (int)($prev->calle_id ?? 0); ?>"
+                                    data-numero-casa="<?php echo htmlspecialchars($prev->numero_casa ?? ''); ?>"
+                                    style="font-size: 0.75rem;">
+                                    Revisar / Activar
                                 </button>
                             </td>
                         </tr>
@@ -730,6 +804,175 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
         </div>
     </div>
 </div>
+
+<div id="cargaMasivaModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 720px; max-height: 90vh; overflow-y: auto;">
+        <button type="button" id="closeCargaMasivaModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.25rem;">Carga masiva de socios</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+            Copie desde Excel y pegue aquí (con encabezados). Valide primero; los registros correctos quedarán en estado <strong>PRE-VALIDAR</strong>.
+        </p>
+        <details style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
+            <summary style="cursor: pointer; color: var(--primary);">Columnas esperadas</summary>
+            <p style="margin: 0.5rem 0 0;">id_socio, rut, nombres, apellido_paterno, apellido_materno, email, telefono, genero, fecha_nacimiento, estado_civil, nacionalidad, profesion, calle, numero_casa, fecha_inicio</p>
+            <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres, apellido paterno y apellido materno. El correo puede quedar vacío.</p>
+        </details>
+
+        <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST">
+            <div class="form-group">
+                <label class="form-label">Datos (Excel / planilla)</label>
+                <textarea name="bulk_data" class="form-control" rows="8" placeholder="Pegue aquí las filas copiadas desde Excel..." required></textarea>
+            </div>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" id="cancelCargaMasivaModal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Validar datos</button>
+            </div>
+        </form>
+
+        <?php if (!empty($bulkPreview['result']['rows'])): ?>
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem;">Resultado de validación</h4>
+            <p style="font-size: 0.82rem; margin-bottom: 0.75rem;">
+                <span style="color: var(--success);"><?php echo (int)($bulkPreview['result']['valid_count'] ?? 0); ?> válida(s)</span>
+                ·
+                <span style="color: var(--danger);"><?php echo (int)($bulkPreview['result']['error_count'] ?? 0); ?> con error(es)</span>
+            </p>
+            <div class="table-responsive" style="max-height: 220px; overflow-y: auto; margin-bottom: 1rem;">
+                <table class="table" style="font-size: 0.78rem;">
+                    <thead><tr><th>Fila</th><th>RUT</th><th>Nombre</th><th>Estado</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($bulkPreview['result']['rows'] as $brow): ?>
+                        <tr>
+                            <td><?php echo (int)$brow['line']; ?></td>
+                            <td style="font-family: monospace;"><?php echo htmlspecialchars($brow['data']['rut'] ?? ''); ?></td>
+                            <td><?php echo htmlspecialchars(trim(($brow['data']['nombres'] ?? '') . ' ' . ($brow['data']['apellido_paterno'] ?? ''))); ?></td>
+                            <td>
+                                <?php if ($brow['valid']): ?>
+                                    <span style="color: var(--success);">OK</span>
+                                <?php else: ?>
+                                    <span style="color: var(--danger);"><?php echo htmlspecialchars(implode(', ', $brow['errors'])); ?></span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php if (!empty($bulkPreview['valid_rows'])): ?>
+            <form action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST">
+                <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Importar <?php echo count($bulkPreview['valid_rows']); ?> registro(s) como PRE-VALIDAR?">
+                    Confirmar importación (<?php echo count($bulkPreview['valid_rows']); ?>)
+                </button>
+            </form>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div id="prevalidarSocioModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 540px; max-height: 90vh; overflow-y: auto;">
+        <button type="button" id="closePrevalidarSocioModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.25rem;">Revisar registro pre-validado</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">Edite los datos y actívelo directamente (envía correo) o espere a que el socio complete vía link de invitación.</p>
+
+        <form id="formPrevalidarActualizar" action="<?php echo URLROOT; ?>/admin/socio_prevalidar_actualizar" method="POST">
+            <input type="hidden" name="socio_id" id="prev_socio_id">
+            <div class="form-group">
+                <label class="form-label">ID Socio</label>
+                <input type="number" name="id_socio" id="prev_id_socio" class="form-control" min="1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nombres *</label>
+                <input type="text" name="nombres" id="prev_nombres" class="form-control cb-uppercase" required>
+            </div>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Apellido Paterno *</label>
+                    <input type="text" name="apellido_paterno" id="prev_apellido_paterno" class="form-control cb-uppercase" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Apellido Materno *</label>
+                    <input type="text" name="apellido_materno" id="prev_apellido_materno" class="form-control cb-uppercase" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">RUT *</label>
+                <input type="text" name="rut" id="prev_rut" class="form-control cb-rut-chile" required maxlength="12">
+            </div>
+            <?php
+            $prefix = 'prev_';
+            $values = [];
+            $required = false;
+            require APPROOT . '/views/partials/socio_demografia_fields.php';
+            ?>
+            <div class="form-group">
+                <label class="form-label">Correo (requerido para activar)</label>
+                <input type="email" name="email" id="prev_email" class="form-control">
+            </div>
+            <?php
+            $id = 'prev_telefono';
+            $name = 'telefono';
+            $label = 'Teléfono';
+            $required = false;
+            $value = '';
+            require APPROOT . '/views/partials/campo_telefono_cl.php';
+            ?>
+            <div class="form-group">
+                <label class="form-label">Fecha inicio</label>
+                <input type="date" name="fecha_inicio" id="prev_fecha_inicio" class="form-control">
+            </div>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Calle</label>
+                    <select name="calle_id" id="prev_calle_id" class="form-control">
+                        <option value="">-- Seleccionar --</option>
+                        <?php foreach ($data['calles'] as $calle): ?>
+                            <option value="<?php echo (int)$calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">N° Casa</label>
+                    <input type="text" name="numero_casa" id="prev_numero_casa" class="form-control cb-uppercase">
+                </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary" id="cancelPrevalidarSocioModal">Cancelar</button>
+                <button type="submit" class="btn btn-secondary">Guardar cambios</button>
+            </div>
+        </form>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <form id="formPrevalidarEliminar" action="" method="POST" style="margin: 0;">
+                <button type="submit" class="btn btn-danger confirm-action" data-confirm-message="¿Eliminar este registro pre-validado?">Eliminar</button>
+            </form>
+            <form id="formPrevalidarAprobar" action="<?php echo URLROOT; ?>/admin/socio_prevalidar_aprobar" method="POST" style="margin: 0;">
+                <input type="hidden" name="socio_id" id="prev_aprobar_socio_id">
+                <input type="hidden" name="id_socio" id="prev_aprobar_id_socio">
+                <input type="hidden" name="nombres" id="prev_aprobar_nombres">
+                <input type="hidden" name="apellido_paterno" id="prev_aprobar_apellido_paterno">
+                <input type="hidden" name="apellido_materno" id="prev_aprobar_apellido_materno">
+                <input type="hidden" name="rut" id="prev_aprobar_rut">
+                <input type="hidden" name="email" id="prev_aprobar_email">
+                <input type="hidden" name="genero" id="prev_aprobar_genero">
+                <input type="hidden" name="fecha_nacimiento" id="prev_aprobar_fecha_nacimiento">
+                <input type="hidden" name="estado_civil" id="prev_aprobar_estado_civil">
+                <input type="hidden" name="nacionalidad" id="prev_aprobar_nacionalidad">
+                <input type="hidden" name="profesion" id="prev_aprobar_profesion">
+                <input type="hidden" name="telefono" id="prev_aprobar_telefono">
+                <input type="hidden" name="fecha_inicio" id="prev_aprobar_fecha_inicio">
+                <input type="hidden" name="calle_id" id="prev_aprobar_calle_id">
+                <input type="hidden" name="numero_casa" id="prev_aprobar_numero_casa">
+                <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Activar socio y enviar correo con clave temporal? (requiere correo válido)">Activar y enviar acceso</button>
+            </form>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
 
 <?php if ($isFullAdmin): ?>
@@ -894,6 +1137,62 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('cancelPendienteSocioModal')?.addEventListener('click', () => closeModal(pendModal));
     pendModal?.addEventListener('click', e => { if (e.target === pendModal) closeModal(pendModal); });
 
+    const cargaMasivaModal = document.getElementById('cargaMasivaModal');
+    document.getElementById('closeCargaMasivaModal')?.addEventListener('click', () => closeModal(cargaMasivaModal));
+    document.getElementById('cancelCargaMasivaModal')?.addEventListener('click', () => closeModal(cargaMasivaModal));
+    cargaMasivaModal?.addEventListener('click', e => { if (e.target === cargaMasivaModal) closeModal(cargaMasivaModal); });
+    <?php if (!empty($bulkPreview['result']['rows'])): ?>
+    openModal(cargaMasivaModal);
+    <?php endif; ?>
+
+    const prevalidarModal = document.getElementById('prevalidarSocioModal');
+    const syncPrevalidarApproveFields = () => {
+        document.getElementById('prev_aprobar_socio_id').value = document.getElementById('prev_socio_id').value;
+        document.getElementById('prev_aprobar_id_socio').value = document.getElementById('prev_id_socio').value;
+        document.getElementById('prev_aprobar_nombres').value = document.getElementById('prev_nombres').value;
+        document.getElementById('prev_aprobar_apellido_paterno').value = document.getElementById('prev_apellido_paterno').value;
+        document.getElementById('prev_aprobar_apellido_materno').value = document.getElementById('prev_apellido_materno').value;
+        document.getElementById('prev_aprobar_rut').value = document.getElementById('prev_rut').value;
+        document.getElementById('prev_aprobar_email').value = document.getElementById('prev_email').value;
+        document.getElementById('prev_aprobar_genero').value = document.getElementById('prev_genero').value;
+        document.getElementById('prev_aprobar_fecha_nacimiento').value = document.getElementById('prev_fecha_nacimiento').value;
+        document.getElementById('prev_aprobar_estado_civil').value = document.getElementById('prev_estado_civil').value;
+        document.getElementById('prev_aprobar_nacionalidad').value = document.getElementById('prev_nacionalidad').value;
+        document.getElementById('prev_aprobar_profesion').value = document.getElementById('prev_profesion').value;
+        document.getElementById('prev_aprobar_telefono').value = document.getElementById('prev_telefono').value;
+        document.getElementById('prev_aprobar_fecha_inicio').value = document.getElementById('prev_fecha_inicio').value;
+        document.getElementById('prev_aprobar_calle_id').value = document.getElementById('prev_calle_id').value;
+        document.getElementById('prev_aprobar_numero_casa').value = document.getElementById('prev_numero_casa').value;
+    };
+    document.querySelectorAll('.btn-revisar-prevalidar').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            document.getElementById('prev_socio_id').value = id;
+            document.getElementById('prev_id_socio').value = this.dataset.idSocio || '';
+            document.getElementById('prev_nombres').value = this.dataset.nombres || '';
+            document.getElementById('prev_apellido_paterno').value = this.dataset.apellidoPaterno || '';
+            document.getElementById('prev_apellido_materno').value = this.dataset.apellidoMaterno || '';
+            document.getElementById('prev_rut').value = this.dataset.rut || '';
+            document.getElementById('prev_email').value = this.dataset.email || '';
+            setTelefonoInput('prev_telefono', this.dataset.telefono || '');
+            document.getElementById('prev_fecha_inicio').value = this.dataset.fechaInicio || '';
+            document.getElementById('prev_genero').value = this.dataset.genero || '';
+            document.getElementById('prev_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
+            document.getElementById('prev_estado_civil').value = this.dataset.estadoCivil || '';
+            document.getElementById('prev_nacionalidad').value = this.dataset.nacionalidad || '';
+            document.getElementById('prev_profesion').value = this.dataset.profesion || '';
+            document.getElementById('prev_calle_id').value = this.dataset.calleId || '';
+            document.getElementById('prev_numero_casa').value = this.dataset.numeroCasa || '';
+            document.getElementById('formPrevalidarEliminar').action = '<?php echo URLROOT; ?>/admin/socio_prevalidar_eliminar/' + id;
+            syncPrevalidarApproveFields();
+            openModal(prevalidarModal);
+        });
+    });
+    document.getElementById('formPrevalidarAprobar')?.addEventListener('submit', syncPrevalidarApproveFields);
+    document.getElementById('closePrevalidarSocioModal')?.addEventListener('click', () => closeModal(prevalidarModal));
+    document.getElementById('cancelPrevalidarSocioModal')?.addEventListener('click', () => closeModal(prevalidarModal));
+    prevalidarModal?.addEventListener('click', e => { if (e.target === prevalidarModal) closeModal(prevalidarModal); });
+
     function copiarLinkInvitacion(btn, link) {
         const url = link || btn.dataset.link;
         if (!url) return;
@@ -938,6 +1237,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         input.addEventListener('keydown', function(e) {
             if (e.key === ' ' || e.key === '.') e.preventDefault();
+        });
+    });
+
+    document.querySelectorAll('.cb-uppercase').forEach(function(input) {
+        input.addEventListener('input', function() {
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            this.value = this.value.toUpperCase();
+            this.setSelectionRange(start, end);
         });
     });
 
