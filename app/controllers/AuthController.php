@@ -52,7 +52,17 @@ class AuthController extends Controller {
             if ($loggedInUser) {
                 $this->beginUserSession($loggedInUser);
             } else {
-                $data['error'] = 'Credenciales incorrectas o usuario inactivo.';
+                $pendingUser = null;
+                if (filter_var($rutOrEmail, FILTER_VALIDATE_EMAIL)) {
+                    $pendingUser = $this->userModel->findUserByEmail($rutOrEmail);
+                } else {
+                    $pendingUser = $this->userModel->findUserByRut($rutOrEmail);
+                }
+                if ($pendingUser && isset($pendingUser->status) && $pendingUser->status === 'pending') {
+                    $data['error'] = 'Su solicitud de registro aún está pendiente de aprobación por la directiva.';
+                } else {
+                    $data['error'] = 'Credenciales incorrectas o usuario inactivo.';
+                }
                 $this->view('auth/login', $data);
             }
         } else {

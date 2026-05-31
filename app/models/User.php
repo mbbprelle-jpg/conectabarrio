@@ -1,6 +1,7 @@
 <?php
 class User extends Model {
     private static $hasCalleIdColumn = null;
+    private static $hasStatusColumn = null;
 
     private function hasCalleIdColumn() {
         if (self::$hasCalleIdColumn === null) {
@@ -13,6 +14,19 @@ class User extends Model {
             }
         }
         return self::$hasCalleIdColumn;
+    }
+
+    private function hasStatusColumn() {
+        if (self::$hasStatusColumn === null) {
+            try {
+                $this->db->query('SELECT status FROM usuarios LIMIT 1');
+                $this->db->execute();
+                self::$hasStatusColumn = true;
+            } catch (Exception $e) {
+                self::$hasStatusColumn = false;
+            }
+        }
+        return self::$hasStatusColumn;
     }
     
     // Buscar usuario por correo electrónico
@@ -44,6 +58,9 @@ class User extends Model {
 
         // Verificar contraseña cifrada
         if (password_verify($password, $row->password)) {
+            if ($this->hasStatusColumn() && ($row->status ?? 'active') === 'pending') {
+                return false;
+            }
             // Verificar si el usuario está activo
             if ($row->estado == 1) {
                 return $row;
@@ -171,9 +188,78 @@ class User extends Model {
 
     // Obtener socios asociados a una Junta de Vecinos
     public function getSociosByJunta($juntaId) {
-        $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1 ORDER BY nombre ASC");
+        if ($this->hasStatusColumn()) {
+            $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1 AND status = 'active' ORDER BY nombre ASC");
+        } else {
+            $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1 ORDER BY nombre ASC");
+        }
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->resultSet();
+    }
+
+    public function getPendingByJunta($juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return [];
+        }
+        if ($this->hasCalleIdColumn()) {
+            $this->db->query("SELECT u.*, c.nombre AS calle_nombre FROM usuarios u
+                LEFT JOIN calles c ON u.calle_id = c.id
+                WHERE u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'pending'
+                ORDER BY u.created_at DESC");
+        } else {
+            $this->db->query("SELECT u.* FROM usuarios u
+                WHERE u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'pending'
+                ORDER BY u.created_at DESC");
+        }
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
+    public function getPendingById($userId, $juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return null;
+        }
+        if ($this->hasCalleIdColumn()) {
+            $this->db->query("SELECT u.*, c.nombre AS calle_nombre FROM usuarios u
+                LEFT JOIN calles c ON u.calle_id = c.id
+                WHERE u.id = :id AND u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'pending'");
+        } else {
+            $this->db->query("SELECT u.* FROM usuarios u
+                WHERE u.id = :id AND u.junta_id = :junta_id AND u.rol = 'socio' AND u.status = 'pending'");
+        }
+        $this->db->bind(':id', $userId);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->single();
+    }
+
+    public function updatePending($data) {
+        if (!$this->hasStatusColumn()) {
+            return false;
+        }
+        $this->db->query("UPDATE usuarios SET
+            id_socio = :id_socio,
+            rut = :rut,
+            nombre = :nombre,
+            apellido_paterno = :apellido_paterno,
+            apellido_materno = :apellido_materno,
+            email = :email,
+            telefono = :telefono,
+            calle_id = :calle_id,
+            numero_casa = :numero_casa,
+            fecha_inicio = :fecha_inicio
+            WHERE id = :id AND rol = 'socio' AND status = 'pending'");
+        $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
+        $this->db->bind(':rut', $data['rut']);
+        $this->db->bind(':nombre', $data['nombres']);
+        $this->db->bind(':apellido_paterno', $data['apellido_paterno']);
+        $this->db->bind(':apellido_materno', $data['apellido_materno']);
+        $this->db->bind(':email', $data['email']);
+        $this->db->bind(':telefono', $data['telefono'] ?? '');
+        $this->db->bind(':calle_id', !empty($data['calle_id']) ? $data['calle_id'] : null);
+        $this->db->bind(':numero_casa', !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':fecha_inicio', !empty($data['fecha_inicio']) ? $data['fecha_inicio'] : date('Y-m-d'));
+        $this->db->bind(':id', $data['id']);
+        return $this->db->execute();
     }
 
     // Obtener un socio específico por su ID
@@ -225,7 +311,11 @@ class User extends Model {
 
     // Obtener la cantidad de socios activos en una Junta de Vecinos
     public function getSociosCountByJunta($juntaId) {
-        $this->db->query("SELECT COUNT(*) as total FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1");
+        if ($this->hasStatusColumn()) {
+            $this->db->query("SELECT COUNT(*) as total FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1 AND status = 'active'");
+        } else {
+            $this->db->query("SELECT COUNT(*) as total FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1");
+        }
         $this->db->bind(':junta_id', $juntaId);
         $res = $this->db->single();
         return $res ? (int)$res->total : 0;
@@ -247,6 +337,9 @@ class User extends Model {
      * Create a pending user entry linked to an invitation.
      */
     public function createPending(array $data, int $invitationId) {
+        if (!$this->hasStatusColumn()) {
+            throw new Exception('La columna status no existe. Ejecute sql/create_invitations_and_user_updates.sql');
+        }
         $this->db->query("INSERT INTO usuarios (junta_id, id_socio, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio, status, invitation_id) VALUES (:junta_id, :id_socio, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio, 'pending', :invitation_id)");
         $hashed = password_hash($data['password'], PASSWORD_BCRYPT);
         $this->db->bind(':junta_id', $data['junta_id']);
@@ -264,40 +357,46 @@ class User extends Model {
         $this->db->bind(':numero_casa', $data['numero_casa'] ?? null);
         $this->db->bind(':fecha_inicio', $data['fecha_inicio'] ?? date('Y-m-d'));
         $this->db->bind(':invitation_id', $invitationId);
-        $this->db->execute();
+        if ($this->db->execute()) {
+            return $this->db->lastInsertId();
+        }
+        return false;
     }
 
-    /**
-     * Approve a pending user, assign optional custom id_socio, set active status and send email.
-     */
-    public function approvePending(int $userId, ?string $customIdSocio = null) {
-        // Generate temporary password
-        $tempPwd = $this->generateRandomPassword();
+    public function approvePending(int $userId, int $juntaId, ?int $customIdSocio = null) {
+        if (!$this->hasStatusColumn()) {
+            return null;
+        }
+        require_once APPROOT . '/core/TempPassword.php';
+        $tempPwd = TempPassword::generate();
         $hashed = password_hash($tempPwd, PASSWORD_BCRYPT);
-        // Determine id_socio
-        if ($customIdSocio) {
+
+        if ($customIdSocio && $customIdSocio > 0) {
             $idSocio = $customIdSocio;
         } else {
-            $this->db->query("SELECT MAX(id_socio) as max_id FROM usuarios");
+            $this->db->query("SELECT MAX(id_socio) as max_id FROM usuarios WHERE junta_id = :junta_id");
+            $this->db->bind(':junta_id', $juntaId);
             $row = $this->db->single();
-            $idSocio = $row ? $row->max_id + 1 : 1;
+            $idSocio = ($row && $row->max_id) ? (int)$row->max_id + 1 : 1;
         }
-        // Update user record
-        $this->db->query("UPDATE usuarios SET password = :pwd, status = 'active', id_socio = :id_socio WHERE id = :id");
+
+        $this->db->query("UPDATE usuarios SET password = :pwd, status = 'active', id_socio = :id_socio, must_change = 1 WHERE id = :id AND status = 'pending'");
         $this->db->bind(':pwd', $hashed);
         $this->db->bind(':id_socio', $idSocio);
         $this->db->bind(':id', $userId);
-        $this->db->execute();
-        // Return temporary password for emailing
+        if (!$this->db->execute()) {
+            return null;
+        }
         return $tempPwd;
     }
 
-    /**
-     * Reject a pending registration.
-     */
-    public function rejectPending(int $userId) {
-        $this->db->query("DELETE FROM usuarios WHERE id = :id");
+    public function rejectPending(int $userId, int $juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return false;
+        }
+        $this->db->query("DELETE FROM usuarios WHERE id = :id AND junta_id = :junta_id AND status = 'pending'");
         $this->db->bind(':id', $userId);
+        $this->db->bind(':junta_id', $juntaId);
         return $this->db->execute();
     }
 }

@@ -8,6 +8,7 @@ class AdminController extends Controller {
     private $asistenciaModel;
     private $cierreModel;
     private $membresiaModel;
+    private $invitationModel;
     private $db;
 
     public function __construct() {
@@ -19,6 +20,7 @@ class AdminController extends Controller {
         $this->asistenciaModel = $this->model('Asistencia');
         $this->cierreModel = $this->model('CierreMensual');
         $this->membresiaModel = $this->model('Membresia');
+        $this->invitationModel = $this->model('Invitation');
         $this->db = new Database();
     }
 
@@ -166,16 +168,20 @@ class AdminController extends Controller {
             'active_menu' => 'socios',
             'socios' => $this->userModel->getSociosByJunta($juntaId),
             'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
+            'socios_pendientes' => $this->userModel->getPendingByJunta($juntaId),
+            'invitaciones_activas' => $this->invitationModel->getActiveByJunta($juntaId),
             'cuotas_historial' => $cuotasHistorial,
             'calles' => $calles,
             'proposed_id_socio' => $proposedIdSocio,
             'membresias_map' => $this->buildMembresiasMap($juntaId),
             'success' => $_SESSION['success_msg'] ?? '',
-            'error' => $_SESSION['error_msg'] ?? ''
+            'error' => $_SESSION['error_msg'] ?? '',
+            'link_invitacion' => $_SESSION['link_invitacion'] ?? '',
         ];
 
         unset($_SESSION['success_msg']);
         unset($_SESSION['error_msg']);
+        unset($_SESSION['link_invitacion']);
 
         $this->view('admin/socios', $data);
     }
@@ -259,6 +265,217 @@ class AdminController extends Controller {
             }
         }
         $this->redirect('/admin/socios');
+    }
+
+    public function generar_invitacion() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $juntaId = $_SESSION['user_junta_id'];
+        $created = $this->invitationModel->create($juntaId, 24);
+        if (!$created) {
+            $_SESSION['error_msg'] = 'No se pudo generar el enlace de invitación.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $link = URLROOT . '/invite/registro/' . $created['token'];
+        $_SESSION['link_invitacion'] = $link;
+        $_SESSION['success_msg'] = 'Enlace de invitación generado. Válido por 24 horas hasta '
+            . date('d-m-Y H:i', strtotime($created['expires_at'])) . '.';
+        $this->redirect('/admin/socios');
+    }
+
+    public function invitacion_revocar($id) {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->invitationModel->revoke((int)$id, $_SESSION['user_junta_id'])) {
+            $_SESSION['success_msg'] = 'Enlace de invitación revocado.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo revocar el enlace.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    private function parseSocioFormData($post) {
+        return [
+            'id_socio' => (int)($post['id_socio'] ?? 0),
+            'rut' => trim($post['rut'] ?? ''),
+            'nombres' => trim($post['nombres'] ?? ''),
+            'apellido_paterno' => trim($post['apellido_paterno'] ?? ''),
+            'apellido_materno' => trim($post['apellido_materno'] ?? ''),
+            'email' => trim($post['email'] ?? ''),
+            'telefono' => trim($post['telefono'] ?? ''),
+            'calle_id' => $post['calle_id'] ?? null,
+            'numero_casa' => trim($post['numero_casa'] ?? ''),
+            'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d'),
+        ];
+    }
+
+    private function validateSocioFormData(array $data, $requireIdSocio = true) {
+        if ($requireIdSocio && $data['id_socio'] <= 0) {
+            return 'El ID Socio debe ser mayor a 0.';
+        }
+        if ($data['rut'] === '' || $data['nombres'] === '' || $data['apellido_paterno'] === ''
+            || $data['apellido_materno'] === '' || $data['email'] === ''
+            || empty($data['calle_id']) || $data['numero_casa'] === '') {
+            return 'Complete todos los campos obligatorios.';
+        }
+        return null;
+    }
+
+    public function socio_pendiente_actualizar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $socioId = (int)($post['socio_id'] ?? 0);
+        $juntaId = $_SESSION['user_junta_id'];
+        $socio = $this->userModel->getPendingById($socioId, $juntaId);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Solicitud pendiente no encontrada.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $data = $this->parseSocioFormData($post);
+        $data['id'] = $socioId;
+        $err = $this->validateSocioFormData($data, false);
+        if ($err) {
+            $_SESSION['error_msg'] = $err;
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->emailOrRutTaken($data['email'], $data['rut'], $socioId)) {
+            $_SESSION['error_msg'] = 'El RUT o correo ya está en uso por otro usuario.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->userModel->updatePending($data)) {
+            $_SESSION['success_msg'] = 'Datos de la solicitud actualizados.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudieron guardar los cambios.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    public function socio_pendiente_aprobar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $socioId = (int)($post['socio_id'] ?? 0);
+        $juntaId = $_SESSION['user_junta_id'];
+        $socio = $this->userModel->getPendingById($socioId, $juntaId);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Solicitud pendiente no encontrada.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $plan = $_SESSION['user_junta_plan'] ?? 'basico';
+        $maxSocios = ($plan === 'basico') ? 50 : (($plan === 'mediano') ? 200 : PHP_INT_MAX);
+        if ($maxSocios !== PHP_INT_MAX && $this->userModel->getSociosCountByJunta($juntaId) >= $maxSocios) {
+            $_SESSION['error_msg'] = 'Límite de socios activos alcanzado para su plan.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $data = $this->parseSocioFormData($post);
+        $data['id'] = $socioId;
+        if (empty($data['id_socio']) || $data['id_socio'] <= 0) {
+            $this->db->query('SELECT MAX(id_socio) as max_id FROM usuarios WHERE junta_id = :junta_id');
+            $this->db->bind(':junta_id', $juntaId);
+            $row = $this->db->single();
+            $data['id_socio'] = ($row && $row->max_id) ? (int)$row->max_id + 1 : 1;
+        }
+        $err = $this->validateSocioFormData($data, true);
+        if ($err) {
+            $_SESSION['error_msg'] = $err;
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->emailOrRutTaken($data['email'], $data['rut'], $socioId)) {
+            $_SESSION['error_msg'] = 'El RUT o correo ya está en uso por otro usuario.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $this->db->query('SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio AND id != :id LIMIT 1');
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':id_socio', $data['id_socio']);
+        $this->db->bind(':id', $socioId);
+        if ($this->db->single()) {
+            $_SESSION['error_msg'] = 'El ID Socio #' . $data['id_socio'] . ' ya está en uso en su organización.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        if (!$this->userModel->updatePending($data)) {
+            $_SESSION['error_msg'] = 'No se pudieron actualizar los datos antes de aprobar.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $tempPwd = $this->userModel->approvePending($socioId, $juntaId, (int)$data['id_socio']);
+        if (!$tempPwd) {
+            $_SESSION['error_msg'] = 'Error al activar la cuenta del socio.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        $this->membresiaModel->upsert($socioId, $juntaId, 'socio', ['id_socio' => (int)$data['id_socio']]);
+
+        $socioActivo = $this->userModel->getSocioById($socioId);
+        $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Su organización';
+        $mailResult = SocioApprovalMail::send($socioActivo, $juntaNombre, $tempPwd);
+        unset($tempPwd);
+
+        if ($mailResult['ok']) {
+            $_SESSION['success_msg'] = 'Socio "' . $data['nombres'] . '" aprobado. Se envió correo con sus datos y clave temporal de acceso.';
+        } else {
+            $_SESSION['success_msg'] = 'Socio aprobado, pero no se pudo enviar el correo: ' . ($mailResult['error'] ?? 'error desconocido')
+                . '. Use "Resetear clave" para enviar acceso.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    public function socio_pendiente_rechazar($id) {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $socio = $this->userModel->getPendingById((int)$id, $_SESSION['user_junta_id']);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Solicitud pendiente no encontrada.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->userModel->rejectPending((int)$id, $_SESSION['user_junta_id'])) {
+            $_SESSION['success_msg'] = 'Solicitud de "' . $socio->nombre . '" rechazada y eliminada.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo rechazar la solicitud.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    private function emailOrRutTaken($email, $rut, $excludeUserId = null) {
+        $byEmail = $this->userModel->findUserByEmail($email);
+        if ($byEmail && (!$excludeUserId || (int)$byEmail->id !== (int)$excludeUserId)) {
+            return true;
+        }
+        $byRut = $this->userModel->findUserByRut($rut);
+        if ($byRut && (!$excludeUserId || (int)$byRut->id !== (int)$excludeUserId)) {
+            return true;
+        }
+        return false;
     }
 
     public function socio_actualizar() {

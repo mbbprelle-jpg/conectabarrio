@@ -45,10 +45,79 @@ function cbFechaSocioInput($socio) {
     </div>
 <?php endif; ?>
 
+<?php
+$sociosPendientes = $data['socios_pendientes'] ?? [];
+$invitacionesActivas = $data['invitaciones_activas'] ?? [];
+?>
+
+<?php if (!empty($sociosPendientes) && $canManageSocios): ?>
+    <div class="alert alert-warning" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span>Hay <strong><?php echo count($sociosPendientes); ?></strong> solicitud(es) de registro pendiente(s) de aprobación.</span>
+    </div>
+<?php endif; ?>
+
 <div class="grid-2col">
     
     <!-- SECCIÓN DE SOCIOS (IZQUIERDA) -->
     <div class="card card-primary" style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+        <?php if ($canManageSocios && !empty($sociosPendientes)): ?>
+        <div style="border: 1px solid rgba(245, 158, 11, 0.35); border-radius: var(--radius-sm); padding: 1rem; background: rgba(245, 158, 11, 0.05);">
+            <h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--warning); display: flex; align-items: center; gap: 0.5rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                Solicitudes pendientes de aprobación
+            </h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Solicitante</th>
+                            <th>RUT / Contacto</th>
+                            <th>Domicilio</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($sociosPendientes as $pend): ?>
+                        <tr>
+                            <td style="font-weight: 600;">
+                                <?php echo htmlspecialchars($pend->nombre . ' ' . $pend->apellido_paterno); ?>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                    Solicitud: <?php echo !empty($pend->created_at) ? date('d-m-Y H:i', strtotime($pend->created_at)) : '—'; ?>
+                                </div>
+                            </td>
+                            <td>
+                                <div style="font-family: monospace;"><?php echo htmlspecialchars($pend->rut); ?></div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);"><?php echo htmlspecialchars($pend->email); ?></div>
+                            </td>
+                            <td style="font-size: 0.85rem;">
+                                <?php echo htmlspecialchars($pend->calle_nombre ?? '—'); ?> #<?php echo htmlspecialchars($pend->numero_casa ?? '—'); ?>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-primary btn-sm btn-revisar-pendiente"
+                                    data-id="<?php echo (int)$pend->id; ?>"
+                                    data-id-socio="<?php echo htmlspecialchars($pend->id_socio ?? ''); ?>"
+                                    data-nombres="<?php echo htmlspecialchars($pend->nombre); ?>"
+                                    data-apellido-paterno="<?php echo htmlspecialchars($pend->apellido_paterno); ?>"
+                                    data-apellido-materno="<?php echo htmlspecialchars($pend->apellido_materno); ?>"
+                                    data-rut="<?php echo htmlspecialchars($pend->rut); ?>"
+                                    data-email="<?php echo htmlspecialchars($pend->email); ?>"
+                                    data-telefono="<?php echo htmlspecialchars($pend->telefono ?? ''); ?>"
+                                    data-fecha-inicio="<?php echo cbFechaSocioInput($pend); ?>"
+                                    data-calle-id="<?php echo (int)($pend->calle_id ?? 0); ?>"
+                                    data-numero-casa="<?php echo htmlspecialchars($pend->numero_casa ?? ''); ?>"
+                                    style="font-size: 0.75rem;">
+                                    Revisar / Aprobar
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
         
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
             <h3 class="card-title" style="margin-bottom: 0;">
@@ -233,6 +302,46 @@ function cbFechaSocioInput($socio) {
 
     <!-- ACCIONES DE FORMULARIOS (DERECHA) -->
     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+
+        <?php if ($canManageSocios): ?>
+        <div class="card card-primary">
+            <h3 class="card-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                Link de invitación (24 h)
+            </h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+                Genere un enlace para que nuevos vecinos completen su solicitud de registro. Las solicitudes quedan pendientes hasta que usted las apruebe.
+            </p>
+
+            <?php if (!empty($data['link_invitacion'])): ?>
+                <div class="form-group">
+                    <label class="form-label">Enlace generado (copie y comparta)</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="linkInvitacionInput" class="form-control" readonly value="<?php echo htmlspecialchars($data['link_invitacion']); ?>" style="font-size: 0.75rem; font-family: monospace;">
+                        <button type="button" class="btn btn-secondary" id="btnCopiarLink" style="white-space: nowrap;">Copiar</button>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <?php if (!empty($invitacionesActivas)): ?>
+                <div style="margin-bottom: 1rem;">
+                    <h4 style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Enlaces activos</h4>
+                    <?php foreach ($invitacionesActivas as $inv): ?>
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 0.4rem; font-size: 0.75rem;">
+                            <span>Vence: <?php echo date('d-m-Y H:i', strtotime($inv->expires_at)); ?></span>
+                            <form action="<?php echo URLROOT; ?>/admin/invitacion_revocar/<?php echo (int)$inv->id; ?>" method="POST" style="margin: 0;">
+                                <button type="submit" class="btn btn-danger btn-sm confirm-action" data-confirm-message="¿Revocar este enlace de invitación?" style="padding: 0.2rem 0.45rem; font-size: 0.7rem;">Revocar</button>
+                            </form>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <form action="<?php echo URLROOT; ?>/admin/generar_invitacion" method="POST">
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Generar nuevo enlace (24 horas)</button>
+            </form>
+        </div>
+        <?php endif; ?>
         
         <!-- CARD 1: INSCRIBIR SOCIO VECINO -->
         <div class="card card-warning">
@@ -485,6 +594,95 @@ function cbFechaSocioInput($socio) {
 </div>
 <?php endif; ?>
 
+<?php if ($canManageSocios): ?>
+<div id="pendienteSocioModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 540px; max-height: 90vh; overflow-y: auto;">
+        <button type="button" id="closePendienteSocioModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.25rem;">Revisar solicitud pendiente</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.25rem;">Edite los datos si es necesario y apruebe para activar la cuenta y enviar el correo de acceso.</p>
+
+        <form id="formPendienteActualizar" action="<?php echo URLROOT; ?>/admin/socio_pendiente_actualizar" method="POST">
+            <input type="hidden" name="socio_id" id="pend_socio_id">
+            <div class="form-group">
+                <label class="form-label">ID Socio (se asigna al aprobar) *</label>
+                <input type="number" name="id_socio" id="pend_id_socio" class="form-control" min="1" value="<?php echo htmlspecialchars($data['proposed_id_socio']); ?>">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nombres *</label>
+                <input type="text" name="nombres" id="pend_nombres" class="form-control" required>
+            </div>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Apellido Paterno *</label>
+                    <input type="text" name="apellido_paterno" id="pend_apellido_paterno" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Apellido Materno *</label>
+                    <input type="text" name="apellido_materno" id="pend_apellido_materno" class="form-control" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">RUT *</label>
+                <input type="text" name="rut" id="pend_rut" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Correo *</label>
+                <input type="email" name="email" id="pend_email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Teléfono</label>
+                <input type="text" name="telefono" id="pend_telefono" class="form-control">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha inicio *</label>
+                <input type="date" name="fecha_inicio" id="pend_fecha_inicio" class="form-control" required>
+            </div>
+            <div class="grid-2col">
+                <div class="form-group">
+                    <label class="form-label">Calle *</label>
+                    <select name="calle_id" id="pend_calle_id" class="form-control" required>
+                        <option value="">-- Seleccionar --</option>
+                        <?php foreach ($data['calles'] as $calle): ?>
+                            <option value="<?php echo (int)$calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">N° Casa *</label>
+                    <input type="text" name="numero_casa" id="pend_numero_casa" class="form-control" required>
+                </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary" id="cancelPendienteSocioModal">Cancelar</button>
+                <button type="submit" class="btn btn-secondary">Guardar cambios</button>
+            </div>
+        </form>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <form id="formPendienteRechazar" action="" method="POST" style="margin: 0;">
+                <button type="submit" class="btn btn-danger confirm-action" data-confirm-message="¿Rechazar y eliminar esta solicitud de registro?">Rechazar solicitud</button>
+            </form>
+            <form id="formPendienteAprobar" action="<?php echo URLROOT; ?>/admin/socio_pendiente_aprobar" method="POST" style="margin: 0;">
+                <input type="hidden" name="socio_id" id="pend_aprobar_socio_id">
+                <input type="hidden" name="id_socio" id="pend_aprobar_id_socio">
+                <input type="hidden" name="nombres" id="pend_aprobar_nombres">
+                <input type="hidden" name="apellido_paterno" id="pend_aprobar_apellido_paterno">
+                <input type="hidden" name="apellido_materno" id="pend_aprobar_apellido_materno">
+                <input type="hidden" name="rut" id="pend_aprobar_rut">
+                <input type="hidden" name="email" id="pend_aprobar_email">
+                <input type="hidden" name="telefono" id="pend_aprobar_telefono">
+                <input type="hidden" name="fecha_inicio" id="pend_aprobar_fecha_inicio">
+                <input type="hidden" name="calle_id" id="pend_aprobar_calle_id">
+                <input type="hidden" name="numero_casa" id="pend_aprobar_numero_casa">
+                <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Aprobar registro y enviar correo con clave temporal al socio?">Aprobar y enviar acceso</button>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if ($isFullAdmin): ?>
 <div id="delegacionModal" class="glass-modal-overlay">
     <div class="glass-modal-container" style="max-width: 480px;">
@@ -557,6 +755,54 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('closeEditarSocioModal')?.addEventListener('click', () => closeModal(editModal));
     document.getElementById('cancelEditarSocioModal')?.addEventListener('click', () => closeModal(editModal));
     editModal?.addEventListener('click', e => { if (e.target === editModal) closeModal(editModal); });
+
+    const pendModal = document.getElementById('pendienteSocioModal');
+    const syncPendienteApproveFields = () => {
+        document.getElementById('pend_aprobar_socio_id').value = document.getElementById('pend_socio_id').value;
+        document.getElementById('pend_aprobar_id_socio').value = document.getElementById('pend_id_socio').value;
+        document.getElementById('pend_aprobar_nombres').value = document.getElementById('pend_nombres').value;
+        document.getElementById('pend_aprobar_apellido_paterno').value = document.getElementById('pend_apellido_paterno').value;
+        document.getElementById('pend_aprobar_apellido_materno').value = document.getElementById('pend_apellido_materno').value;
+        document.getElementById('pend_aprobar_rut').value = document.getElementById('pend_rut').value;
+        document.getElementById('pend_aprobar_email').value = document.getElementById('pend_email').value;
+        document.getElementById('pend_aprobar_telefono').value = document.getElementById('pend_telefono').value;
+        document.getElementById('pend_aprobar_fecha_inicio').value = document.getElementById('pend_fecha_inicio').value;
+        document.getElementById('pend_aprobar_calle_id').value = document.getElementById('pend_calle_id').value;
+        document.getElementById('pend_aprobar_numero_casa').value = document.getElementById('pend_numero_casa').value;
+    };
+    document.querySelectorAll('.btn-revisar-pendiente').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            document.getElementById('pend_socio_id').value = id;
+            document.getElementById('pend_id_socio').value = this.dataset.idSocio || '<?php echo (int)$data['proposed_id_socio']; ?>';
+            document.getElementById('pend_nombres').value = this.dataset.nombres || '';
+            document.getElementById('pend_apellido_paterno').value = this.dataset.apellidoPaterno || '';
+            document.getElementById('pend_apellido_materno').value = this.dataset.apellidoMaterno || '';
+            document.getElementById('pend_rut').value = this.dataset.rut || '';
+            document.getElementById('pend_email').value = this.dataset.email || '';
+            document.getElementById('pend_telefono').value = this.dataset.telefono || '';
+            document.getElementById('pend_fecha_inicio').value = this.dataset.fechaInicio || '';
+            document.getElementById('pend_calle_id').value = this.dataset.calleId || '';
+            document.getElementById('pend_numero_casa').value = this.dataset.numeroCasa || '';
+            document.getElementById('formPendienteRechazar').action = '<?php echo URLROOT; ?>/admin/socio_pendiente_rechazar/' + id;
+            syncPendienteApproveFields();
+            openModal(pendModal);
+        });
+    });
+    document.getElementById('formPendienteAprobar')?.addEventListener('submit', syncPendienteApproveFields);
+    document.getElementById('closePendienteSocioModal')?.addEventListener('click', () => closeModal(pendModal));
+    document.getElementById('cancelPendienteSocioModal')?.addEventListener('click', () => closeModal(pendModal));
+    pendModal?.addEventListener('click', e => { if (e.target === pendModal) closeModal(pendModal); });
+
+    document.getElementById('btnCopiarLink')?.addEventListener('click', function() {
+        const input = document.getElementById('linkInvitacionInput');
+        if (!input) return;
+        input.select();
+        navigator.clipboard?.writeText(input.value).then(() => {
+            this.textContent = 'Copiado';
+            setTimeout(() => { this.textContent = 'Copiar'; }, 2000);
+        });
+    });
 
     <?php if ($isFullAdmin): ?>
     const delegacionModal = document.getElementById('delegacionModal');
