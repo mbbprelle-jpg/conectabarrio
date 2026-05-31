@@ -1,5 +1,19 @@
 <?php
 class User extends Model {
+    private static $hasCalleIdColumn = null;
+
+    private function hasCalleIdColumn() {
+        if (self::$hasCalleIdColumn === null) {
+            try {
+                $this->db->query('SELECT calle_id FROM usuarios LIMIT 1');
+                $this->db->execute();
+                self::$hasCalleIdColumn = true;
+            } catch (Exception $e) {
+                self::$hasCalleIdColumn = false;
+            }
+        }
+        return self::$hasCalleIdColumn;
+    }
     
     // Buscar usuario por correo electrónico
     public function findUserByEmail($email) {
@@ -164,7 +178,18 @@ class User extends Model {
 
     // Obtener un socio específico por su ID
     public function getSocioById($socioId) {
-        $this->db->query("SELECT u.*, c.nombre as calle_nombre, j.nombre as junta_nombre FROM usuarios u LEFT JOIN calles c ON u.calle_id = c.id LEFT JOIN juntas_vecinos j ON u.junta_id = j.id WHERE u.id = :id AND u.rol = 'socio'");
+        if ($this->hasCalleIdColumn()) {
+            $this->db->query("SELECT u.*, c.nombre AS calle_nombre, j.nombre AS junta_nombre
+                FROM usuarios u
+                LEFT JOIN calles c ON u.calle_id = c.id
+                LEFT JOIN juntas_vecinos j ON u.junta_id = j.id
+                WHERE u.id = :id AND u.rol = 'socio'");
+        } else {
+            $this->db->query("SELECT u.*, j.nombre AS junta_nombre
+                FROM usuarios u
+                LEFT JOIN juntas_vecinos j ON u.junta_id = j.id
+                WHERE u.id = :id AND u.rol = 'socio'");
+        }
         $this->db->bind(':id', $socioId);
         return $this->db->single();
     }

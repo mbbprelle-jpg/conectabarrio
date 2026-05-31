@@ -406,8 +406,8 @@ class AdminController extends Controller {
             if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
                 $result = TempPassword::issueToUser($socio);
                 if ($result['ok']) {
-                    $_SESSION['success_msg'] = 'Se envió una contraseña temporal al correo de "' . $socio->nombre . '" (' . $socio->email . '). '
-                        . 'El socio deberá cambiarla al ingresar. Por seguridad, usted no puede ver la clave generada.';
+                    $_SESSION['success_msg'] = 'Se le envió una contraseña temporal al usuario "' . $socio->nombre . '". '
+                        . 'Deberá cambiarla al ingresar por primera vez.';
                 } else {
                     $_SESSION['error_msg'] = $result['error'] ?? 'Error al restablecer la contraseña.';
                 }
