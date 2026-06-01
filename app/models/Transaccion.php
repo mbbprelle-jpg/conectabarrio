@@ -20,14 +20,22 @@ class Transaccion extends Model {
         return $this->db->execute();
     }
 
-    // Verificar si un socio ya pagó o fue eximido de un mes específico
-    public function checkPagoSocio($socioId, $mesPagado) {
-        $this->db->query("SELECT * FROM transacciones 
+    // Verificar si un socio ya pagó o fue eximido de un mes específico (en una organización)
+    public function checkPagoSocio($socioId, $mesPagado, $juntaId = null) {
+        $sql = "SELECT * FROM transacciones 
                          WHERE socio_id = :socio_id 
                          AND categoria IN ('Cuota Socio', 'Cuota Condonada') 
-                         AND mes_pagado = :mes_pagado LIMIT 1");
+                         AND mes_pagado = :mes_pagado";
+        if ($juntaId !== null) {
+            $sql .= " AND junta_id = :junta_id";
+        }
+        $sql .= " LIMIT 1";
+        $this->db->query($sql);
         $this->db->bind(':socio_id', $socioId);
         $this->db->bind(':mes_pagado', $mesPagado);
+        if ($juntaId !== null) {
+            $this->db->bind(':junta_id', $juntaId);
+        }
         
         return $this->db->single() ? true : false;
     }
@@ -44,14 +52,21 @@ class Transaccion extends Model {
         return $this->db->resultSet();
     }
 
-    // Obtener los pagos realizados por un socio específico
-    public function getPagosBySocio($socioId) {
-        $this->db->query("SELECT t.*, r.nombre as admin_nombre 
+    // Obtener los pagos realizados por un socio en una organización
+    public function getPagosBySocio($socioId, $juntaId = null) {
+        $sql = "SELECT t.*, r.nombre as admin_nombre 
                          FROM transacciones t 
                          LEFT JOIN usuarios r ON t.registrado_por = r.id 
-                         WHERE t.socio_id = :socio_id AND t.categoria = 'Cuota Socio' 
-                         ORDER BY t.mes_pagado DESC");
+                         WHERE t.socio_id = :socio_id AND t.categoria = 'Cuota Socio'";
+        if ($juntaId !== null) {
+            $sql .= " AND t.junta_id = :junta_id";
+        }
+        $sql .= " ORDER BY t.mes_pagado DESC";
+        $this->db->query($sql);
         $this->db->bind(':socio_id', $socioId);
+        if ($juntaId !== null) {
+            $this->db->bind(':junta_id', $juntaId);
+        }
         return $this->db->resultSet();
     }
 
@@ -128,14 +143,21 @@ class Transaccion extends Model {
         return $this->db->resultSet();
     }
 
-    // Obtener todas las transacciones asociadas a un socio (Cuotas, Condonaciones, Donaciones)
-    public function getTransaccionesBySocio($socioId) {
-        $this->db->query("SELECT t.*, r.nombre as admin_nombre 
+    // Obtener transacciones de un socio en la organización activa (cuotas, donaciones, etc.)
+    public function getTransaccionesBySocio($socioId, $juntaId = null) {
+        $sql = "SELECT t.*, r.nombre as admin_nombre 
                          FROM transacciones t 
                          LEFT JOIN usuarios r ON t.registrado_por = r.id 
-                         WHERE t.socio_id = :socio_id 
-                         ORDER BY t.fecha DESC, t.id DESC");
+                         WHERE t.socio_id = :socio_id";
+        if ($juntaId !== null) {
+            $sql .= " AND t.junta_id = :junta_id";
+        }
+        $sql .= " ORDER BY t.fecha DESC, t.id DESC";
+        $this->db->query($sql);
         $this->db->bind(':socio_id', $socioId);
+        if ($juntaId !== null) {
+            $this->db->bind(':junta_id', $juntaId);
+        }
         return $this->db->resultSet();
     }
 }

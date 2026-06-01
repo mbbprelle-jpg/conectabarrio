@@ -25,8 +25,8 @@ class SocioController extends Controller {
             die('Error al cargar la información del socio.');
         }
 
-        // Obtener historial completo de transacciones del socio (Cuotas, Donaciones, Condonaciones)
-        $transacciones = $this->transaccionModel->getTransaccionesBySocio($socioId);
+        // Solo movimientos de la organización seleccionada en sesión
+        $transacciones = $this->transaccionModel->getTransaccionesBySocio($socioId, $juntaId);
 
         // Obtener el valor de cuota vigente para el mes actual
         $mesActual = date('Y-m');
@@ -62,9 +62,9 @@ class SocioController extends Controller {
     // Listado completo de Comprobantes de Pago del Socio
     public function comprobantes() {
         $socioId = $_SESSION['user_id'];
+        $juntaId = $_SESSION['user_junta_id'];
 
-        // Obtener todos los movimientos asociados a este socio
-        $transacciones = $this->transaccionModel->getTransaccionesBySocio($socioId);
+        $transacciones = $this->transaccionModel->getTransaccionesBySocio($socioId, $juntaId);
 
         $data = [
             'title' => 'Mis Comprobantes de Pago',
@@ -85,7 +85,8 @@ class SocioController extends Controller {
         $socioId = (int)$_SESSION['user_id'];
         $pago = $this->transaccionModel->getComprobanteById($id);
 
-        if (!$pago || (int)$pago->socio_id !== $socioId) {
+        if (!$pago || (int)$pago->socio_id !== $socioId
+            || (int)$pago->junta_id !== (int)($_SESSION['user_junta_id'] ?? 0)) {
             $_SESSION['error_msg'] = 'No tiene autorización para visualizar este comprobante.';
             $this->redirect('/socio/comprobantes');
             return;

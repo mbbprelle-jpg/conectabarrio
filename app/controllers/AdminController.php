@@ -1080,7 +1080,7 @@ class AdminController extends Controller {
                     $mesPagado = trim($mesPagado);
                     
                     // Validar duplicado
-                    if ($this->transaccionModel->checkPagoSocio($socioId, $mesPagado)) {
+                    if ($this->transaccionModel->checkPagoSocio($socioId, $mesPagado, $_SESSION['user_junta_id'])) {
                         throw new Exception('El mes ' . $mesPagado . ' ya registra un pago o exención previamente para ' . $socio->nombre . '.');
                     }
 
@@ -1181,9 +1181,11 @@ class AdminController extends Controller {
             // 2. Verificar si está pagada o condonada
             $db->query("SELECT * FROM transacciones 
                         WHERE socio_id = :socio_id 
+                        AND junta_id = :junta_id
                         AND categoria IN ('Cuota Socio', 'Cuota Condonada') 
                         AND mes_pagado = :mes_pagado LIMIT 1");
             $db->bind(':socio_id', $socioId);
+            $db->bind(':junta_id', $_SESSION['user_junta_id']);
             $db->bind(':mes_pagado', $mes);
             $trans = $db->single();
             
