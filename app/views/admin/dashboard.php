@@ -140,11 +140,16 @@ document.addEventListener('DOMContentLoaded', function() {
         $egresos[] = (int)$item->egresos;
     }
     
-    // Si no hay datos, poblar con valores semilla por defecto para mostrar gráfica inicial
+    // Si no hay movimientos, mostrar meses en cero (no datos ficticios)
     if (empty($labels)) {
-        $labels = ['Mar 2026', 'Abr 2026', 'May 2026'];
-        $ingresos = [305000, 12000, 5000];
-        $egresos = [45000, 92000, 0];
+        $labels = [];
+        $ingresos = [];
+        $egresos = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $labels[] = date('M Y', strtotime("-{$i} months"));
+            $ingresos[] = 0;
+            $egresos[] = 0;
+        }
     }
     ?>
 
