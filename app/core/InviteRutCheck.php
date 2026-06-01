@@ -116,10 +116,19 @@ class InviteRutCheck {
     /** Oculta correos placeholder de pre-validación. */
     public static function displayEmail(?string $email): string {
         $email = trim((string)$email);
-        if ($email === '' || str_contains($email, '@prevalidar.conectabarrio')) {
+        if (self::isPlaceholderEmail($email)) {
             return '';
         }
         return $email;
+    }
+
+    public static function isPlaceholderEmail(?string $email): bool {
+        $email = trim((string)$email);
+        return $email === '' || str_contains($email, '@prevalidar.conectabarrio');
+    }
+
+    public static function hasRealEmail(?string $email): bool {
+        return !self::isPlaceholderEmail($email);
     }
 
     public static function placeholderEmail(string $rut, int $juntaId): string {

@@ -166,7 +166,7 @@ class AdminController extends Controller {
             'header_title' => 'Padrón de Socios y Jurisdicción',
             'header_subtitle' => 'Administre los vecinos afiliados, controle las calles de la junta y programe ajustes de cuotas',
             'active_menu' => 'socios',
-            'socios' => $this->userModel->getSociosByJunta($juntaId),
+            'socios' => $this->userModel->getPadronByJunta($juntaId),
             'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
             'socios_pendientes' => $this->userModel->getPendingByJunta($juntaId),
             'socios_prevalidar' => $this->userModel->getPrevalidarByJunta($juntaId),
@@ -194,29 +194,23 @@ class AdminController extends Controller {
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
             $post = $this->sanitizePost();
 
-            // Validar límites de socios según el Plan Comercial
             $plan = $_SESSION['user_junta_plan'] ?? 'basico';
             $juntaId = $_SESSION['user_junta_id'];
             $maxSocios = ($plan === 'basico') ? 50 : (($plan === 'mediano') ? 200 : PHP_INT_MAX);
-            
-            if ($maxSocios !== PHP_INT_MAX) {
-                $actualSocios = $this->userModel->getSociosCountByJunta($juntaId);
-                if ($actualSocios >= $maxSocios) {
-                    $_SESSION['error_msg'] = 'Límite de socios alcanzado. Su Plan ' . ucfirst($plan) . ' solo permite registrar hasta ' . $maxSocios . ' socios activos. Por favor contacte al Administrador Global para ascender de Plan.';
-                    $this->redirect('/admin/socios');
-                    return;
-                }
-            }
 
             require_once APPROOT . '/core/RutChile.php';
+            require_once APPROOT . '/core/InviteRutCheck.php';
+            require_once APPROOT . '/core/SocioInitialPassword.php';
+
             $dataSocio = $this->parseSocioFormData($post);
-            $dataSocio['junta_id'] = $_SESSION['user_junta_id'];
-            $dataSocio['password'] = 'socio123';
+            $dataSocio['junta_id'] = $juntaId;
             $dataSocio['rol'] = 'socio';
             $dataSocio['estado'] = 1;
             $idSocio = $dataSocio['id_socio'];
+            $emailRaw = mb_strtolower(trim($post['email'] ?? ''), 'UTF-8');
+            $sinCorreo = ($emailRaw === '');
 
-            $validationError = $this->validateSocioFormData($dataSocio, true, true);
+            $validationError = $this->validateSocioFormData($dataSocio, true, true, true, !$sinCorreo);
             if ($validationError) {
                 $_SESSION['error_msg'] = $validationError;
                 $this->redirect('/admin/socios');
@@ -229,36 +223,59 @@ class AdminController extends Controller {
             }
             $dataSocio['rut'] = RutChile::normalize($dataSocio['rut']);
 
-            // Validar si el ID Socio ya está registrado en esta junta/organización
-            $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio");
+            $this->db->query('SELECT id, status FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio LIMIT 1');
             $this->db->bind(':junta_id', $dataSocio['junta_id']);
             $this->db->bind(':id_socio', $idSocio);
-            if ($this->db->single()) {
+            $idTaken = $this->db->single();
+            if ($idTaken && ($idTaken->status ?? '') !== 'prevalidar') {
                 $_SESSION['error_msg'] = 'El ID Socio ' . $idSocio . ' ya está en uso en su organización. Por favor elija otro o use el sugerido.';
                 $this->redirect('/admin/socios');
                 return;
             }
 
-            // Validar si el RUT ya existe en el sistema
-            if ($this->userModel->findUserByRut($dataSocio['rut'])) {
+            $existingRut = $this->userModel->findUserByRut($dataSocio['rut']);
+            if ($existingRut && (($existingRut->status ?? '') !== 'prevalidar' || (int)$existingRut->junta_id !== (int)$juntaId)) {
                 $_SESSION['error_msg'] = 'Ya existe un usuario registrado con ese RUT.';
                 $this->redirect('/admin/socios');
                 return;
             }
 
-            // Validar si el correo ya existe en el sistema
-            if ($this->userModel->findUserByEmail($dataSocio['email'])) {
-                $_SESSION['error_msg'] = 'Ya existe un usuario registrado con ese Correo Electrónico.';
-                $this->redirect('/admin/socios');
-                return;
-            }
-
-            // Registrar socio
-            if ($newUserId = $this->userModel->register($dataSocio)) {
-                $this->membresiaModel->upsert($newUserId, $dataSocio['junta_id'], 'socio', ['id_socio' => $idSocio]);
-                $_SESSION['success_msg'] = 'Socio "' . $dataSocio['nombres'] . ' ' . $dataSocio['apellido_paterno'] . '" inscrito con éxito con ID #' . $idSocio . '.';
+            if (!$sinCorreo) {
+                if ($maxSocios !== PHP_INT_MAX && $this->userModel->getSociosCountByJunta($juntaId) >= $maxSocios) {
+                    $_SESSION['error_msg'] = 'Límite de socios alcanzado. Su Plan ' . ucfirst($plan) . ' solo permite registrar hasta ' . $maxSocios . ' socios activos.';
+                    $this->redirect('/admin/socios');
+                    return;
+                }
+                if ($this->userModel->findUserByEmail($dataSocio['email'])) {
+                    $_SESSION['error_msg'] = 'Ya existe un usuario registrado con ese Correo Electrónico.';
+                    $this->redirect('/admin/socios');
+                    return;
+                }
+                $dataSocio['password'] = 'socio123';
+                if ($newUserId = $this->userModel->register($dataSocio)) {
+                    $this->membresiaModel->upsert($newUserId, $dataSocio['junta_id'], 'socio', ['id_socio' => $idSocio]);
+                    $_SESSION['success_msg'] = 'Socio "' . $dataSocio['nombres'] . ' ' . $dataSocio['apellido_paterno'] . '" inscrito con éxito con ID #' . $idSocio . '. Clave inicial: socio123';
+                } else {
+                    $_SESSION['error_msg'] = 'Error al registrar al socio en la base de datos.';
+                }
             } else {
-                $_SESSION['error_msg'] = 'Error al registrar al socio en la base de datos.';
+                $dataSocio['email'] = InviteRutCheck::placeholderEmail($dataSocio['rut'], $juntaId);
+                $dataSocio['use_rut_initial_password'] = true;
+                if ($existingRut && ($existingRut->status ?? '') === 'prevalidar' && (int)$existingRut->junta_id === (int)$juntaId) {
+                    $dataSocio['id'] = (int)$existingRut->id;
+                    if ($this->userModel->updatePrevalidar($dataSocio)) {
+                        $this->membresiaModel->upsert((int)$existingRut->id, $juntaId, 'socio', ['id_socio' => $idSocio]);
+                        $_SESSION['success_msg'] = 'Alta provisional actualizada para "' . $dataSocio['nombres'] . '". Puede registrar pagos; el vecino ingresa con RUT y clave ' . SocioInitialPassword::fromRut($dataSocio['rut']) . '.';
+                    } else {
+                        $_SESSION['error_msg'] = 'No se pudo actualizar el registro provisional.';
+                    }
+                } elseif ($newUserId = $this->userModel->createPrevalidar($dataSocio)) {
+                    $this->membresiaModel->upsert($newUserId, $juntaId, 'socio', ['id_socio' => $idSocio]);
+                    $_SESSION['success_msg'] = 'Socio "' . $dataSocio['nombres'] . ' ' . $dataSocio['apellido_paterno'] . '" registrado en alta provisional (sin correo). '
+                        . 'Puede asociar pagos ya. Clave inicial del vecino: primeros 6 dígitos del RUT (' . SocioInitialPassword::fromRut($dataSocio['rut']) . ').';
+                } else {
+                    $_SESSION['error_msg'] = 'Error al registrar al socio en la base de datos.';
+                }
             }
         }
         $this->redirect('/admin/socios');
@@ -321,16 +338,20 @@ class AdminController extends Controller {
         return SocioInput::normalizeTextFields($data);
     }
 
-    private function validateSocioFormData(array $data, $requireIdSocio = true, $requireProfile = true) {
+    private function validateSocioFormData(array $data, $requireIdSocio = true, $requireProfile = true, $requireApellidoMaterno = true, $requireEmail = true) {
         require_once APPROOT . '/core/RutChile.php';
         require_once APPROOT . '/core/SocioInput.php';
         if ($requireIdSocio && $data['id_socio'] <= 0) {
             return 'El ID Socio debe ser mayor a 0.';
         }
         if ($data['rut'] === '' || $data['nombres'] === '' || $data['apellido_paterno'] === ''
-            || $data['apellido_materno'] === '' || $data['email'] === ''
+            || ($requireApellidoMaterno && $data['apellido_materno'] === '')
+            || ($requireEmail && $data['email'] === '')
             || empty($data['calle_id']) || $data['numero_casa'] === '') {
             return 'Complete todos los campos obligatorios.';
+        }
+        if ($requireEmail && $data['email'] !== '' && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            return 'El correo electrónico no es válido.';
         }
         $rutOk = RutChile::normalize($data['rut']);
         if ($rutOk === false) {
@@ -614,7 +635,7 @@ class AdminController extends Controller {
         }
 
         unset($_SESSION['bulk_import_preview']);
-        $_SESSION['success_msg'] = $inserted . ' socio(s) quedaron en estado PRE-VALIDAR.'
+        $_SESSION['success_msg'] = $inserted . ' socio(s) quedaron en alta provisional (sin correo). Puede registrar pagos; clave inicial: primeros 6 dígitos del RUT.'
             . ($skipped > 0 ? ' ' . $skipped . ' fila(s) omitida(s).' : '');
         $this->redirect('/admin/socios');
     }
@@ -798,18 +819,24 @@ class AdminController extends Controller {
         $post = $this->sanitizePost();
         $socioId = (int)($post['socio_id'] ?? 0);
         $juntaId = $_SESSION['user_junta_id'];
-        $socio = $this->userModel->getSocioById($socioId);
-        if (!$socio || (int)$socio->junta_id !== (int)$juntaId) {
-            $_SESSION['error_msg'] = 'Socio no encontrado en su organización.';
+        $socio = $this->userModel->getPadronMiembroById($socioId, $juntaId);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Miembro no encontrado en su organización.';
             $this->redirect('/admin/socios');
             return;
         }
+        $isAdminMiembro = ($socio->rol ?? '') === 'admin';
         $idSocio = (int)($post['id_socio'] ?? 0);
         $data = $this->parseSocioFormData($post);
         $data['id'] = $socioId;
-        $data['id_socio'] = $idSocio;
+        if ($isAdminMiembro && $idSocio <= 0) {
+            $data['id_socio'] = !empty($socio->id_socio) ? (int)$socio->id_socio : null;
+        } else {
+            $data['id_socio'] = $idSocio > 0 ? $idSocio : null;
+        }
+        $idSocio = !empty($data['id_socio']) ? (int)$data['id_socio'] : 0;
 
-        $validationError = $this->validateSocioFormData($data, true, false);
+        $validationError = $this->validateSocioFormData($data, !$isAdminMiembro, false, !$isAdminMiembro);
         if ($validationError) {
             $_SESSION['error_msg'] = $validationError;
             $this->redirect('/admin/socios');
@@ -822,14 +849,16 @@ class AdminController extends Controller {
         }
         require_once APPROOT . '/core/RutChile.php';
         $data['rut'] = RutChile::normalize($data['rut']);
-        $this->db->query("SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio AND id != :id LIMIT 1");
-        $this->db->bind(':junta_id', $juntaId);
-        $this->db->bind(':id_socio', $idSocio);
-        $this->db->bind(':id', $socioId);
-        if ($this->db->single()) {
-            $_SESSION['error_msg'] = 'El ID Socio #' . $idSocio . ' ya está en uso por otro vecino.';
-            $this->redirect('/admin/socios');
-            return;
+        if ($idSocio > 0) {
+            $this->db->query("SELECT id FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio AND id != :id LIMIT 1");
+            $this->db->bind(':junta_id', $juntaId);
+            $this->db->bind(':id_socio', $idSocio);
+            $this->db->bind(':id', $socioId);
+            if ($this->db->single()) {
+                $_SESSION['error_msg'] = 'El ID Socio #' . $idSocio . ' ya está en uso por otro vecino.';
+                $this->redirect('/admin/socios');
+                return;
+            }
         }
         $existingRut = $this->userModel->findUserByRut($data['rut']);
         if ($existingRut && (int)$existingRut->id !== $socioId) {
@@ -843,15 +872,18 @@ class AdminController extends Controller {
             $this->redirect('/admin/socios');
             return;
         }
-        if ($this->userModel->updateSocio($data)) {
+        if ($this->userModel->updatePadronMiembro($data)) {
             try {
-                $this->membresiaModel->upsert($socioId, $juntaId, 'socio', ['id_socio' => $idSocio]);
+                $memRol = $isAdminMiembro ? 'admin' : 'socio';
+                $memExtra = $idSocio > 0 ? ['id_socio' => $idSocio] : [];
+                $this->membresiaModel->upsert($socioId, $juntaId, $memRol, $memExtra);
             } catch (Exception $e) {
                 // Tabla de membresías opcional hasta migración SQL
             }
-            $_SESSION['success_msg'] = 'Datos del socio "' . $data['nombres'] . '" actualizados correctamente.';
+            $etiqueta = $isAdminMiembro ? 'administrador' : 'socio';
+            $_SESSION['success_msg'] = 'Datos del ' . $etiqueta . ' "' . $data['nombres'] . '" actualizados correctamente.';
         } else {
-            $_SESSION['error_msg'] = 'No se pudieron guardar los cambios del socio.';
+            $_SESSION['error_msg'] = 'No se pudieron guardar los cambios.';
         }
         $this->redirect('/admin/socios');
     }
@@ -929,8 +961,9 @@ class AdminController extends Controller {
     public function socio_reset_password($id) {
         $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $socio = $this->userModel->getSocioById($id);
-            if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
+            $juntaId = $_SESSION['user_junta_id'];
+            $socio = $this->userModel->getPadronMiembroById($id, $juntaId);
+            if ($socio) {
                 $result = TempPassword::issueToUser($socio);
                 if ($result['ok']) {
                     $_SESSION['success_msg'] = 'Se le envió una contraseña temporal al usuario "' . $socio->nombre . '". '
@@ -939,7 +972,7 @@ class AdminController extends Controller {
                     $_SESSION['error_msg'] = $result['error'] ?? 'Error al restablecer la contraseña.';
                 }
             } else {
-                $_SESSION['error_msg'] = 'Socio no encontrado o no pertenece a tu Junta.';
+                $_SESSION['error_msg'] = 'Usuario no encontrado o no pertenece a tu Junta.';
             }
         }
         $this->redirect('/admin/socios');
@@ -949,15 +982,16 @@ class AdminController extends Controller {
     public function socio_eliminar($id) {
         $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $socio = $this->userModel->getSocioById($id);
-            if ($socio && $socio->junta_id == $_SESSION['user_junta_id']) {
-                if ($this->userModel->delete($id)) {
-                    $_SESSION['success_msg'] = 'Socio "' . $socio->nombre . '" dado de baja correctamente (Estado: Inactivo).';
-                } else {
-                    $_SESSION['error_msg'] = 'Error al dar de baja al socio.';
-                }
-            } else {
+            $juntaId = $_SESSION['user_junta_id'];
+            $socio = $this->userModel->getPadronMiembroById($id, $juntaId);
+            if (!$socio) {
                 $_SESSION['error_msg'] = 'Socio no encontrado.';
+            } elseif (($socio->rol ?? '') === 'admin') {
+                $_SESSION['error_msg'] = 'No se puede dar de baja a un administrador desde el padrón.';
+            } elseif ($this->userModel->delete($id)) {
+                $_SESSION['success_msg'] = 'Socio "' . $socio->nombre . '" dado de baja correctamente (Estado: Inactivo).';
+            } else {
+                $_SESSION['error_msg'] = 'Error al dar de baja al socio.';
             }
         }
         $this->redirect('/admin/socios');
@@ -1020,7 +1054,7 @@ class AdminController extends Controller {
             'header_title' => 'Registro de Caja (Ingresos y Egresos)',
             'header_subtitle' => 'Registre recaudación de cuotas, otros ingresos y gastos generales de la junta',
             'active_menu' => 'finanzas',
-            'socios' => $this->userModel->getSociosByJunta($juntaId),
+            'socios' => $this->userModel->getSociosOperativosByJunta($juntaId),
             'transacciones' => $this->transaccionModel->getTransaccionesByJunta($juntaId),
             'balance' => $this->transaccionModel->getBalanceConsolidado($juntaId),
             'success' => $_SESSION['success_msg'] ?? '',
@@ -1056,8 +1090,9 @@ class AdminController extends Controller {
             }
 
             // 1. Validar que el socio pertenece a la Junta
-            $socio = $this->userModel->getUserById($socioId);
-            if (!$socio || $socio->junta_id != $_SESSION['user_junta_id'] || $socio->rol !== 'socio') {
+            $juntaId = (int)$_SESSION['user_junta_id'];
+            $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
+            if (!$socio) {
                 $_SESSION['error_msg'] = 'Socio no válido.';
                 $this->redirect('/admin/finanzas');
                 return;
@@ -1148,8 +1183,9 @@ class AdminController extends Controller {
         }
 
         // Obtener socio
-        $socio = $this->userModel->getUserById($socioId);
-        if (!$socio || $socio->junta_id != $_SESSION['user_junta_id'] || $socio->rol !== 'socio') {
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
+        if (!$socio) {
             echo json_encode(['success' => false, 'message' => 'Socio no válido']);
             exit;
         }
@@ -1226,7 +1262,8 @@ class AdminController extends Controller {
             'socio' => [
                 'id' => $socio->id,
                 'nombre' => $socio->nombre,
-                'fecha_inicio' => $socio->fecha_inicio
+                'fecha_inicio' => $socio->fecha_inicio,
+                'prevalidar' => ($socio->status ?? '') === 'prevalidar',
             ],
             'meses' => $meses
         ]);
@@ -1253,8 +1290,8 @@ class AdminController extends Controller {
 
             // Validar que el socio pertenece a la misma junta si se especificó
             if ($socioId) {
-                $socio = $this->userModel->getUserById($socioId);
-                if (!$socio || $socio->junta_id != $_SESSION['user_junta_id'] || $socio->rol !== 'socio') {
+                $socio = $this->userModel->getSocioOperativoById((int)$socioId, (int)$_SESSION['user_junta_id']);
+                if (!$socio) {
                     $_SESSION['error_msg'] = 'El socio seleccionado no es válido para su organización.';
                     $this->redirect('/admin/finanzas');
                     return;

@@ -159,6 +159,8 @@ class AuthController extends Controller {
         $_SESSION['user_rol'] = $user->rol;
         $_SESSION['user_junta_id'] = $user->junta_id;
         $_SESSION['must_change'] = $user->must_change ?? false;
+        require_once APPROOT . '/core/AuthContext.php';
+        AuthContext::syncAccountCompletionFlag($user);
         $_SESSION['membership_id'] = null;
         $_SESSION['user_cargo'] = null;
         $_SESSION['permiso_gestion_socios'] = 0;
@@ -213,6 +215,10 @@ class AuthController extends Controller {
     // Redirección centralizada por rol
     // Redirigir según el rol del usuario
     private function redirectByRole($role) {
+        if (!empty($_SESSION['needs_account_completion'])) {
+            $this->redirect('/auth/completar_cuenta');
+            exit;
+        }
         // Si el usuario debe cambiar la contraseña, redirigir al formulario de cambio
         if (isset($_SESSION['must_change']) && $_SESSION['must_change']) {
             $this->redirect('/auth/resetPassword');
@@ -281,6 +287,70 @@ return;
     }
 
     // Mostrar formulario para cambiar contraseña temporal
+    public function completar_cuenta() {
+        if (!isset($_SESSION['user_id'])) {
+            $this->redirect('/auth/login');
+            return;
+        }
+        $user = $this->userModel->getUserById($_SESSION['user_id']);
+        if (!$user || !$this->userModel->needsAccountCompletion($user)) {
+            $this->redirectByRole($_SESSION['user_rol'] ?? 'socio');
+            return;
+        }
+
+        $viewData = [
+            'title' => 'Completar cuenta',
+            'header_title' => 'Activar cuenta de socio',
+            'header_subtitle' => 'Registre su correo y contraseña definitiva',
+            'error' => '',
+        ];
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+            $email = mb_strtolower(trim($_POST['email'] ?? ''), 'UTF-8');
+            $newPass = trim($_POST['new_password'] ?? '');
+            $confirm = trim($_POST['confirm_password'] ?? '');
+
+            require_once APPROOT . '/core/InviteRutCheck.php';
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $viewData['error'] = 'Ingrese un correo electrónico válido.';
+                $this->view('auth/completar_cuenta', $viewData);
+                return;
+            }
+            if (InviteRutCheck::isPlaceholderEmail($email)) {
+                $viewData['error'] = 'Debe indicar un correo personal real, no un correo provisional.';
+                $this->view('auth/completar_cuenta', $viewData);
+                return;
+            }
+            if (strlen($newPass) < 8) {
+                $viewData['error'] = 'La contraseña debe tener al menos 8 caracteres.';
+                $this->view('auth/completar_cuenta', $viewData);
+                return;
+            }
+            if ($newPass !== $confirm) {
+                $viewData['error'] = 'Las contraseñas no coinciden.';
+                $this->view('auth/completar_cuenta', $viewData);
+                return;
+            }
+            $existing = $this->userModel->findUserByEmail($email);
+            if ($existing && (int)$existing->id !== (int)$user->id) {
+                $viewData['error'] = 'Ese correo ya está registrado por otro usuario.';
+                $this->view('auth/completar_cuenta', $viewData);
+                return;
+            }
+            if ($this->userModel->completePrevalidarAccount((int)$user->id, $email, $newPass)) {
+                $_SESSION['user_email'] = $email;
+                $_SESSION['needs_account_completion'] = 0;
+                $_SESSION['must_change'] = 0;
+                $_SESSION['success_msg'] = 'Cuenta activada correctamente. Bienvenido al portal.';
+                $this->redirectByRole($_SESSION['user_rol'] ?? 'socio');
+                return;
+            }
+            $viewData['error'] = 'No se pudo activar la cuenta. Intente nuevamente o contacte a la directiva.';
+        }
+
+        $this->view('auth/completar_cuenta', $viewData);
+    }
+
     public function resetPassword() {
         if (!isset($_SESSION['user_id']) || empty($_SESSION['must_change'])) {
             $this->redirect('/auth/login');

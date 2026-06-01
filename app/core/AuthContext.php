@@ -14,6 +14,7 @@ class AuthContext {
         $_SESSION['permiso_registro_pagos'] = (int)($membership->permiso_registro_pagos ?? 0);
         $_SESSION['permiso_todos'] = (int)($membership->permiso_todos ?? 0);
         $_SESSION['must_change'] = $user->must_change ?? false;
+        self::syncAccountCompletionFlag($user);
         $_SESSION['user_junta_nombre'] = $membership->junta_nombre ?? 'Organización';
         $_SESSION['user_junta_comuna'] = $membership->comuna ?? '';
         $_SESSION['user_junta_plan'] = $membership->plan ?? 'basico';
@@ -62,5 +63,13 @@ class AuthContext {
             $methods = array_merge($methods, ['finanzas', 'registrar_pago_cuota', 'registrar_transaccion', 'get_socio_cuotas']);
         }
         return array_unique($methods);
+    }
+
+    public static function syncAccountCompletionFlag($user): void {
+        require_once APPROOT . '/core/InviteRutCheck.php';
+        $_SESSION['needs_account_completion'] = (
+            ($user->status ?? '') === 'prevalidar'
+            && InviteRutCheck::isPlaceholderEmail($user->email ?? '')
+        ) ? 1 : 0;
     }
 }

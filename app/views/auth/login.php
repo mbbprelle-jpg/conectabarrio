@@ -234,6 +234,10 @@
                 </div>
             </div>
 
+            <p style="font-size: 0.72rem; color: var(--text-muted); margin: -0.25rem 0 0.75rem;">
+                Si fue registrado en alta provisional, use su RUT y los primeros 6 dígitos numéricos del RUT como contraseña.
+            </p>
+
             <div class="auth-actions" style="display: flex; flex-direction: column; align-items: stretch; margin-top: 0.5rem; gap: 0.5rem;">
                 <div class="text-center">
                     <a href="#" id="forgotPasswordLink" class="link-underline link-primary" style="font-size:0.85rem;">¿Olvidó su contraseña?</a>

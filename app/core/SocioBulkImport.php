@@ -169,7 +169,8 @@ class SocioBulkImport {
             'calle_id' => $calleId,
             'numero_casa' => self::cell($cells, $map, 'numero_casa'),
             'fecha_inicio' => self::cell($cells, $map, 'fecha_inicio') ?: date('Y-m-d'),
-            'password' => bin2hex(random_bytes(16)),
+            'password' => '',
+            'use_rut_initial_password' => true,
             'rol' => 'socio',
             'estado' => 1,
         ];

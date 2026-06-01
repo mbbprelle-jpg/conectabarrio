@@ -1,5 +1,15 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 
+<?php
+function cbFinanzasSocioLabel($socio) {
+    $label = ($socio->nombre ?? '') . ' (' . ($socio->rut ?? '') . ')';
+    if (($socio->status ?? '') === 'prevalidar') {
+        $label .= ' — Alta provisional';
+    }
+    return $label;
+}
+?>
+
 <style>
 /* Estilos para el selector de meses multi-select */
 .mes-group-title {
@@ -130,10 +140,13 @@
                 
                 <div class="form-group">
                     <label for="socio_id" class="form-label">Seleccione Socio Vecino *</label>
+                    <div id="socio_provisional_alert" class="alert alert-warning" style="display: none; padding: 0.65rem 0.85rem; font-size: 0.78rem; margin-bottom: 0.65rem;">
+                        Este socio está en <strong>alta provisional</strong> (sin correo). Puede registrar el pago; el vecino aún no tiene acceso al portal hasta activar su cuenta.
+                    </div>
                     <select name="socio_id" id="socio_id" class="form-control" required>
                         <option value="">-- Seleccionar Socio --</option>
                         <?php foreach ($data['socios'] as $socio): ?>
-                            <option value="<?php echo $socio->id; ?>"><?php echo htmlspecialchars($socio->nombre); ?> (<?php echo htmlspecialchars($socio->rut); ?>)</option>
+                            <option value="<?php echo $socio->id; ?>" data-prevalidar="<?php echo ($socio->status ?? '') === 'prevalidar' ? '1' : '0'; ?>"><?php echo htmlspecialchars(cbFinanzasSocioLabel($socio)); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -223,7 +236,7 @@
                     <select name="socio_id" id="asociar_socio_id" class="form-control">
                         <option value="">-- No asociar (Movimiento General) --</option>
                         <?php foreach ($data['socios'] as $socio): ?>
-                            <option value="<?php echo $socio->id; ?>"><?php echo htmlspecialchars($socio->nombre); ?> (<?php echo htmlspecialchars($socio->rut); ?>)</option>
+                            <option value="<?php echo $socio->id; ?>"><?php echo htmlspecialchars(cbFinanzasSocioLabel($socio)); ?></option>
                         <?php endforeach; ?>
                     </select>
                     <small style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
@@ -346,6 +359,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // SECCIÓN 1: PAGO DE CUOTAS Y CONDONACIÓN
     // ==========================================
     const socioSelect = document.getElementById('socio_id');
+    const socioProvisionalAlert = document.getElementById('socio_provisional_alert');
     const mesesContainer = document.getElementById('meses_checkboxes_container');
     const quickActions = document.getElementById('quick_actions_container');
     const btnSelectPendientes = document.getElementById('btn_select_pendientes');
@@ -358,13 +372,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnSubmitCuota = document.getElementById('btn_submit_cuota');
 
     if (socioSelect && mesesContainer) {
+        const syncProvisionalAlert = () => {
+            if (!socioProvisionalAlert) return;
+            const opt = socioSelect.options[socioSelect.selectedIndex];
+            const isProv = opt && opt.dataset.prevalidar === '1';
+            socioProvisionalAlert.style.display = isProv ? 'block' : 'none';
+        };
         socioSelect.addEventListener('change', function() {
+            syncProvisionalAlert();
             const socioId = this.value;
             
             if (!socioId) {
                 mesesContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">-- Primero seleccione un socio vecino --</p>';
                 quickActions.style.display = 'none';
                 alertInfo.style.display = 'none';
+                if (socioProvisionalAlert) socioProvisionalAlert.style.display = 'none';
                 return;
             }
 

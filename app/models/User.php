@@ -151,7 +151,7 @@ class User extends Model {
                 return $row;
             }
         }
-        
+
         return false;
     }
 
@@ -206,6 +206,15 @@ class User extends Model {
     }
 
     public function updateSocio($data) {
+        return $this->updatePadronMiembro($data, ['socio']);
+    }
+
+    public function updatePadronMiembro($data, array $roles = ['socio', 'admin']) {
+        $roles = array_values(array_intersect($roles, ['socio', 'admin']));
+        if (empty($roles)) {
+            return false;
+        }
+        $roleList = implode("','", $roles);
         $profileSql = $this->profileUpdateSqlSet();
         $this->db->query("UPDATE usuarios SET
             id_socio = :id_socio,
@@ -219,7 +228,7 @@ class User extends Model {
             numero_casa = :numero_casa,
             fecha_inicio = :fecha_inicio
             {$profileSql}
-            WHERE id = :id AND rol = 'socio'");
+            WHERE id = :id AND rol IN ('{$roleList}')");
         $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
         $this->db->bind(':rut', $data['rut']);
         $this->db->bind(':nombre', $data['nombres']);
@@ -301,6 +310,67 @@ class User extends Model {
         }
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->resultSet();
+    }
+
+    /** Socios activos y en alta provisional (operativos para finanzas). */
+    public function getSociosOperativosByJunta($juntaId) {
+        if (!$this->hasStatusColumn()) {
+            return $this->getSociosByJunta($juntaId);
+        }
+        $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1
+            AND status IN ('active', 'prevalidar') ORDER BY nombre ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
+    public function getSocioOperativoById($socioId, $juntaId) {
+        if (!$this->hasStatusColumn()) {
+            $socio = $this->getSocioById($socioId);
+            return ($socio && (int)$socio->junta_id === (int)$juntaId) ? $socio : null;
+        }
+        $this->db->query("SELECT * FROM usuarios WHERE id = :id AND junta_id = :junta_id AND rol = 'socio'
+            AND estado = 1 AND status IN ('active', 'prevalidar')");
+        $this->db->bind(':id', $socioId);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->single();
+    }
+
+    public function needsAccountCompletion($user): bool {
+        if (!$user) {
+            return false;
+        }
+        require_once APPROOT . '/core/InviteRutCheck.php';
+        return ($user->status ?? '') === 'prevalidar'
+            && InviteRutCheck::isPlaceholderEmail($user->email ?? '');
+    }
+
+    public function completePrevalidarAccount(int $userId, string $email, string $newPassword): bool {
+        if (!$this->hasStatusColumn()) {
+            return false;
+        }
+        $hashed = password_hash($newPassword, PASSWORD_BCRYPT);
+        $this->db->query("UPDATE usuarios SET email = :email, password = :pwd, status = 'active', must_change = 0
+            WHERE id = :id AND rol = 'socio' AND status = 'prevalidar'");
+        $this->db->bind(':email', mb_strtolower(trim($email), 'UTF-8'));
+        $this->db->bind(':pwd', $hashed);
+        $this->db->bind(':id', $userId);
+        return $this->db->execute();
+    }
+
+    /** Socios activos + administradores activos de la junta (padrón visible). */
+    public function getPadronByJunta($juntaId) {
+        $byId = [];
+        foreach ($this->getSociosByJunta($juntaId) as $socio) {
+            $byId[(int)$socio->id] = $socio;
+        }
+        foreach ($this->getAdminsByJunta($juntaId) as $admin) {
+            $byId[(int)$admin->id] = $admin;
+        }
+        $list = array_values($byId);
+        usort($list, function ($a, $b) {
+            return strcasecmp($a->nombre ?? '', $b->nombre ?? '');
+        });
+        return $list;
     }
 
     public function getPendingByJunta($juntaId) {
@@ -386,6 +456,45 @@ class User extends Model {
                 WHERE u.id = :id AND u.rol = 'socio'");
         }
         $this->db->bind(':id', $socioId);
+        return $this->db->single();
+    }
+
+    /** Socio o administrador activo perteneciente al padrón de la junta. */
+    public function getPadronMiembroById($userId, $juntaId) {
+        $statusFilter = $this->hasStatusColumn()
+            ? "AND (u.rol = 'admin' OR u.status = 'active')"
+            : '';
+        if ($this->hasCalleIdColumn()) {
+            $this->db->query("SELECT u.*, c.nombre AS calle_nombre, j.nombre AS junta_nombre
+                FROM usuarios u
+                LEFT JOIN calles c ON u.calle_id = c.id
+                LEFT JOIN juntas_vecinos j ON u.junta_id = j.id
+                WHERE u.id = :id AND u.estado = 1 AND u.rol IN ('socio', 'admin')
+                {$statusFilter}
+                AND (
+                    u.junta_id = :junta_id
+                    OR EXISTS (
+                        SELECT 1 FROM usuario_membresias m
+                        WHERE m.usuario_id = u.id AND m.junta_id = :junta_id2 AND m.estado = 1
+                    )
+                )");
+        } else {
+            $this->db->query("SELECT u.*, j.nombre AS junta_nombre
+                FROM usuarios u
+                LEFT JOIN juntas_vecinos j ON u.junta_id = j.id
+                WHERE u.id = :id AND u.estado = 1 AND u.rol IN ('socio', 'admin')
+                {$statusFilter}
+                AND (
+                    u.junta_id = :junta_id
+                    OR EXISTS (
+                        SELECT 1 FROM usuario_membresias m
+                        WHERE m.usuario_id = u.id AND m.junta_id = :junta_id2 AND m.estado = 1
+                    )
+                )");
+        }
+        $this->db->bind(':id', $userId);
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':junta_id2', $juntaId);
         return $this->db->single();
     }
 
@@ -562,11 +671,16 @@ class User extends Model {
         if (!$this->hasStatusColumn()) {
             throw new Exception('La columna status no existe.');
         }
+        require_once APPROOT . '/core/SocioInitialPassword.php';
+        $plainPassword = $data['password'] ?? '';
+        if ($plainPassword === '' || !empty($data['use_rut_initial_password'])) {
+            $plainPassword = SocioInitialPassword::fromRut($data['rut'] ?? '');
+        }
         $cols = 'junta_id, id_socio, rut, nombre, apellido_paterno, apellido_materno, email, password, rol, telefono, estado, calle_id, numero_casa, fecha_inicio, status';
         $vals = ':junta_id, :id_socio, :rut, :nombre, :apellido_paterno, :apellido_materno, :email, :password, :rol, :telefono, :estado, :calle_id, :numero_casa, :fecha_inicio, \'prevalidar\'';
         $this->appendProfileInsertColumns($cols, $vals);
         $this->db->query("INSERT INTO usuarios ({$cols}) VALUES ({$vals})");
-        $hashed = password_hash($data['password'], PASSWORD_BCRYPT);
+        $hashed = password_hash($plainPassword, PASSWORD_BCRYPT);
         $this->db->bind(':junta_id', $data['junta_id']);
         $this->db->bind(':id_socio', !empty($data['id_socio']) ? (int)$data['id_socio'] : null);
         $this->db->bind(':rut', $data['rut']);
@@ -583,7 +697,11 @@ class User extends Model {
         $this->db->bind(':fecha_inicio', $data['fecha_inicio'] ?? date('Y-m-d'));
         $this->bindProfileFields($data);
         if ($this->db->execute()) {
-            return $this->db->lastInsertId();
+            $newId = $this->db->lastInsertId();
+            $this->db->query('UPDATE usuarios SET must_change = 1 WHERE id = :id');
+            $this->db->bind(':id', $newId);
+            $this->db->execute();
+            return $newId;
         }
         return false;
     }

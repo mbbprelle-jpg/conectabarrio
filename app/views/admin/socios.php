@@ -50,6 +50,7 @@ function cbFechaSocioInput($socio) {
 <?php
 $sociosPendientes = $data['socios_pendientes'] ?? [];
 $sociosPrevalidar = $data['socios_prevalidar'] ?? [];
+$totalAltaProvisional = count($sociosPrevalidar);
 $bulkPreview = $data['bulk_import_preview'] ?? null;
 $invitacionesActivas = $data['invitaciones_activas'] ?? [];
 $cuotaVigente = !empty($data['cuotas_historial']) ? $data['cuotas_historial'][0] : null;
@@ -172,11 +173,13 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
 
         <?php if ($canManageSocios && !empty($sociosPrevalidar)): ?>
         <div style="border: 1px solid rgba(99, 102, 241, 0.35); border-radius: var(--radius-sm); padding: 1rem; background: rgba(99, 102, 241, 0.05); margin-bottom: 0;">
-            <h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
-                Pre-validados (carga masiva o planilla)
+            <h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                Alta provisional
+                <span class="badge badge-warning" style="font-size: 0.68rem;"><?php echo $totalAltaProvisional; ?> sin correo</span>
             </h4>
             <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1rem;">
-                Estos registros esperan que el socio complete datos vía link de invitación, o que la directiva los active directamente.
+                Socios registrados por la directiva o carga masiva sin correo. Puede asociarles pagos en Finanzas.
+                El vecino ingresa con su <strong>RUT</strong> y clave = <strong>primeros 6 dígitos del RUT</strong>, completa su correo y activa la cuenta.
             </p>
             <div class="table-responsive">
                 <table class="table">
@@ -196,6 +199,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                 <?php if (!empty($prev->id_socio)): ?>
                                     <span style="font-size: 0.75rem; color: var(--primary);"> #<?php echo (int)$prev->id_socio; ?></span>
                                 <?php endif; ?>
+                                <span class="badge badge-warning" style="font-size: 0.65rem; margin-left: 0.25rem;">Alta provisional</span>
                             </td>
                             <td>
                                 <div style="font-family: monospace;"><?php echo htmlspecialchars($prev->rut); ?></div>
@@ -244,7 +248,12 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
             </h3>
             
             <!-- Barra de búsqueda dinámica -->
-            <input type="text" id="searchSocio" class="form-control" placeholder="Buscar socio por nombre o RUT..." style="max-width: 250px; padding: 0.5rem 0.8rem; font-size: 0.85rem;">
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem;">
+                <?php if ($totalAltaProvisional > 0): ?>
+                    <span style="font-size: 0.75rem; color: var(--warning); font-weight: 600;"><?php echo $totalAltaProvisional; ?> en alta provisional (sin correo)</span>
+                <?php endif; ?>
+                <input type="text" id="searchSocio" class="form-control" placeholder="Buscar socio por nombre o RUT..." style="max-width: 250px; padding: 0.5rem 0.8rem; font-size: 0.85rem;">
+            </div>
         </div>
 
         <?php if (empty($data['socios'])): ?>
@@ -262,13 +271,20 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($data['socios'] as $socio): ?>
+                        <?php foreach ($data['socios'] as $socio):
+                            $esAdminPadron = ($socio->rol ?? '') === 'admin';
+                        ?>
                             <tr>
-                                <td style="font-weight: 600; display: flex; align-items: center;" class="search-name">
-                                    <span style="color: var(--primary); font-size: 0.8rem; margin-right: 0.6rem; font-family: monospace; padding: 0.15rem 0.4rem; background: rgba(99, 102, 241, 0.1); border-radius: 4px; border: 1px solid rgba(99, 102, 241, 0.2); line-height: 1;" title="ID Socio">
+                                <td style="font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem;" class="search-name">
+                                    <?php if (!$esAdminPadron): ?>
+                                    <span style="color: var(--primary); font-size: 0.8rem; font-family: monospace; padding: 0.15rem 0.4rem; background: rgba(99, 102, 241, 0.1); border-radius: 4px; border: 1px solid rgba(99, 102, 241, 0.2); line-height: 1;" title="ID Socio">
                                         #<?php echo htmlspecialchars($socio->id_socio ?? 'N/A'); ?>
                                     </span>
+                                    <?php endif; ?>
                                     <?php echo htmlspecialchars($socio->nombre); ?>
+                                    <?php if ($esAdminPadron): ?>
+                                        <span class="badge badge-info" style="font-size: 0.68rem; font-weight: 600;">Administrador</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td style="font-family: monospace;" class="search-rut"><?php echo htmlspecialchars($socio->rut); ?></td>
                                 <td>
@@ -279,16 +295,19 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                     ?></div>
                                     <div style="font-size: 0.75rem; color: var(--primary); font-weight: 500; margin-top: 0.15rem; display: flex; align-items: center; gap: 0.25rem;">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                                        Socio desde: <?php echo cbFormatFechaSocio($socio); ?>
+                                        <?php echo $esAdminPadron ? 'Desde' : 'Socio desde'; ?>: <?php echo cbFormatFechaSocio($socio); ?>
                                     </div>
                                 </td>
-                                <?php if ($isFullAdmin):
+                                <?php if ($isFullAdmin): ?>
+                                <td>
+                                    <?php if ($esAdminPadron): ?>
+                                        <span class="badge badge-info">Administrador principal</span>
+                                    <?php else:
                                     $mem = $membresiasMap[$socio->id] ?? null;
                                     $cargo = $mem->cargo ?? '';
                                     $permSocios = !empty($mem->permiso_gestion_socios) || !empty($mem->permiso_todos);
                                     $permPagos = !empty($mem->permiso_registro_pagos) || !empty($mem->permiso_todos);
-                                ?>
-                                <td>
+                                    ?>
                                     <?php if ($cargo): ?>
                                         <span class="badge badge-info" style="margin-bottom: 0.25rem; display: inline-block;"><?php echo htmlspecialchars($cargo); ?></span><br>
                                     <?php endif; ?>
@@ -310,6 +329,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                             Delegar
                                         </button>
                                     </div>
+                                    <?php endif; ?>
                                 </td>
                                 <?php endif; ?>
                                 <td>
@@ -317,8 +337,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                         <?php if ($canManageSocios): ?>
                                         <button type="button"
                                                 class="btn btn-primary btn-sm btn-editar-socio"
-                                                title="Editar datos del socio"
+                                                title="Editar datos<?php echo $esAdminPadron ? ' del administrador' : ' del socio'; ?>"
                                                 data-id="<?php echo (int)$socio->id; ?>"
+                                                data-rol="<?php echo htmlspecialchars($socio->rol ?? 'socio'); ?>"
                                                 data-id-socio="<?php echo (int)($socio->id_socio ?? 0); ?>"
                                                 data-nombres="<?php echo htmlspecialchars($socio->nombre ?? ''); ?>"
                                                 data-apellido-paterno="<?php echo htmlspecialchars($socio->apellido_paterno ?? ''); ?>"
@@ -354,6 +375,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                             </button>
                                         </form>
 
+                                        <?php if (!$esAdminPadron): ?>
                                         <!-- Formulario Dar de Baja Socio (Baja Lógica) -->
                                         <form action="<?php echo URLROOT; ?>/admin/socio_eliminar/<?php echo $socio->id; ?>" method="POST" style="margin: 0;">
                                             <button type="submit" 
@@ -365,6 +387,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                                 Dar de Baja
                                             </button>
                                         </form>
+                                        <?php endif; ?>
                                         
                                     </div>
                                 </td>
@@ -467,8 +490,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
             require APPROOT . '/views/partials/socio_demografia_fields.php';
             ?>
             <div class="form-group">
-                <label for="email" class="form-label">Correo Electrónico *</label>
-                <input type="email" name="email" id="email" class="form-control" required>
+                <label for="email" class="form-label">Correo Electrónico</label>
+                <input type="email" name="email" id="email" class="form-control" placeholder="Opcional si aún no lo tiene">
+                <small style="font-size: 0.72rem; color: var(--text-muted);">Si lo deja vacío, el socio queda en <strong>alta provisional</strong>: podrá registrar pagos y el vecino activará su cuenta al ingresar con RUT.</small>
             </div>
             <?php require APPROOT . '/views/partials/campo_telefono_cl.php'; ?>
             <div class="form-group">
@@ -495,8 +519,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <label for="numero_casa" class="form-label">Número de Casa *</label>
                 <input type="text" name="numero_casa" id="numero_casa" class="form-control" required>
             </div>
-            <div class="alert alert-success" style="padding: 0.8rem; font-size: 0.75rem; margin-bottom: 1rem;">
-                La contraseña inicial asignada será: <strong>socio123</strong>.
+            <div class="alert alert-success" id="inscribirSocioClaveHint" style="padding: 0.8rem; font-size: 0.75rem; margin-bottom: 1rem;">
+                <span id="inscribirClaveConCorreo">Con correo: clave inicial <strong>socio123</strong>.</span>
+                <span id="inscribirClaveSinCorreo" style="display: none;">Sin correo: alta provisional. Clave inicial = <strong>primeros 6 dígitos del RUT</strong> (sin puntos ni guión).</span>
             </div>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" data-close-modal="inscribirSocioModal">Cancelar</button>
@@ -631,12 +656,12 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
         <button type="button" id="closeEditarSocioModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
-        <h3 style="margin-bottom: 1.25rem;">Editar datos del socio</h3>
+        <h3 id="editarSocioModalTitle" style="margin-bottom: 1.25rem;">Editar datos del socio</h3>
         <form action="<?php echo URLROOT; ?>/admin/socio_actualizar" method="POST">
             <input type="hidden" name="socio_id" id="edit_socio_id">
-            <div class="form-group">
-                <label class="form-label">ID Socio *</label>
-                <input type="number" name="id_socio" id="edit_id_socio" class="form-control" min="1" required>
+            <div class="form-group" id="edit_id_socio_group">
+                <label class="form-label" id="edit_id_socio_label">ID Socio *</label>
+                <input type="number" name="id_socio" id="edit_id_socio" class="form-control" min="1">
             </div>
             <div class="form-group">
                 <label class="form-label">Nombres *</label>
@@ -1047,6 +1072,17 @@ document.addEventListener('DOMContentLoaded', function() {
             openModal(document.getElementById(this.getAttribute('data-open-modal')));
         });
     });
+
+    const inscribirEmail = document.getElementById('email');
+    const claveConCorreo = document.getElementById('inscribirClaveConCorreo');
+    const claveSinCorreo = document.getElementById('inscribirClaveSinCorreo');
+    const syncInscribirClaveHint = () => {
+        const sinCorreo = !inscribirEmail || inscribirEmail.value.trim() === '';
+        if (claveConCorreo) claveConCorreo.style.display = sinCorreo ? 'none' : '';
+        if (claveSinCorreo) claveSinCorreo.style.display = sinCorreo ? '' : 'none';
+    };
+    inscribirEmail?.addEventListener('input', syncInscribirClaveHint);
+    syncInscribirClaveHint();
     document.querySelectorAll('[data-close-modal]').forEach(function(btn) {
         btn.addEventListener('click', function() {
             closeModal(document.getElementById(this.getAttribute('data-close-modal')));
@@ -1064,10 +1100,40 @@ document.addEventListener('DOMContentLoaded', function() {
     <?php endif; ?>
 
     const editModal = document.getElementById('editarSocioModal');
+    const editModalTitle = document.getElementById('editarSocioModalTitle');
+    const editIdSocioInput = document.getElementById('edit_id_socio');
+    const editIdSocioLabel = document.getElementById('edit_id_socio_label');
+    const editIdSocioGroup = document.getElementById('edit_id_socio_group');
+    const editApellidoMaterno = document.getElementById('edit_apellido_materno');
+    const setEditModalForRol = (rol) => {
+        const isAdmin = rol === 'admin';
+        if (editModalTitle) {
+            editModalTitle.textContent = isAdmin ? 'Editar datos del administrador' : 'Editar datos del socio';
+        }
+        if (editIdSocioGroup) {
+            editIdSocioGroup.style.display = isAdmin ? 'none' : '';
+        }
+        if (editIdSocioInput) {
+            editIdSocioInput.required = !isAdmin;
+            if (isAdmin) {
+                editIdSocioInput.value = '';
+            }
+        }
+        if (editIdSocioLabel) {
+            editIdSocioLabel.textContent = 'ID Socio *';
+        }
+        if (editApellidoMaterno) {
+            editApellidoMaterno.required = !isAdmin;
+        }
+    };
     document.querySelectorAll('.btn-editar-socio').forEach(btn => {
         btn.addEventListener('click', function() {
+            const rol = this.dataset.rol || 'socio';
+            setEditModalForRol(rol);
             document.getElementById('edit_socio_id').value = this.dataset.id;
-            document.getElementById('edit_id_socio').value = this.dataset.idSocio || '';
+            if (rol !== 'admin') {
+                document.getElementById('edit_id_socio').value = this.dataset.idSocio || '';
+            }
             document.getElementById('edit_nombres').value = this.dataset.nombres || '';
             document.getElementById('edit_apellido_paterno').value = this.dataset.apellidoPaterno || '';
             document.getElementById('edit_apellido_materno').value = this.dataset.apellidoMaterno || '';

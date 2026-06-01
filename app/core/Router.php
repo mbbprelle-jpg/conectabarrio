@@ -78,7 +78,13 @@ class Router {
             exit;
         }
 
-        if ($isLoggedIn && !empty($_SESSION['must_change'])) {
+        if ($isLoggedIn && !empty($_SESSION['needs_account_completion'])) {
+            $allowedCompletion = ['completar_cuenta', 'logout'];
+            if ($controllerClass !== 'AuthController' || !in_array($method, $allowedCompletion, true)) {
+                header('location: ' . URLROOT . '/auth/completar_cuenta');
+                exit;
+            }
+        } elseif ($isLoggedIn && !empty($_SESSION['must_change'])) {
             $allowedWithMustChange = ['resetPassword', 'logout'];
             if ($controllerClass !== 'AuthController' || !in_array($method, $allowedWithMustChange, true)) {
                 header('location: ' . URLROOT . '/auth/resetPassword');
@@ -88,6 +94,10 @@ class Router {
 
         // Si está logueado e intenta entrar al login, redirigir a su dashboard correspondiente
         if ($isLoggedIn && $controllerClass === 'AuthController' && $method === 'login') {
+            if (!empty($_SESSION['needs_account_completion'])) {
+                header('location: ' . URLROOT . '/auth/completar_cuenta');
+                exit;
+            }
             if (!empty($_SESSION['must_change'])) {
                 header('location: ' . URLROOT . '/auth/resetPassword');
                 exit;
