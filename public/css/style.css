@@ -1925,6 +1925,90 @@ html {
     min-width: 120px;
 }
 
+/* Overlay de carga global */
+.cb-loading-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    background: rgba(8, 8, 12, 0.82);
+    backdrop-filter: blur(8px);
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.cb-loading-overlay.is-open {
+    display: flex;
+}
+
+body.cb-loading-active {
+    overflow: hidden;
+    pointer-events: none;
+}
+
+body.cb-loading-active .cb-loading-overlay {
+    pointer-events: auto;
+}
+
+.cb-loading-box {
+    width: 100%;
+    max-width: 420px;
+    background: rgba(20, 20, 25, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: 2rem 1.75rem;
+    text-align: center;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+    animation: cbConfirmIn 0.22s ease;
+}
+
+.cb-loading-spinner {
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 1.25rem;
+    border: 3px solid rgba(255, 255, 255, 0.12);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: cbLoadingSpin 0.75s linear infinite;
+}
+
+@keyframes cbLoadingSpin {
+    to { transform: rotate(360deg); }
+}
+
+.cb-loading-title {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    color: var(--text-main);
+}
+
+.cb-loading-message {
+    margin: 0 0 0.75rem;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    color: var(--text-muted);
+}
+
+.cb-loading-hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--warning);
+    font-weight: 500;
+}
+
+.bulk-import-processing-note {
+    margin: 0 0 0.85rem;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: var(--radius-sm);
+}
+
 /* Socio — solicitar cambio de datos */
 .socio-solicitud-page {
     width: 100%;
@@ -2267,5 +2351,103 @@ html {
 .bulk-import-detail {
     min-width: 180px;
     max-width: 320px;
+}
+
+/* Calles — listado con buscador */
+.calles-search-panel {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.85rem 1rem;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.calles-search-panel--compact {
+    padding: 0.75rem 0.85rem;
+}
+
+.calles-search-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.calles-search-input {
+    font-size: 0.88rem;
+}
+
+.calles-search-meta {
+    margin: 0.45rem 0 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.calles-search-hint {
+    opacity: 0.85;
+}
+
+.calles-search-no-results {
+    margin: 0 0 0.5rem;
+    font-size: 0.78rem;
+    color: var(--warning);
+}
+
+.calles-list-scroll {
+    max-height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.calles-search-panel--compact .calles-list-scroll {
+    max-height: 200px;
+}
+
+.calles-list-empty {
+    margin: 0;
+    padding: 0.75rem 0;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.calles-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.84rem;
+}
+
+.calles-list-item-name {
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.calles-list-item-action {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.calles-list-item-action .btn {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.72rem;
+}
+
+.calles-list-item[hidden] {
+    display: none !important;
+}
+
+.calles-search-input:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 

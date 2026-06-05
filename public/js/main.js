@@ -108,6 +108,47 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.cbOpenConfirm = openConfirmModal;
 
+    var loadingOverlay = document.getElementById('cbLoadingOverlay');
+    var loadingTitle = document.getElementById('cbLoadingTitle');
+    var loadingMessage = document.getElementById('cbLoadingMessage');
+    var loadingActive = false;
+
+    function showLoadingOverlay(title, message) {
+        if (!loadingOverlay) {
+            return;
+        }
+        loadingActive = true;
+        if (loadingTitle) {
+            loadingTitle.textContent = title || 'Procesando…';
+        }
+        if (loadingMessage) {
+            loadingMessage.textContent = message || 'Espere un momento, por favor.';
+        }
+        loadingOverlay.classList.add('is-open');
+        loadingOverlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('cb-loading-active');
+    }
+
+    window.cbShowLoading = showLoadingOverlay;
+
+    window.addEventListener('beforeunload', function(e) {
+        if (loadingActive) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    document.querySelectorAll('form.cb-loading-form').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            var title = form.getAttribute('data-loading-title') || 'Procesando…';
+            var message = form.getAttribute('data-loading-message') || 'Espere un momento, por favor.';
+            showLoadingOverlay(title, message);
+            form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+                btn.disabled = true;
+            });
+        });
+    });
+
     const confirmButtons = document.querySelectorAll('.confirm-action');
     confirmButtons.forEach(function(button) {
         button.addEventListener('click', function(e) {

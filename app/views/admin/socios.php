@@ -58,6 +58,10 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
 $juntaComuna = $_SESSION['user_junta_comuna'] ?? '';
 $usesCalles = $data['uses_calles'] ?? true;
 $orgTipo = $data['org_tipo'] ?? 'Junta de Vecinos';
+$callesList = $data['calles'] ?? [];
+usort($callesList, static function ($a, $b) {
+    return strcasecmp($a->nombre ?? '', $b->nombre ?? '');
+});
 $cambiosPendientes = $data['cambios_pendientes'] ?? [];
 $cambiosRevisionData = [];
 if ($canManageSocios && !empty($cambiosPendientes)) {
@@ -695,22 +699,24 @@ foreach ($data['calles'] as $calleItem) {
                 </div>
             </div>
         </form>
-        <?php if (empty($data['calles'])): ?>
-            <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 1rem 0;">Aún no hay calles creadas.</p>
-        <?php else: ?>
-            <div style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
-                <?php foreach ($data['calles'] as $calle): ?>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.65rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 0.85rem;">
-                        <span style="font-weight: 600;"><?php echo htmlspecialchars($calle->nombre); ?></span>
-                        <form action="<?php echo URLROOT; ?>/admin/calle_eliminar/<?php echo $calle->id; ?>" method="POST" style="margin: 0;">
-                            <button type="submit" class="btn btn-danger btn-sm confirm-action"
-                                    data-confirm-message="¿Eliminar la calle '<?php echo htmlspecialchars($calle->nombre); ?>'? Los socios quedarán sin calle asociada."
-                                    style="padding: 0.25rem 0.4rem; font-size: 0.72rem;">Eliminar</button>
-                        </form>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+
+        <div class="calles-search-panel">
+            <label for="callesSearchInput" class="form-label">Buscar calle</label>
+            <input type="search"
+                   id="callesSearchInput"
+                   class="form-control calles-search-input"
+                   placeholder="Escriba parte del nombre (ej: MONTT, CARMEN)..."
+                   autocomplete="off">
+            <p class="calles-search-meta">
+                <span id="callesSearchCount"><?php echo count($callesList); ?> calles</span>
+                <span class="calles-search-hint">· orden alfabético</span>
+            </p>
+            <p class="calles-search-no-results" id="callesSearchEmpty" hidden>No hay calles que coincidan con su búsqueda.</p>
+            <?php
+            $showDelete = true;
+            require APPROOT . '/views/partials/calles_busqueda_lista.php';
+            ?>
+        </div>
     </div>
 </div>
 <?php endif; ?>
@@ -945,7 +951,33 @@ foreach ($data['calles'] as $calleItem) {
             <p style="margin: 0.35rem 0 0;">La calle debe existir previamente en la junta. Filas con errores no se importan; las observaciones son avisos para cuando active al socio.</p>
         </details>
 
-        <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST">
+        <?php if ($usesCalles && $canManageSocios): ?>
+        <div class="calles-search-panel calles-search-panel--compact" style="margin-bottom: 1rem;">
+            <div class="calles-search-panel-head">
+                <label for="bulkCallesSearchInput" class="form-label" style="margin-bottom: 0.35rem;">Calles registradas en la junta</label>
+                <button type="button" class="btn btn-secondary btn-sm" data-open-modal="callesModal">Gestionar calles</button>
+            </div>
+            <input type="search"
+                   id="bulkCallesSearchInput"
+                   class="form-control calles-search-input"
+                   placeholder="Busque si la calle del Excel existe (ej: PRESIDENTE JORGE MONTT)..."
+                   autocomplete="off">
+            <p class="calles-search-meta">
+                <span id="bulkCallesSearchCount"><?php echo count($callesList); ?> calles</span>
+                <span class="calles-search-hint">· orden alfabético</span>
+            </p>
+            <p class="calles-search-no-results" id="bulkCallesSearchEmpty" hidden>No hay calles que coincidan. Debe crearla en «Gestionar calles» antes de importar.</p>
+            <?php
+            $listId = 'bulkCallesList';
+            $showDelete = false;
+            require APPROOT . '/views/partials/calles_busqueda_lista.php';
+            ?>
+        </div>
+        <?php endif; ?>
+
+        <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST" class="cb-loading-form"
+              data-loading-title="Validando planilla"
+              data-loading-message="Estamos revisando fila por fila. En unos segundos verá el resultado abajo.">
             <div class="form-group">
                 <label class="form-label">Datos (Excel / planilla)</label>
                 <textarea name="bulk_data" class="form-control" rows="8" placeholder="Pegue aquí las filas copiadas desde Excel..." required></textarea>
@@ -1033,10 +1065,24 @@ foreach ($data['calles'] as $calleItem) {
                     </tbody>
                 </table>
             </div>
-            <?php if (!empty($bulkPreview['valid_rows'])): ?>
-            <form action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST">
-                <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Importar <?php echo count($bulkPreview['valid_rows']); ?> registro(s) como PRE-VALIDAR?">
-                    Confirmar importación (<?php echo count($bulkPreview['valid_rows']); ?>)
+            <?php if (!empty($bulkPreview['valid_rows'])):
+                $importCount = count($bulkPreview['valid_rows']);
+                $estSeconds = max(8, (int)ceil($importCount * 1.2));
+                if ($estSeconds >= 60) {
+                    $estTimeLabel = 'aprox. ' . (int)ceil($estSeconds / 60) . ' min';
+                } else {
+                    $estTimeLabel = 'aprox. ' . $estSeconds . ' seg';
+                }
+            ?>
+            <p class="bulk-import-processing-note">
+                Al confirmar, el sistema registrará <?php echo $importCount; ?> socio(s) y georreferenciará domicilios si hace falta.
+                Tiempo estimado: <strong><?php echo $estTimeLabel; ?></strong>. Debe permanecer en esta pestaña hasta que termine.
+            </p>
+            <form action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST" class="cb-loading-form"
+                  data-loading-title="Importando socios"
+                  data-loading-message="Registrando <?php echo $importCount; ?> socio(s). Tiempo estimado: <?php echo $estTimeLabel; ?>. No cierre ni recargue esta ventana; no podrá usar el portal hasta que finalice.">
+                <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Importar <?php echo $importCount; ?> registro(s) como PRE-VALIDAR?">
+                    Confirmar importación (<?php echo $importCount; ?>)
                 </button>
             </form>
             <?php endif; ?>
@@ -1281,6 +1327,55 @@ document.addEventListener('DOMContentLoaded', function() {
         const el = document.getElementById(id);
         if (el) el.value = val || '';
     }
+
+    function normalizeCalleQuery(str) {
+        return (str || '').toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ').trim();
+    }
+
+    function bindCallesSearch(inputEl, listEl, countEl, emptyEl) {
+        if (!inputEl || !listEl) {
+            return;
+        }
+        const items = listEl.querySelectorAll('.calles-list-item');
+        const total = items.length;
+        function applyFilter() {
+            const q = normalizeCalleQuery(inputEl.value);
+            let visible = 0;
+            items.forEach(function(item) {
+                const name = normalizeCalleQuery(item.getAttribute('data-calle-search') || '');
+                const show = q === '' || name.includes(q);
+                item.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            if (countEl) {
+                countEl.textContent = q
+                    ? (visible + ' de ' + total + ' calles')
+                    : (total + ' calles');
+            }
+            if (emptyEl) {
+                emptyEl.hidden = visible > 0 || total === 0;
+            }
+        }
+        inputEl.addEventListener('input', applyFilter);
+        applyFilter();
+    }
+
+    bindCallesSearch(
+        document.getElementById('callesSearchInput'),
+        document.getElementById('callesList'),
+        document.getElementById('callesSearchCount'),
+        document.getElementById('callesSearchEmpty')
+    );
+    bindCallesSearch(
+        document.getElementById('bulkCallesSearchInput'),
+        document.getElementById('bulkCallesList'),
+        document.getElementById('bulkCallesSearchCount'),
+        document.getElementById('bulkCallesSearchEmpty')
+    );
 
     function setDomicilioFromDataset(prefix, dataset) {
         setField(prefix + 'calle_id', dataset.calleId);
