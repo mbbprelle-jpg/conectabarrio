@@ -186,3 +186,43 @@ class SocioController extends Controller {
     }
 
     public function comprobantes() {
+        $socioId = $_SESSION['user_id'];
+        $juntaId = $_SESSION['user_junta_id'];
+
+        $transacciones = $this->transaccionModel->getTransaccionesBySocio($socioId, $juntaId);
+
+        $data = [
+            'title' => 'Mis Comprobantes de Pago',
+            'header_title' => 'Historial de Comprobantes',
+            'header_subtitle' => 'Visualice e imprima los comprobantes de sus cuotas registradas por la directiva',
+            'active_menu' => 'comprobantes',
+            'transacciones' => $transacciones,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+
+        $this->view('socio/comprobantes', $data);
+    }
+
+    public function comprobante($id) {
+        $socioId = (int)$_SESSION['user_id'];
+        $pago = $this->transaccionModel->getComprobanteById($id);
+
+        if (!$pago || (int)$pago->socio_id !== $socioId
+            || (int)$pago->junta_id !== (int)($_SESSION['user_junta_id'] ?? 0)) {
+            $_SESSION['error_msg'] = 'No tiene autorización para visualizar este comprobante.';
+            $this->redirect('/socio/comprobantes');
+            return;
+        }
+
+        $data = [
+            'title' => 'Comprobante Folio #' . str_pad($pago->id, 6, '0', STR_PAD_LEFT),
+            'pago' => $pago,
+            'is_socio_view' => true,
+            'back_url' => URLROOT . '/socio/comprobantes',
+        ];
+
+        $this->view('admin/comprobante_detalle', $data);
+    }
+}
