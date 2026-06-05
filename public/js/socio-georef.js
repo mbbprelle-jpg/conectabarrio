@@ -52,6 +52,8 @@
         this.lngInput = document.getElementById(this.prefix + 'longitud');
         this.linkInput = document.getElementById(this.prefix + 'link_google');
         this.statusEl = document.getElementById(this.prefix + 'georef_status');
+        this.coordsTextEl = document.getElementById(this.prefix + 'georef_coords_text');
+        this.coordsLinkEl = document.getElementById(this.prefix + 'georef_coords_link');
         this.mapEl = document.getElementById(this.prefix + 'georef_map');
         this.map = null;
         this.marker = null;
@@ -66,6 +68,29 @@
         this.statusEl.style.color = isError ? 'var(--danger, #ef4444)' : 'var(--text-muted)';
     };
 
+    SocioGeorefMap.prototype.updateCoordsDisplay = function () {
+        var lat = this.latInput ? this.latInput.value.trim() : '';
+        var lng = this.lngInput ? this.lngInput.value.trim() : '';
+        var link = this.linkInput ? this.linkInput.value.trim() : '';
+
+        if (this.coordsTextEl) {
+            if (lat && lng) {
+                this.coordsTextEl.textContent = lat + ', ' + lng;
+            } else {
+                this.coordsTextEl.textContent = 'Sin ubicación — seleccione dirección o mueva el marcador';
+            }
+        }
+
+        if (this.coordsLinkEl) {
+            if (lat && lng) {
+                this.coordsLinkEl.href = link || buildGoogleMapsLink(lat, lng);
+                this.coordsLinkEl.style.display = '';
+            } else {
+                this.coordsLinkEl.style.display = 'none';
+            }
+        }
+    };
+
     SocioGeorefMap.prototype.setCoords = function (lat, lng, silent) {
         if (this.latInput) {
             this.latInput.value = lat;
@@ -76,6 +101,7 @@
         if (this.linkInput) {
             this.linkInput.value = buildGoogleMapsLink(lat, lng);
         }
+        this.updateCoordsDisplay();
         if (!silent) {
             this.setStatus('Ubicación confirmada. Puede mover el marcador para afinar.');
         }
@@ -113,6 +139,7 @@
         if (!isNaN(lat) && !isNaN(lng)) {
             this.setStatus('Ubicación cargada. Puede mover el marcador si no es exacta.');
         }
+        this.updateCoordsDisplay();
     };
 
     SocioGeorefMap.prototype.refreshView = function () {
@@ -261,6 +288,7 @@
             if (this.linkInput) {
                 this.linkInput.value = link || buildGoogleMapsLink(lat, lng);
             }
+            this.updateCoordsDisplay();
             this.ensureMap();
             this.refreshView();
         }
@@ -281,6 +309,7 @@
 
     SocioGeorefMap.prototype.init = function () {
         this.bindEvents();
+        this.updateCoordsDisplay();
         var lat = this.latInput && this.latInput.value;
         var lng = this.lngInput && this.lngInput.value;
         if (lat && lng) {

@@ -944,6 +944,42 @@ select.form-control {
     margin-bottom: 1rem;
 }
 
+.socio-georef-coords {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.75rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 0.78rem;
+}
+
+.socio-georef-coords-label {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.socio-georef-coords-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text-main);
+    letter-spacing: 0.02em;
+}
+
+.socio-georef-coords-link {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.socio-georef-coords-link:hover {
+    text-decoration: underline;
+}
+
 
 .grid-2col {
     display: grid;

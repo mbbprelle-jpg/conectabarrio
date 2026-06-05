@@ -28,6 +28,21 @@ $linkGoogle = $georefValues['link_google'] ?? '';
         <?php endif; ?>
     </p>
     <div id="<?php echo htmlspecialchars($georefPrefix); ?>georef_map" class="socio-georef-map" role="region" aria-label="Mapa de ubicación del domicilio"></div>
+    <div id="<?php echo htmlspecialchars($georefPrefix); ?>georef_coords" class="socio-georef-coords" aria-live="polite">
+        <span class="socio-georef-coords-label">Coordenadas del pin:</span>
+        <span id="<?php echo htmlspecialchars($georefPrefix); ?>georef_coords_text" class="socio-georef-coords-value">
+            <?php if ($latitud !== '' && $longitud !== ''): ?>
+                <?php echo htmlspecialchars((string)$latitud); ?>, <?php echo htmlspecialchars((string)$longitud); ?>
+            <?php else: ?>
+                Sin ubicación — seleccione dirección o mueva el marcador
+            <?php endif; ?>
+        </span>
+        <?php if ($linkGoogle !== ''): ?>
+            <a id="<?php echo htmlspecialchars($georefPrefix); ?>georef_coords_link" class="socio-georef-coords-link" href="<?php echo htmlspecialchars($linkGoogle); ?>" target="_blank" rel="noopener noreferrer">Ver en mapa</a>
+        <?php else: ?>
+            <a id="<?php echo htmlspecialchars($georefPrefix); ?>georef_coords_link" class="socio-georef-coords-link" href="#" target="_blank" rel="noopener noreferrer" style="display: none;">Ver en mapa</a>
+        <?php endif; ?>
+    </div>
     <input type="hidden" name="latitud" id="<?php echo htmlspecialchars($georefPrefix); ?>latitud" value="<?php echo htmlspecialchars((string)$latitud); ?>">
     <input type="hidden" name="longitud" id="<?php echo htmlspecialchars($georefPrefix); ?>longitud" value="<?php echo htmlspecialchars((string)$longitud); ?>">
     <input type="hidden" name="link_google" id="<?php echo htmlspecialchars($georefPrefix); ?>link_google" value="<?php echo htmlspecialchars($linkGoogle); ?>">
