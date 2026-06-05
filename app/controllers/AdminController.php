@@ -603,25 +603,24 @@ class AdminController extends Controller {
         }
         require_once APPROOT . '/core/SocioBulkImport.php';
         require_once APPROOT . '/core/RutChile.php';
+        require_once APPROOT . '/core/OrgHelper.php';
 
         $post = $this->sanitizePost();
         $raw = trim($post['bulk_data'] ?? '');
         $juntaId = (int)$_SESSION['user_junta_id'];
+        $usesCalles = OrgHelper::usesCallesJurisdiccion($_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos');
 
         $this->db->query('SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC');
         $this->db->bind(':junta_id', $juntaId);
         $calles = $this->db->resultSet();
 
-        $result = SocioBulkImport::parse($raw, $calles, $juntaId);
+        $result = SocioBulkImport::parse($raw, $calles, $juntaId, $usesCalles);
         $validRows = [];
-        $validCount = 0;
-        $errorCount = 0;
         foreach ($result['rows'] as $idx => $row) {
             if (!$row['valid']) {
-                $errorCount++;
                 continue;
             }
-            $data = $row['data'];
+            $data = SocioBulkImport::stripInternalFields($row['data']);
             $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
             $rowErrors = [];
             $existing = $this->userModel->findUserByRut($data['rut']);
@@ -648,14 +647,26 @@ class AdminController extends Controller {
             if (!empty($rowErrors)) {
                 $result['rows'][$idx]['valid'] = false;
                 $result['rows'][$idx]['errors'] = array_merge($row['errors'], $rowErrors);
-                $errorCount++;
             } else {
                 $validRows[] = $data;
+            }
+        }
+        $validCount = 0;
+        $errorCount = 0;
+        $warningCount = 0;
+        foreach ($result['rows'] as $row) {
+            if ($row['valid']) {
                 $validCount++;
+                if (!empty($row['warnings'])) {
+                    $warningCount++;
+                }
+            } else {
+                $errorCount++;
             }
         }
         $result['valid_count'] = $validCount;
         $result['error_count'] = $errorCount;
+        $result['warning_count'] = $warningCount;
 
         $_SESSION['bulk_import_preview'] = [
             'junta_id' => $juntaId,
@@ -664,8 +675,13 @@ class AdminController extends Controller {
             'result' => $result,
         ];
 
-        $_SESSION['success_msg'] = 'Validación completada: ' . (int)$result['valid_count'] . ' fila(s) válida(s), '
-            . (int)$result['error_count'] . ' con errores.';
+        $msg = 'Validación completada: ' . (int)$result['valid_count'] . ' fila(s) importable(s), '
+            . (int)$result['error_count'] . ' con errores';
+        if ($warningCount > 0) {
+            $msg .= ', ' . $warningCount . ' con observaciones (se importan, pero revise antes de activar)';
+        }
+        $msg .= '.';
+        $_SESSION['success_msg'] = $msg;
         $this->redirect('/admin/socios');
     }
 

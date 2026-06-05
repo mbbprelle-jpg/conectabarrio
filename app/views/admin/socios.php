@@ -941,7 +941,8 @@ foreach ($data['calles'] as $calleItem) {
         <details style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
             <summary style="cursor: pointer; color: var(--primary);">Columnas esperadas</summary>
             <p style="margin: 0.5rem 0 0;">id_socio, rut, nombres, apellido_paterno, apellido_materno, email, telefono, genero, fecha_nacimiento, estado_civil, nacionalidad, profesion, calle, numero_casa, latitud, longitud, link_google, fecha_inicio</p>
-            <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres y apellido paterno. Apellido materno y correo pueden quedar vacíos.</p>
+            <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres y apellido paterno. Fechas en formato <strong>dd-mm-yyyy</strong> (como en Excel). Estado civil: CASADO/A, SOLTERO/A, etc.</p>
+            <p style="margin: 0.35rem 0 0;">La calle debe existir previamente en la junta. Filas con errores no se importan; las observaciones son avisos para cuando active al socio.</p>
         </details>
 
         <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST">
@@ -959,24 +960,72 @@ foreach ($data['calles'] as $calleItem) {
         <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
             <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem;">Resultado de validación</h4>
             <p style="font-size: 0.82rem; margin-bottom: 0.75rem;">
-                <span style="color: var(--success);"><?php echo (int)($bulkPreview['result']['valid_count'] ?? 0); ?> válida(s)</span>
+                <span style="color: var(--success);"><?php echo (int)($bulkPreview['result']['valid_count'] ?? 0); ?> importable(s)</span>
                 ·
                 <span style="color: var(--danger);"><?php echo (int)($bulkPreview['result']['error_count'] ?? 0); ?> con error(es)</span>
+                <?php if (!empty($bulkPreview['result']['warning_count'])): ?>
+                ·
+                <span style="color: var(--warning);"><?php echo (int)$bulkPreview['result']['warning_count']; ?> con observaciones</span>
+                <?php endif; ?>
             </p>
-            <div class="table-responsive" style="max-height: 220px; overflow-y: auto; margin-bottom: 1rem;">
-                <table class="table" style="font-size: 0.78rem;">
-                    <thead><tr><th>Fila</th><th>RUT</th><th>Nombre</th><th>Estado</th></tr></thead>
-                    <tbody>
-                    <?php foreach ($bulkPreview['result']['rows'] as $brow): ?>
+            <div class="table-responsive" style="max-height: 320px; overflow-y: auto; margin-bottom: 1rem;">
+                <table class="table bulk-import-preview-table" style="font-size: 0.75rem;">
+                    <thead>
                         <tr>
+                            <th>Fila</th>
+                            <th>RUT</th>
+                            <th>Nombre</th>
+                            <th>Estado</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($bulkPreview['result']['rows'] as $brow):
+                        $d = $brow['data'] ?? [];
+                        $fechaInicio = !empty($d['fecha_inicio']) ? date('d-m-Y', strtotime($d['fecha_inicio'])) : '—';
+                    ?>
+                        <tr class="<?php echo !$brow['valid'] ? 'bulk-import-row--error' : (!empty($brow['warnings']) ? 'bulk-import-row--warn' : 'bulk-import-row--ok'); ?>">
                             <td><?php echo (int)$brow['line']; ?></td>
-                            <td style="font-family: monospace;"><?php echo htmlspecialchars($brow['data']['rut'] ?? ''); ?></td>
-                            <td><?php echo htmlspecialchars(trim(($brow['data']['nombres'] ?? '') . ' ' . ($brow['data']['apellido_paterno'] ?? ''))); ?></td>
+                            <td style="font-family: monospace;"><?php echo htmlspecialchars($d['rut'] ?? ''); ?></td>
+                            <td><?php echo htmlspecialchars(trim(($d['nombres'] ?? '') . ' ' . ($d['apellido_paterno'] ?? ''))); ?></td>
                             <td>
-                                <?php if ($brow['valid']): ?>
-                                    <span style="color: var(--success);">OK</span>
+                                <?php if (!$brow['valid']): ?>
+                                    <span class="bulk-import-badge bulk-import-badge--error">Error</span>
+                                <?php elseif (!empty($brow['warnings'])): ?>
+                                    <span class="bulk-import-badge bulk-import-badge--warn">OK · revisar</span>
                                 <?php else: ?>
-                                    <span style="color: var(--danger);"><?php echo htmlspecialchars(implode(', ', $brow['errors'])); ?></span>
+                                    <span class="bulk-import-badge bulk-import-badge--ok">OK</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="bulk-import-detail">
+                                <?php if (!$brow['valid']): ?>
+                                    <ul class="bulk-import-msg-list bulk-import-msg-list--error">
+                                        <?php foreach ($brow['errors'] as $err): ?>
+                                            <li><?php echo htmlspecialchars($err); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php else: ?>
+                                    <?php if (!empty($brow['warnings'])): ?>
+                                    <ul class="bulk-import-msg-list bulk-import-msg-list--warn">
+                                        <?php foreach ($brow['warnings'] as $warn): ?>
+                                            <li><?php echo htmlspecialchars($warn); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                    <?php endif; ?>
+                                    <div class="bulk-import-normalized">
+                                        <?php if (!empty($d['estado_civil'])): ?>
+                                            <span>Estado civil: <?php echo htmlspecialchars(SocioInput::estadoCivilLabel($d['estado_civil'])); ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($d['nacionalidad'])): ?>
+                                            <span>Nacionalidad: <?php echo htmlspecialchars($d['nacionalidad']); ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($d['fecha_inicio'])): ?>
+                                            <span>Inicio: <?php echo htmlspecialchars($fechaInicio); ?></span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($d['calle_id'])): ?>
+                                            <span>Calle vinculada</span>
+                                        <?php endif; ?>
+                                    </div>
                                 <?php endif; ?>
                             </td>
                         </tr>

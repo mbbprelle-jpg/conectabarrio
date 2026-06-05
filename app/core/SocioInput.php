@@ -83,11 +83,47 @@ class SocioInput {
 
     public static function normalizeEstadoCivil($estadoCivil) {
         $key = mb_strtoupper(trim((string)$estadoCivil), 'UTF-8');
-        $key = str_replace(' ', '_', $key);
+        $key = preg_replace('/\/A$/u', '', $key);
+        $key = str_replace([' ', '/'], '_', $key);
+        $key = preg_replace('/_+/', '_', $key);
+        $key = rtrim($key, '_');
+        if (preg_match('/^(SOLTERO|CASADO|DIVORCIADO|VIUDO)_A$/u', $key, $m)) {
+            $key = $m[1];
+        }
         if ($key === 'NO_INFORMAR' || $key === 'NOINFORMAR') {
             return 'NO_INFORMAR';
         }
+        if ($key === 'CONVIVIENTE_CIVIL' || $key === 'CONVIVIENTE') {
+            return 'CONVIVIENTE_CIVIL';
+        }
         return array_key_exists($key, self::ESTADOS_CIVILES) ? $key : null;
+    }
+
+    /**
+     * Convierte fechas de Excel (dd-mm-yyyy, dd/mm/yyyy) a Y-m-d.
+     * @return string|null|false null si vacío, false si formato inválido
+     */
+    public static function parseExcelDate($value) {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return null;
+        }
+        if (preg_match('/^(\d{1,2})[-\/\.](\d{1,2})[-\/\.](\d{4})$/', $value, $m)) {
+            $day = (int)$m[1];
+            $month = (int)$m[2];
+            $year = (int)$m[3];
+            if (checkdate($month, $day, $year)) {
+                return sprintf('%04d-%02d-%02d', $year, $month, $day);
+            }
+            return false;
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m)) {
+            if (checkdate((int)$m[2], (int)$m[3], (int)$m[1])) {
+                return $value;
+            }
+            return false;
+        }
+        return false;
     }
 
     public static function normalizeNacionalidad($nacionalidad) {
