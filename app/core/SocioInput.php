@@ -90,7 +90,7 @@ class SocioInput {
         if (preg_match('/^(SOLTERO|CASADO|DIVORCIADO|VIUDO)_A$/u', $key, $m)) {
             $key = $m[1];
         }
-        if ($key === 'NO_INFORMAR' || $key === 'NOINFORMAR') {
+        if (in_array($key, ['NO_INFORMAR', 'NOINFORMAR', 'NO_INFORMADO', 'NO_INFORMADA', 'NI'], true)) {
             return 'NO_INFORMAR';
         }
         if ($key === 'CONVIVIENTE_CIVIL' || $key === 'CONVIVIENTE') {

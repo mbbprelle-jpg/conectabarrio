@@ -183,6 +183,11 @@ class SocioBulkImport {
             $fechaInicio = date('Y-m-d');
         }
 
+        $estadoCivil = SocioInput::normalizeEstadoCivil($estadoCivilRaw);
+        if ($estadoCivil === null && trim($estadoCivilRaw) === '') {
+            $estadoCivil = 'NO_INFORMAR';
+        }
+
         $latRaw = self::cell($cells, $map, 'latitud');
         $lngRaw = self::cell($cells, $map, 'longitud');
         $linkRaw = mb_strtolower(self::cell($cells, $map, 'link_google'), 'UTF-8');
@@ -203,7 +208,7 @@ class SocioBulkImport {
             'telefono' => SocioInput::normalizeTelefono(self::cell($cells, $map, 'telefono')),
             'genero' => SocioInput::normalizeGenero($generoRaw),
             'fecha_nacimiento' => $fechaNacimiento === false ? null : $fechaNacimiento,
-            'estado_civil' => SocioInput::normalizeEstadoCivil($estadoCivilRaw),
+            'estado_civil' => $estadoCivil,
             'nacionalidad' => SocioInput::normalizeNacionalidad($nacionalidadRaw),
             'profesion' => SocioInput::normalizeProfesion(self::cell($cells, $map, 'profesion')),
             'calle_id' => $calleId,
@@ -273,7 +278,7 @@ class SocioBulkImport {
             $errors[] = 'Género no reconocido (use MASCULINO, FEMENINO o NO ESPECIFICAR)';
         }
         if (($meta['estado_civil_raw'] ?? '') !== '' && empty($data['estado_civil'])) {
-            $errors[] = 'Estado civil no reconocido (ej: CASADO/A, SOLTERO/A, VIUDO/A)';
+            $errors[] = 'Estado civil no reconocido (use CASADO/A, SOLTERO/A, NO INFORMAR, NO INFORMADO, etc.)';
         }
         if (($meta['nacionalidad_raw'] ?? '') !== '' && empty($data['nacionalidad'])) {
             $errors[] = 'Nacionalidad no reconocida (ej: CHILENA, ARGENTINA)';
@@ -291,9 +296,6 @@ class SocioBulkImport {
         }
         if (empty($data['genero']) && ($meta['genero_raw'] ?? '') === '') {
             $warnings[] = 'Falta género (requerido al activar la cuenta)';
-        }
-        if (empty($data['estado_civil']) && ($meta['estado_civil_raw'] ?? '') === '') {
-            $warnings[] = 'Falta estado civil (requerido al activar la cuenta)';
         }
         if (empty($data['nacionalidad']) && ($meta['nacionalidad_raw'] ?? '') === '') {
             $warnings[] = 'Falta nacionalidad (requerida al activar la cuenta)';

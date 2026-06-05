@@ -947,7 +947,8 @@ foreach ($data['calles'] as $calleItem) {
         <details style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
             <summary style="cursor: pointer; color: var(--primary);">Columnas esperadas</summary>
             <p style="margin: 0.5rem 0 0;">id_socio, rut, nombres, apellido_paterno, apellido_materno, email, telefono, genero, fecha_nacimiento, estado_civil, nacionalidad, profesion, calle, numero_casa, latitud, longitud, link_google, fecha_inicio</p>
-            <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres y apellido paterno. Fechas en formato <strong>dd-mm-yyyy</strong> (como en Excel). Estado civil: CASADO/A, SOLTERO/A, etc.</p>
+            <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres y apellido paterno. Fechas en formato <strong>dd-mm-yyyy</strong> (como en Excel).</p>
+            <p style="margin: 0.35rem 0 0;">Estado civil: CASADO/A, SOLTERO/A, VIUDO/A, <strong>NO INFORMAR</strong> o <strong>NO INFORMADO</strong>. Si lo deja vacío, se registrará como «No informar».</p>
             <p style="margin: 0.35rem 0 0;">La calle debe existir previamente en la junta. Filas con errores no se importan; las observaciones son avisos para cuando active al socio.</p>
         </details>
 
