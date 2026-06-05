@@ -55,6 +55,11 @@ $bulkPreview = $data['bulk_import_preview'] ?? null;
 $invitacionesActivas = $data['invitaciones_activas'] ?? [];
 $cuotaVigente = !empty($data['cuotas_historial']) ? $data['cuotas_historial'][0] : null;
 $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',', '.') : '0';
+$juntaComuna = $_SESSION['user_junta_comuna'] ?? '';
+$callesGeorefMap = [];
+foreach ($data['calles'] as $calleItem) {
+    $callesGeorefMap[(string)$calleItem->id] = $calleItem->nombre;
+}
 ?>
 
 <?php if (!empty($sociosPendientes) && $canManageSocios): ?>
@@ -159,6 +164,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                     data-profesion="<?php echo htmlspecialchars($pend->profesion ?? ''); ?>"
                                     data-calle-id="<?php echo (int)($pend->calle_id ?? 0); ?>"
                                     data-numero-casa="<?php echo htmlspecialchars($pend->numero_casa ?? ''); ?>"
+                                    data-latitud="<?php echo htmlspecialchars($pend->latitud ?? ''); ?>"
+                                    data-longitud="<?php echo htmlspecialchars($pend->longitud ?? ''); ?>"
+                                    data-link-google="<?php echo htmlspecialchars($pend->link_google ?? ''); ?>"
                                     style="font-size: 0.75rem;">
                                     Revisar / Aprobar
                                 </button>
@@ -229,6 +237,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                     data-profesion="<?php echo htmlspecialchars($prev->profesion ?? ''); ?>"
                                     data-calle-id="<?php echo (int)($prev->calle_id ?? 0); ?>"
                                     data-numero-casa="<?php echo htmlspecialchars($prev->numero_casa ?? ''); ?>"
+                                    data-latitud="<?php echo htmlspecialchars($prev->latitud ?? ''); ?>"
+                                    data-longitud="<?php echo htmlspecialchars($prev->longitud ?? ''); ?>"
+                                    data-link-google="<?php echo htmlspecialchars($prev->link_google ?? ''); ?>"
                                     style="font-size: 0.75rem;">
                                     Revisar / Activar
                                 </button>
@@ -355,6 +366,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                                                 data-fecha-inicio="<?php echo htmlspecialchars(cbFechaSocioInput($socio)); ?>"
                                                 data-calle-id="<?php echo (int)($socio->calle_id ?? 0); ?>"
                                                 data-numero-casa="<?php echo htmlspecialchars($socio->numero_casa ?? ''); ?>"
+                                                data-latitud="<?php echo htmlspecialchars($socio->latitud ?? ''); ?>"
+                                                data-longitud="<?php echo htmlspecialchars($socio->longitud ?? ''); ?>"
+                                                data-link-google="<?php echo htmlspecialchars($socio->link_google ?? ''); ?>"
                                                 style="padding: 0.4rem 0.6rem;">
                                             Editar
                                         </button>
@@ -519,6 +533,14 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <label for="numero_casa" class="form-label">Número de Casa *</label>
                 <input type="text" name="numero_casa" id="numero_casa" class="form-control" required>
             </div>
+            <?php
+            $georefPrefix = '';
+            $calleSelectId = 'calle_id';
+            $numeroInputId = 'numero_casa';
+            $georefValues = [];
+            $georefComuna = $juntaComuna;
+            require APPROOT . '/views/partials/socio_georef_map.php';
+            ?>
             <div class="alert alert-success" id="inscribirSocioClaveHint" style="padding: 0.8rem; font-size: 0.75rem; margin-bottom: 1rem;">
                 <span id="inscribirClaveConCorreo">Con correo: clave inicial <strong>socio123</strong>.</span>
                 <span id="inscribirClaveSinCorreo" style="display: none;">Sin correo: alta provisional. Clave inicial = <strong>primeros 6 dígitos del RUT</strong> (sin puntos ni guión).</span>
@@ -694,7 +716,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
             <?php
             $id = 'edit_telefono';
             $name = 'telefono';
-            $label = 'Teléfono';
+            $telefonoLabel = 'Teléfono';
             $required = false;
             $value = '';
             require APPROOT . '/views/partials/campo_telefono_cl.php';
@@ -718,6 +740,14 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                     <input type="text" name="numero_casa" id="edit_numero_casa" class="form-control" required>
                 </div>
             </div>
+            <?php
+            $georefPrefix = 'edit_';
+            $calleSelectId = 'edit_calle_id';
+            $numeroInputId = 'edit_numero_casa';
+            $georefValues = [];
+            $georefComuna = $juntaComuna;
+            require APPROOT . '/views/partials/socio_georef_map.php';
+            ?>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
                 <button type="button" class="btn btn-secondary" id="cancelEditarSocioModal">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Guardar cambios</button>
@@ -773,7 +803,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
             <?php
             $id = 'pend_telefono';
             $name = 'telefono';
-            $label = 'Teléfono';
+            $telefonoLabel = 'Teléfono';
             $required = false;
             $value = '';
             require APPROOT . '/views/partials/campo_telefono_cl.php';
@@ -797,6 +827,14 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                     <input type="text" name="numero_casa" id="pend_numero_casa" class="form-control" required>
                 </div>
             </div>
+            <?php
+            $georefPrefix = 'pend_';
+            $calleSelectId = 'pend_calle_id';
+            $numeroInputId = 'pend_numero_casa';
+            $georefValues = [];
+            $georefComuna = $juntaComuna;
+            require APPROOT . '/views/partials/socio_georef_map.php';
+            ?>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
                 <button type="button" class="btn btn-secondary" id="cancelPendienteSocioModal">Cancelar</button>
                 <button type="submit" class="btn btn-secondary">Guardar cambios</button>
@@ -824,6 +862,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <input type="hidden" name="fecha_inicio" id="pend_aprobar_fecha_inicio">
                 <input type="hidden" name="calle_id" id="pend_aprobar_calle_id">
                 <input type="hidden" name="numero_casa" id="pend_aprobar_numero_casa">
+                <input type="hidden" name="latitud" id="pend_aprobar_latitud">
+                <input type="hidden" name="longitud" id="pend_aprobar_longitud">
+                <input type="hidden" name="link_google" id="pend_aprobar_link_google">
                 <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Aprobar registro y enviar correo con clave temporal al socio?">Aprobar y enviar acceso</button>
             </form>
         </div>
@@ -841,7 +882,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
         </p>
         <details style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
             <summary style="cursor: pointer; color: var(--primary);">Columnas esperadas</summary>
-            <p style="margin: 0.5rem 0 0;">id_socio, rut, nombres, apellido_paterno, apellido_materno, email, telefono, genero, fecha_nacimiento, estado_civil, nacionalidad, profesion, calle, numero_casa, fecha_inicio</p>
+            <p style="margin: 0.5rem 0 0;">id_socio, rut, nombres, apellido_paterno, apellido_materno, email, telefono, genero, fecha_nacimiento, estado_civil, nacionalidad, profesion, calle, numero_casa, latitud, longitud, link_google, fecha_inicio</p>
             <p style="margin: 0.35rem 0 0;">Mínimo obligatorio: rut, nombres y apellido paterno. Apellido materno y correo pueden quedar vacíos.</p>
         </details>
 
@@ -942,7 +983,7 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
             <?php
             $id = 'prev_telefono';
             $name = 'telefono';
-            $label = 'Teléfono';
+            $telefonoLabel = 'Teléfono';
             $required = false;
             $value = '';
             require APPROOT . '/views/partials/campo_telefono_cl.php';
@@ -966,6 +1007,14 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                     <input type="text" name="numero_casa" id="prev_numero_casa" class="form-control cb-uppercase">
                 </div>
             </div>
+            <?php
+            $georefPrefix = 'prev_';
+            $calleSelectId = 'prev_calle_id';
+            $numeroInputId = 'prev_numero_casa';
+            $georefValues = [];
+            $georefComuna = $juntaComuna;
+            require APPROOT . '/views/partials/socio_georef_map.php';
+            ?>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
                 <button type="button" class="btn btn-secondary" id="cancelPrevalidarSocioModal">Cancelar</button>
                 <button type="submit" class="btn btn-secondary">Guardar cambios</button>
@@ -993,6 +1042,9 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
                 <input type="hidden" name="fecha_inicio" id="prev_aprobar_fecha_inicio">
                 <input type="hidden" name="calle_id" id="prev_aprobar_calle_id">
                 <input type="hidden" name="numero_casa" id="prev_aprobar_numero_casa">
+                <input type="hidden" name="latitud" id="prev_aprobar_latitud">
+                <input type="hidden" name="longitud" id="prev_aprobar_longitud">
+                <input type="hidden" name="link_google" id="prev_aprobar_link_google">
                 <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Activar socio y enviar correo con clave temporal? (requiere correo válido)">Activar y enviar acceso</button>
             </form>
         </div>
@@ -1047,10 +1099,27 @@ $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',',
 <?php endif; ?>
 
 <?php if ($canManageSocios): ?>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="<?php echo URLROOT; ?>/js/socio-georef.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const openModal = (el) => { if (el) { el.classList.add('is-open'); document.body.style.overflow = 'hidden'; } };
     const closeModal = (el) => { if (el) { el.classList.remove('is-open'); document.body.style.overflow = ''; } };
+
+    const callesGeorefMap = <?php echo json_encode($callesGeorefMap, JSON_UNESCAPED_UNICODE); ?>;
+    const georefInstances = typeof initSocioGeorefMaps === 'function'
+        ? initSocioGeorefMaps(callesGeorefMap)
+        : {};
+
+    function loadGeoref(prefix, lat, lng, link) {
+        const instance = georefInstances[prefix || 'default'];
+        if (!instance) {
+            return;
+        }
+        instance.loadFromValues(lat || '', lng || '', link || '');
+        instance.refreshLayout();
+    }
 
     function telefonoDigits(value) {
         let digits = String(value || '').replace(/\D/g, '');
@@ -1148,6 +1217,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_fecha_inicio').value = this.dataset.fechaInicio || '';
             document.getElementById('edit_calle_id').value = this.dataset.calleId || '';
             document.getElementById('edit_numero_casa').value = this.dataset.numeroCasa || '';
+            loadGeoref('edit_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');
             openModal(editModal);
         });
     });
@@ -1173,6 +1243,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('pend_aprobar_fecha_inicio').value = document.getElementById('pend_fecha_inicio').value;
         document.getElementById('pend_aprobar_calle_id').value = document.getElementById('pend_calle_id').value;
         document.getElementById('pend_aprobar_numero_casa').value = document.getElementById('pend_numero_casa').value;
+        document.getElementById('pend_aprobar_latitud').value = document.getElementById('pend_latitud').value;
+        document.getElementById('pend_aprobar_longitud').value = document.getElementById('pend_longitud').value;
+        document.getElementById('pend_aprobar_link_google').value = document.getElementById('pend_link_google').value;
     };
     document.querySelectorAll('.btn-revisar-pendiente').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -1193,6 +1266,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('pend_profesion').value = this.dataset.profesion || '';
             document.getElementById('pend_calle_id').value = this.dataset.calleId || '';
             document.getElementById('pend_numero_casa').value = this.dataset.numeroCasa || '';
+            loadGeoref('pend_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');
             document.getElementById('formPendienteRechazar').action = '<?php echo URLROOT; ?>/admin/socio_pendiente_rechazar/' + id;
             syncPendienteApproveFields();
             openModal(pendModal);
@@ -1229,6 +1303,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('prev_aprobar_fecha_inicio').value = document.getElementById('prev_fecha_inicio').value;
         document.getElementById('prev_aprobar_calle_id').value = document.getElementById('prev_calle_id').value;
         document.getElementById('prev_aprobar_numero_casa').value = document.getElementById('prev_numero_casa').value;
+        document.getElementById('prev_aprobar_latitud').value = document.getElementById('prev_latitud').value;
+        document.getElementById('prev_aprobar_longitud').value = document.getElementById('prev_longitud').value;
+        document.getElementById('prev_aprobar_link_google').value = document.getElementById('prev_link_google').value;
     };
     document.querySelectorAll('.btn-revisar-prevalidar').forEach(btn => {
         btn.addEventListener('click', function() {
@@ -1249,6 +1326,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('prev_profesion').value = this.dataset.profesion || '';
             document.getElementById('prev_calle_id').value = this.dataset.calleId || '';
             document.getElementById('prev_numero_casa').value = this.dataset.numeroCasa || '';
+            loadGeoref('prev_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');
             document.getElementById('formPrevalidarEliminar').action = '<?php echo URLROOT; ?>/admin/socio_prevalidar_eliminar/' + id;
             syncPrevalidarApproveFields();
             openModal(prevalidarModal);
@@ -1312,6 +1390,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const end = this.selectionEnd;
             this.value = this.value.toUpperCase();
             this.setSelectionRange(start, end);
+        });
+    });
+
+    document.querySelectorAll('[data-open-modal="inscribirSocioModal"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            setTimeout(function() { loadGeoref('', '', '', ''); }, 250);
         });
     });
 

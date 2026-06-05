@@ -109,6 +109,9 @@ class InviteRutCheck {
             'calle_id' => $user->calle_id ?? '',
             'numero_casa' => $user->numero_casa ?? '',
             'fecha_inicio' => !empty($user->fecha_inicio) ? substr($user->fecha_inicio, 0, 10) : date('Y-m-d'),
+            'latitud' => $user->latitud ?? '',
+            'longitud' => $user->longitud ?? '',
+            'link_google' => $user->link_google ?? '',
             'prevalidar_user_id' => (int)$user->id,
         ];
     }

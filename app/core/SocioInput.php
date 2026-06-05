@@ -4,6 +4,7 @@ class SocioInput {
     public const GENEROS = ['MASCULINO', 'FEMENINO', 'NO ESPECIFICAR'];
 
     public const ESTADOS_CIVILES = [
+        'NO_INFORMAR' => 'No informar',
         'SOLTERO' => 'Soltero/a',
         'CASADO' => 'Casado/a',
         'CONVIVIENTE_CIVIL' => 'Conviviente Civil',
@@ -64,7 +65,7 @@ class SocioInput {
     ];
 
     public static function normalizeTextFields(array $data, array $skipKeys = []) {
-        $defaultSkip = ['email', 'password', 'token', 'calle_id', 'fecha_inicio', 'fecha_nacimiento', 'genero', 'estado_civil', 'nacionalidad', 'telefono'];
+        $defaultSkip = ['email', 'password', 'token', 'calle_id', 'fecha_inicio', 'fecha_nacimiento', 'genero', 'estado_civil', 'nacionalidad', 'telefono', 'latitud', 'longitud', 'link_google'];
         $skipKeys = array_unique(array_merge($defaultSkip, $skipKeys));
         foreach ($data as $key => $value) {
             if (in_array($key, $skipKeys, true) || !is_string($value)) {
@@ -82,6 +83,10 @@ class SocioInput {
 
     public static function normalizeEstadoCivil($estadoCivil) {
         $key = mb_strtoupper(trim((string)$estadoCivil), 'UTF-8');
+        $key = str_replace(' ', '_', $key);
+        if ($key === 'NO_INFORMAR' || $key === 'NOINFORMAR') {
+            return 'NO_INFORMAR';
+        }
         return array_key_exists($key, self::ESTADOS_CIVILES) ? $key : null;
     }
 

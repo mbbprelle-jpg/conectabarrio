@@ -317,7 +317,9 @@ class AdminController extends Controller {
 
     private function parseSocioFormData($post) {
         require_once APPROOT . '/core/SocioInput.php';
+        require_once APPROOT . '/core/SocioGeoref.php';
         $profile = SocioInput::parseProfileFromPost($post);
+        $georef = SocioGeoref::parseFromPost($post);
         $data = [
             'id_socio' => (int)($post['id_socio'] ?? 0),
             'rut' => trim($post['rut'] ?? ''),
@@ -334,6 +336,9 @@ class AdminController extends Controller {
             'estado_civil' => $profile['estado_civil'],
             'nacionalidad' => $profile['nacionalidad'],
             'profesion' => $profile['profesion'],
+            'latitud' => $georef['latitud'],
+            'longitud' => $georef['longitud'],
+            'link_google' => $georef['link_google'],
         ];
         return SocioInput::normalizeTextFields($data);
     }
@@ -599,6 +604,7 @@ class AdminController extends Controller {
             return;
         }
         require_once APPROOT . '/core/RutChile.php';
+        require_once APPROOT . '/core/SocioGeoref.php';
 
         $preview = $_SESSION['bulk_import_preview'] ?? null;
         $juntaId = (int)$_SESSION['user_junta_id'];
@@ -608,11 +614,24 @@ class AdminController extends Controller {
             return;
         }
 
+        $this->db->query('SELECT id, nombre FROM calles WHERE junta_id = :junta_id');
+        $this->db->bind(':junta_id', $juntaId);
+        $callesRows = $this->db->resultSet();
+        $callesById = [];
+        foreach ($callesRows as $calleRow) {
+            $callesById[(int)$calleRow->id] = $calleRow->nombre;
+        }
+        $comuna = $_SESSION['user_junta_comuna'] ?? '';
+
         $inserted = 0;
         $skipped = 0;
         foreach ($preview['valid_rows'] as $data) {
             $data['junta_id'] = $juntaId;
             $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
+            if (empty($data['latitud']) || empty($data['longitud'])) {
+                $data = SocioGeoref::resolveForSocio($data, $callesById, $comuna);
+                usleep(1100000);
+            }
             $existing = $this->userModel->findUserByRut($data['rut']);
             if ($existing) {
                 if (($existing->status ?? '') === 'prevalidar' && (int)$existing->junta_id === $juntaId) {

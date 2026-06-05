@@ -246,10 +246,12 @@ class InviteController extends Controller {
 
     private function parseRegistrationPost(array $post, $juntaId) {
         require_once APPROOT . '/core/SocioInput.php';
+        require_once APPROOT . '/core/SocioGeoref.php';
 
         $idSocioRaw = trim($post['id_socio'] ?? '');
         $idSocio = ($idSocioRaw !== '') ? (int)$idSocioRaw : null;
         $profile = SocioInput::parseProfileFromPost($post);
+        $georef = SocioGeoref::parseFromPost($post);
 
         $data = [
             'junta_id' => $juntaId,
@@ -271,6 +273,9 @@ class InviteController extends Controller {
             'estado_civil' => $profile['estado_civil'],
             'nacionalidad' => $profile['nacionalidad'],
             'profesion' => $profile['profesion'],
+            'latitud' => $georef['latitud'],
+            'longitud' => $georef['longitud'],
+            'link_google' => $georef['link_google'],
         ];
 
         return SocioInput::normalizeTextFields($data);

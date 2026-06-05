@@ -5,6 +5,7 @@ UPDATE usuarios SET estado_civil = NULL
 WHERE estado_civil IN ('SEPARADO', 'UNION_CIVIL');
 
 ALTER TABLE usuarios MODIFY COLUMN estado_civil ENUM(
+    'NO_INFORMAR',
     'SOLTERO',
     'CASADO',
     'CONVIVIENTE_CIVIL',

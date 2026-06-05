@@ -5,6 +5,7 @@ class User extends Model {
     private static $hasGeneroColumn = null;
     private static $hasEstadoCivilColumn = null;
     private static $hasProfesionColumn = null;
+    private static $hasGeorefColumn = null;
 
     private function hasCalleIdColumn() {
         if (self::$hasCalleIdColumn === null) {
@@ -71,6 +72,19 @@ class User extends Model {
         return self::$hasProfesionColumn;
     }
 
+    private function hasGeorefColumn() {
+        if (self::$hasGeorefColumn === null) {
+            try {
+                $this->db->query('SELECT latitud FROM usuarios LIMIT 1');
+                $this->db->execute();
+                self::$hasGeorefColumn = true;
+            } catch (Exception $e) {
+                self::$hasGeorefColumn = false;
+            }
+        }
+        return self::$hasGeorefColumn;
+    }
+
     private function appendProfileInsertColumns(&$cols, &$vals) {
         if ($this->hasGeneroColumn()) {
             $cols .= ', genero, fecha_nacimiento';
@@ -83,6 +97,10 @@ class User extends Model {
         if ($this->hasProfesionColumn()) {
             $cols .= ', profesion';
             $vals .= ', :profesion';
+        }
+        if ($this->hasGeorefColumn()) {
+            $cols .= ', latitud, longitud, link_google';
+            $vals .= ', :latitud, :longitud, :link_google';
         }
     }
 
@@ -98,6 +116,11 @@ class User extends Model {
         if ($this->hasProfesionColumn()) {
             $this->db->bind(':profesion', !empty($data['profesion']) ? $data['profesion'] : null);
         }
+        if ($this->hasGeorefColumn()) {
+            $this->db->bind(':latitud', isset($data['latitud']) && $data['latitud'] !== '' ? $data['latitud'] : null);
+            $this->db->bind(':longitud', isset($data['longitud']) && $data['longitud'] !== '' ? $data['longitud'] : null);
+            $this->db->bind(':link_google', !empty($data['link_google']) ? $data['link_google'] : null);
+        }
     }
 
     private function profileUpdateSqlSet() {
@@ -110,6 +133,9 @@ class User extends Model {
         }
         if ($this->hasProfesionColumn()) {
             $sql .= ', profesion = :profesion';
+        }
+        if ($this->hasGeorefColumn()) {
+            $sql .= ', latitud = :latitud, longitud = :longitud, link_google = :link_google';
         }
         return $sql;
     }

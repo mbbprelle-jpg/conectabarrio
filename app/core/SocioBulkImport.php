@@ -1,6 +1,7 @@
 <?php
 require_once APPROOT . '/core/RutChile.php';
 require_once APPROOT . '/core/SocioInput.php';
+require_once APPROOT . '/core/SocioGeoref.php';
 require_once APPROOT . '/core/InviteRutCheck.php';
 
 class SocioBulkImport {
@@ -21,6 +22,9 @@ class SocioBulkImport {
         'calle' => ['calle', 'direccion', 'dirección'],
         'numero_casa' => ['numero_casa', 'numero casa', 'n casa', 'n° casa', 'numero'],
         'fecha_inicio' => ['fecha_inicio', 'fecha inicio', 'inicio'],
+        'latitud' => ['latitud', 'lat'],
+        'longitud' => ['longitud', 'lng', 'lon'],
+        'link_google' => ['link_google', 'link google', 'google maps', 'maps'],
     ];
 
     /**
@@ -152,6 +156,15 @@ class SocioBulkImport {
         $estadoCivilRaw = mb_strtoupper(self::cell($cells, $map, 'estado_civil'), 'UTF-8');
         $estadoCivilRaw = str_replace(' ', '_', $estadoCivilRaw);
 
+        $latRaw = self::cell($cells, $map, 'latitud');
+        $lngRaw = self::cell($cells, $map, 'longitud');
+        $linkRaw = mb_strtolower(self::cell($cells, $map, 'link_google'), 'UTF-8');
+        $lat = SocioGeoref::parseCoord($latRaw);
+        $lng = SocioGeoref::parseCoord($lngRaw);
+        if ($lat !== null && $lng !== null) {
+            $linkRaw = SocioGeoref::buildGoogleMapsLink($lat, $lng);
+        }
+
         $data = [
             'junta_id' => $juntaId,
             'id_socio' => self::cell($cells, $map, 'id_socio') !== '' ? (int)self::cell($cells, $map, 'id_socio') : null,
@@ -169,6 +182,9 @@ class SocioBulkImport {
             'calle_id' => $calleId,
             'numero_casa' => self::cell($cells, $map, 'numero_casa'),
             'fecha_inicio' => self::cell($cells, $map, 'fecha_inicio') ?: date('Y-m-d'),
+            'latitud' => $lat,
+            'longitud' => $lng,
+            'link_google' => $linkRaw !== '' ? $linkRaw : null,
             'password' => '',
             'use_rut_initial_password' => true,
             'rol' => 'socio',

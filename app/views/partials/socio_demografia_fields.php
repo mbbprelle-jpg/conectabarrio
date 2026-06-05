@@ -30,10 +30,12 @@ $reqAttr = $required ? 'required' : '';
     <div class="form-group">
         <label for="<?php echo htmlspecialchars($prefix); ?>estado_civil" class="form-label">Estado Civil<?php echo $required ? ' *' : ''; ?></label>
         <select name="estado_civil" id="<?php echo htmlspecialchars($prefix); ?>estado_civil" class="form-control" <?php echo $reqAttr; ?>>
-            <option value="">-- Seleccionar --</option>
-            <?php foreach (SocioInput::ESTADOS_CIVILES as $key => $label): ?>
+            <?php if ($required): ?>
+                <option value="" disabled <?php echo empty($values['estado_civil']) ? 'selected' : ''; ?>>-- Seleccionar --</option>
+            <?php endif; ?>
+            <?php foreach (SocioInput::ESTADOS_CIVILES as $key => $estadoLabel): ?>
                 <option value="<?php echo htmlspecialchars($key); ?>" <?php echo (($values['estado_civil'] ?? '') === $key) ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($label); ?>
+                    <?php echo htmlspecialchars($estadoLabel); ?>
                 </option>
             <?php endforeach; ?>
         </select>

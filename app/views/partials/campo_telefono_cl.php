@@ -2,13 +2,13 @@
 require_once APPROOT . '/core/SocioInput.php';
 $id = $id ?? 'telefono';
 $name = $name ?? 'telefono';
-$label = $label ?? 'Teléfono';
+$telefonoLabel = $telefonoLabel ?? 'Teléfono';
 $required = !empty($required);
 $value = $value ?? '';
 $digits = SocioInput::telefonoDigits($value);
 ?>
 <div class="form-group">
-    <label for="<?php echo htmlspecialchars($id); ?>" class="form-label"><?php echo htmlspecialchars($label); ?><?php echo $required ? ' *' : ''; ?></label>
+    <label for="<?php echo htmlspecialchars($id); ?>" class="form-label"><?php echo htmlspecialchars($telefonoLabel); ?><?php echo $required ? ' *' : ''; ?></label>
     <div class="telefono-cl-wrap">
         <span class="telefono-cl-prefix" aria-hidden="true">+56</span>
         <input type="tel"

@@ -199,7 +199,7 @@
                     <?php
                     $id = 'telefono_invitacion';
                     $name = 'telefono';
-                    $label = 'Teléfono';
+                    $telefonoLabel = 'Teléfono';
                     $required = false;
                     $value = $old['telefono'] ?? '';
                     require APPROOT . '/views/partials/campo_telefono_cl.php';
@@ -216,9 +216,9 @@
                             <div class="alert alert-danger alert-block alert-persistent" style="font-size: 0.85rem; margin-bottom: 0.75rem;">
                                 <div class="alert-content">No hay calles configuradas. Contacte a la directiva.</div>
                             </div>
-                            <select name="calle_id" class="form-control" disabled required><option value="">—</option></select>
+                            <select name="calle_id" id="calle_id" class="form-control" disabled required><option value="">—</option></select>
                         <?php else: ?>
-                            <select name="calle_id" class="form-control" required>
+                            <select name="calle_id" id="calle_id" class="form-control" required>
                                 <option value="">-- Seleccionar Calle --</option>
                                 <?php foreach ($data['calles'] as $calle): ?>
                                     <option value="<?php echo (int)$calle->id; ?>" <?php echo (($old['calle_id'] ?? '') == $calle->id) ? 'selected' : ''; ?>>
@@ -231,8 +231,21 @@
 
                     <div class="form-group">
                         <label class="form-label">Número de Casa *</label>
-                        <input type="text" name="numero_casa" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['numero_casa'] ?? ''); ?>">
+                        <input type="text" name="numero_casa" id="numero_casa" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['numero_casa'] ?? ''); ?>">
                     </div>
+
+                    <?php
+                    $georefPrefix = '';
+                    $calleSelectId = 'calle_id';
+                    $numeroInputId = 'numero_casa';
+                    $georefValues = [
+                        'latitud' => $old['latitud'] ?? '',
+                        'longitud' => $old['longitud'] ?? '',
+                        'link_google' => $old['link_google'] ?? '',
+                    ];
+                    $georefComuna = $data['invitation']->comuna ?? '';
+                    require APPROOT . '/views/partials/socio_georef_map.php';
+                    ?>
 
                     <div class="alert alert-info alert-block invite-registro-notice alert-persistent">
                         <div class="alert-content">
@@ -297,6 +310,36 @@
 </script>
 
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>
+
+<?php if (($data['step'] ?? '') === 'form' && !empty($data['calles'])): ?>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="<?php echo URLROOT; ?>/js/socio-georef.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const callesGeorefMap = <?php
+        $inviteCallesMapJs = [];
+        foreach ($data['calles'] as $calleItem) {
+            $inviteCallesMapJs[(string)$calleItem->id] = $calleItem->nombre;
+        }
+        echo json_encode($inviteCallesMapJs, JSON_UNESCAPED_UNICODE);
+    ?>;
+    const georefInstances = typeof initSocioGeorefMaps === 'function'
+        ? initSocioGeorefMaps(callesGeorefMap)
+        : {};
+    const instance = georefInstances.default;
+    if (instance) {
+        const lat = document.getElementById('latitud')?.value || '';
+        const lng = document.getElementById('longitud')?.value || '';
+        const link = document.getElementById('link_google')?.value || '';
+        if (lat && lng) {
+            instance.loadFromValues(lat, lng, link);
+        }
+        setTimeout(function() { instance.refreshLayout(); }, 300);
+    }
+});
+</script>
+<?php endif; ?>
 
 <script>
 (function() {
