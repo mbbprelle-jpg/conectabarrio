@@ -1078,7 +1078,7 @@ foreach ($data['calles'] as $calleItem) {
                 Al confirmar, el sistema registrará <?php echo $importCount; ?> socio(s) y georreferenciará domicilios si hace falta.
                 Tiempo estimado: <strong><?php echo $estTimeLabel; ?></strong>. Debe permanecer en esta pestaña hasta que termine.
             </p>
-            <form action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST" class="cb-loading-form"
+            <form action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST" class="cb-loading-form cb-loading-form--long"
                   data-loading-title="Importando socios"
                   data-loading-message="Registrando <?php echo $importCount; ?> socio(s). Tiempo estimado: <?php echo $estTimeLabel; ?>. No cierre ni recargue esta ventana; no podrá usar el portal hasta que finalice.">
                 <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Importar <?php echo $importCount; ?> registro(s) como PRE-VALIDAR?">

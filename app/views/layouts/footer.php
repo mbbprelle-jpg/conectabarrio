@@ -26,7 +26,11 @@
         <div class="cb-loading-spinner" aria-hidden="true"></div>
         <h3 id="cbLoadingTitle" class="cb-loading-title">Procesando…</h3>
         <p id="cbLoadingMessage" class="cb-loading-message">Espere un momento, por favor.</p>
-        <p class="cb-loading-hint">No cierre ni recargue esta pestaña hasta que finalice.</p>
+        <div class="cb-loading-progress" aria-hidden="true">
+            <div class="cb-loading-progress-bar"></div>
+        </div>
+        <p id="cbLoadingStatus" class="cb-loading-status">Iniciando…</p>
+        <p class="cb-loading-hint">No cierre ni recargue esta pestaña. La página se actualizará sola al terminar.</p>
     </div>
 </div>
 

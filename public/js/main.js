@@ -111,11 +111,44 @@ document.addEventListener('DOMContentLoaded', function() {
     var loadingOverlay = document.getElementById('cbLoadingOverlay');
     var loadingTitle = document.getElementById('cbLoadingTitle');
     var loadingMessage = document.getElementById('cbLoadingMessage');
+    var loadingStatus = document.getElementById('cbLoadingStatus');
     var loadingActive = false;
+    var loadingStatusTimer = null;
+    var loadingStatusSteps = [
+        'Preparando datos…',
+        'Validando información…',
+        'Registrando socios…',
+        'Georreferenciando domicilios…',
+        'Casi listo…'
+    ];
 
-    function showLoadingOverlay(title, message) {
+    function closeUiForLoading() {
+        document.querySelectorAll('.glass-modal-overlay.is-open').forEach(function(el) {
+            el.classList.remove('is-open');
+        });
+        closeConfirmModal();
+        document.body.style.overflow = 'hidden';
+    }
+
+    function startLoadingStatusCycle() {
+        if (!loadingStatus) {
+            return;
+        }
+        var step = 0;
+        loadingStatus.textContent = loadingStatusSteps[0];
+        loadingStatusTimer = window.setInterval(function() {
+            step = (step + 1) % loadingStatusSteps.length;
+            loadingStatus.textContent = loadingStatusSteps[step];
+        }, 2800);
+    }
+
+    function showLoadingOverlay(title, message, longRunning) {
         if (!loadingOverlay) {
             return;
+        }
+        closeUiForLoading();
+        if (loadingOverlay.parentNode !== document.body) {
+            document.body.appendChild(loadingOverlay);
         }
         loadingActive = true;
         if (loadingTitle) {
@@ -127,9 +160,34 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingOverlay.classList.add('is-open');
         loadingOverlay.setAttribute('aria-hidden', 'false');
         document.body.classList.add('cb-loading-active');
+        if (longRunning) {
+            startLoadingStatusCycle();
+        } else if (loadingStatus) {
+            loadingStatus.textContent = 'Un momento…';
+        }
+        void loadingOverlay.offsetHeight;
     }
 
     window.cbShowLoading = showLoadingOverlay;
+
+    function triggerFormLoadingSubmit(form) {
+        if (!form || form.dataset.cbLoading === '1') {
+            return;
+        }
+        form.dataset.cbLoading = '1';
+        var longRunning = form.classList.contains('cb-loading-form--long');
+        showLoadingOverlay(
+            form.getAttribute('data-loading-title'),
+            form.getAttribute('data-loading-message'),
+            longRunning
+        );
+        form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+            btn.disabled = true;
+        });
+        window.setTimeout(function() {
+            form.submit();
+        }, 100);
+    }
 
     window.addEventListener('beforeunload', function(e) {
         if (loadingActive) {
@@ -139,13 +197,12 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     document.querySelectorAll('form.cb-loading-form').forEach(function(form) {
-        form.addEventListener('submit', function() {
-            var title = form.getAttribute('data-loading-title') || 'Procesando…';
-            var message = form.getAttribute('data-loading-message') || 'Espere un momento, por favor.';
-            showLoadingOverlay(title, message);
-            form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
-                btn.disabled = true;
-            });
+        form.addEventListener('submit', function(e) {
+            if (form.dataset.cbLoading === '1') {
+                return;
+            }
+            e.preventDefault();
+            triggerFormLoadingSubmit(form);
         });
     });
 
@@ -166,7 +223,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 confirmLabel: confirmLabel,
                 onConfirm: function() {
                     if (form) {
-                        form.submit();
+                        triggerFormLoadingSubmit(form);
                     } else if (href) {
                         window.location.href = href;
                     }
