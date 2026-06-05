@@ -938,6 +938,7 @@ select.form-control {
     border: 1px solid var(--border-color);
     background: rgba(255, 255, 255, 0.03);
     z-index: 0;
+    cursor: crosshair;
 }
 
 .socio-georef-group {

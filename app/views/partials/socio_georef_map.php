@@ -22,9 +22,9 @@ $linkGoogle = $georefValues['link_google'] ?? '';
     <label class="form-label">Ubicación en mapa</label>
     <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0 0 0.5rem;">
         <?php if ($usesFreeText): ?>
-            Escriba su dirección y ajuste el marcador si no es exacta.
+            Escriba su dirección y haga clic en el mapa para marcar el punto exacto.
         <?php else: ?>
-            Seleccione calle y número; luego ajuste el marcador si la ubicación no es exacta.
+            Seleccione calle y número; luego haga clic en el mapa para marcar el punto exacto.
         <?php endif; ?>
     </p>
     <div id="<?php echo htmlspecialchars($georefPrefix); ?>georef_map" class="socio-georef-map" role="region" aria-label="Mapa de ubicación del domicilio"></div>
@@ -34,7 +34,7 @@ $linkGoogle = $georefValues['link_google'] ?? '';
             <?php if ($latitud !== '' && $longitud !== ''): ?>
                 <?php echo htmlspecialchars((string)$latitud); ?>, <?php echo htmlspecialchars((string)$longitud); ?>
             <?php else: ?>
-                Sin ubicación — seleccione dirección o mueva el marcador
+                Sin ubicación — seleccione dirección o haga clic en el mapa
             <?php endif; ?>
         </span>
         <?php if ($linkGoogle !== ''): ?>

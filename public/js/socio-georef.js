@@ -77,7 +77,7 @@
             if (lat && lng) {
                 this.coordsTextEl.textContent = lat + ', ' + lng;
             } else {
-                this.coordsTextEl.textContent = 'Sin ubicación — seleccione dirección o mueva el marcador';
+                this.coordsTextEl.textContent = 'Sin ubicación — seleccione dirección o haga clic en el mapa';
             }
         }
 
@@ -103,7 +103,7 @@
         }
         this.updateCoordsDisplay();
         if (!silent) {
-            this.setStatus('Ubicación confirmada. Puede mover el marcador para afinar.');
+            this.setStatus('Ubicación marcada. Haga clic en el mapa para ajustar el punto.');
         }
     };
 
@@ -130,14 +130,17 @@
         }).addTo(this.map);
 
         var self = this;
-        this.marker = L.marker(center, { draggable: true }).addTo(this.map);
-        this.marker.on('dragend', function () {
-            var pos = self.marker.getLatLng();
+        this.marker = L.marker(center, { draggable: false }).addTo(this.map);
+        this.map.on('click', function (event) {
+            var pos = event.latlng;
+            self.marker.setLatLng(pos);
             self.setCoords(pos.lat.toFixed(7), pos.lng.toFixed(7));
         });
 
         if (!isNaN(lat) && !isNaN(lng)) {
-            this.setStatus('Ubicación cargada. Puede mover el marcador si no es exacta.');
+            this.setStatus('Ubicación cargada. Haga clic en el mapa para cambiar el punto.');
+        } else {
+            this.setStatus('Haga clic en el mapa para marcar su domicilio.');
         }
         this.updateCoordsDisplay();
     };
@@ -160,7 +163,7 @@
         this.setCoords(lat.toFixed(7), lng.toFixed(7), true);
         this.marker.setLatLng([lat, lng]);
         this.map.setView([lat, lng], 17);
-        this.setStatus(message || 'Ubicación aproximada. Ajuste el marcador si es necesario.');
+        this.setStatus(message || 'Ubicación aproximada. Haga clic en el mapa para afinar.');
     };
 
     SocioGeorefMap.prototype.fetchNominatim = function (query, onSuccess, onFail) {
@@ -202,7 +205,7 @@
                     self.centerOnCoords(lat, lng);
                 },
                 function () {
-                    self.setStatus('No se encontró la dirección. Mueva el mapa manualmente.', true);
+                    self.setStatus('No se encontró la dirección. Haga clic en el mapa para marcar el punto.', true);
                     self.ensureMap();
                 }
             );
@@ -234,14 +237,14 @@
             function () {
                 var centro = getCalleCentro(self.calleSelect);
                 if (centro) {
-                    self.centerOnCoords(centro.lat, centro.lng, 'No se encontró el número. Centrado en la calle; ajuste el marcador.', true);
+                    self.centerOnCoords(centro.lat, centro.lng, 'No se encontró el número. Centrado en la calle; haga clic en el mapa para afinar.', true);
                     return;
                 }
                 if (!isNaN(self.latSede) && !isNaN(self.lngSede)) {
                     self.centerOnCoords(self.latSede, self.lngSede, 'No se encontró la dirección. Centrado en sede de la organización.', true);
                     return;
                 }
-                self.setStatus('No se encontró la dirección. Mueva el mapa manualmente.', true);
+                self.setStatus('No se encontró la dirección. Haga clic en el mapa para marcar el punto.', true);
                 self.ensureMap();
             }
         );
@@ -310,11 +313,7 @@
     SocioGeorefMap.prototype.init = function () {
         this.bindEvents();
         this.updateCoordsDisplay();
-        var lat = this.latInput && this.latInput.value;
-        var lng = this.lngInput && this.lngInput.value;
-        if (lat && lng) {
-            this.ensureMap();
-        }
+        this.ensureMap();
     };
 
     global.initSocioGeorefMaps = function (callesMap) {
