@@ -1,7 +1,7 @@
 -- Georef calles/sede, domicilio por membresía y solicitudes de cambio de datos
--- Ejecutar después de las columnas que el usuario ya aplicó manualmente.
+-- Ejecutar en la base de datos que usa la app (ajuste USE si su BD tiene otro nombre).
 
-USE conectabarrio;
+-- USE conectabarrio;
 
 -- ========== BLOQUE 1 — calles y sede (si aún no existen) ==========
 -- ALTER TABLE calles ADD COLUMN lat_centro DECIMAL(10,7) NULL, ADD COLUMN lng_centro DECIMAL(10,7) NULL;

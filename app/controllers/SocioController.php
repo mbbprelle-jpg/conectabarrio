@@ -176,12 +176,15 @@ class SocioController extends Controller {
 
         $membresia = $this->membresiaModel->getByUsuarioJunta($socioId, $juntaId);
         $created = $this->cambioModel->create($socioId, $juntaId, $membresia ? (int)$membresia->id : null, $datos);
-        if ($created) {
+        if ($created !== null) {
             $_SESSION['success_msg'] = 'Su solicitud fue enviada. Un administrador revisará los cambios antes de aplicarlos.';
             $this->redirect('/socio/dashboard');
             return;
         }
-        $_SESSION['error_msg'] = 'No se pudo registrar la solicitud. Verifique que ejecutó la migración SQL.';
+        $detail = trim($this->cambioModel->getLastError());
+        $_SESSION['error_msg'] = $detail !== ''
+            ? $detail
+            : 'No se pudo registrar la solicitud. Verifique que ejecutó la migración SQL.';
         $this->redirect('/socio/solicitar_cambio');
     }
 

@@ -2,11 +2,18 @@
 
 class SocioCambioSolicitud extends Model {
 
+    private $lastError = '';
+
+    public function getLastError(): string {
+        return $this->lastError;
+    }
+
     public function hasTable(): bool {
         try {
-            $this->db->query('SELECT id FROM socio_cambio_solicitudes LIMIT 1');
-            $this->db->execute();
-            return true;
+            $this->db->query("SELECT 1 FROM information_schema.tables
+                WHERE table_schema = DATABASE() AND table_name = 'socio_cambio_solicitudes' LIMIT 1");
+            $row = $this->db->single();
+            return !empty($row);
         } catch (Exception $e) {
             return false;
         }
@@ -52,29 +59,53 @@ class SocioCambioSolicitud extends Model {
     }
 
     public function create(int $usuarioId, int $juntaId, ?int $membresiaId, array $datos): ?int {
+        $this->lastError = '';
         if (!$this->hasTable()) {
+            $this->lastError = 'Falta la tabla socio_cambio_solicitudes. Ejecute sql/create_socio_cambio_solicitudes.sql en su base de datos.';
             return null;
         }
-        $existing = $this->getPendingForUsuarioJunta($usuarioId, $juntaId);
-        if ($existing) {
-            $this->db->query("UPDATE socio_cambio_solicitudes
-                SET datos_json = :datos, membresia_id = :membresia_id, created_at = NOW()
-                WHERE id = :id");
-            $this->db->bind(':datos', json_encode($datos, JSON_UNESCAPED_UNICODE));
+        try {
+            $payload = json_encode($datos, JSON_UNESCAPED_UNICODE);
+            if ($payload === false) {
+                $this->lastError = 'No se pudieron serializar los datos del formulario.';
+                return null;
+            }
+
+            $existing = $this->getPendingForUsuarioJunta($usuarioId, $juntaId);
+            if ($existing) {
+                $this->db->query("UPDATE socio_cambio_solicitudes
+                    SET datos_json = :datos, membresia_id = :membresia_id, created_at = NOW()
+                    WHERE id = :id");
+                $this->db->bind(':datos', $payload);
+                $this->db->bind(':membresia_id', $membresiaId);
+                $this->db->bind(':id', $existing->id);
+                if ($this->db->execute()) {
+                    return (int)$existing->id;
+                }
+                $this->lastError = 'No se pudo actualizar la solicitud pendiente.';
+                return null;
+            }
+
+            $this->db->query("INSERT INTO socio_cambio_solicitudes (usuario_id, junta_id, membresia_id, datos_json, status)
+                VALUES (:usuario_id, :junta_id, :membresia_id, :datos, 'pending')");
+            $this->db->bind(':usuario_id', $usuarioId);
+            $this->db->bind(':junta_id', $juntaId);
             $this->db->bind(':membresia_id', $membresiaId);
-            $this->db->bind(':id', $existing->id);
-            return $this->db->execute() ? (int)$existing->id : null;
+            $this->db->bind(':datos', $payload);
+            if ($this->db->execute()) {
+                $id = (int)$this->db->lastInsertId();
+                if ($id > 0) {
+                    return $id;
+                }
+                $this->lastError = 'La solicitud se guardó pero no se obtuvo el identificador.';
+                return null;
+            }
+            $this->lastError = 'No se pudo insertar la solicitud.';
+            return null;
+        } catch (Exception $e) {
+            $this->lastError = $e->getMessage();
+            return null;
         }
-        $this->db->query("INSERT INTO socio_cambio_solicitudes (usuario_id, junta_id, membresia_id, datos_json, status)
-            VALUES (:usuario_id, :junta_id, :membresia_id, :datos, 'pending')");
-        $this->db->bind(':usuario_id', $usuarioId);
-        $this->db->bind(':junta_id', $juntaId);
-        $this->db->bind(':membresia_id', $membresiaId);
-        $this->db->bind(':datos', json_encode($datos, JSON_UNESCAPED_UNICODE));
-        if ($this->db->execute()) {
-            return (int)$this->db->lastInsertId();
-        }
-        return null;
     }
 
     public function approve(int $id, int $juntaId, int $reviewerId): bool {
