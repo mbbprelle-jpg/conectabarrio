@@ -1200,7 +1200,8 @@ foreach ($data['calles'] as $calleItem) {
                 </label>
             </div>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
-                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa la gestión de socios y calles; al asignar <strong>Tesorero</strong>, el registro de pagos.
+                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa la gestión de socios y el mapa; al asignar <strong>Tesorero</strong>, el registro de pagos.
+                Recuerde también habilitar el mapa para la organización en la tarjeta superior «Mapa de socios».
             </p>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" id="cancelDelegacionModal">Cancelar</button>
@@ -1540,7 +1541,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('cancelDelegacionModal')?.addEventListener('click', () => closeModal(delegacionModal));
     delegacionModal?.addEventListener('click', e => { if (e.target === delegacionModal) closeModal(delegacionModal); });
     document.getElementById('delegacion_cargo')?.addEventListener('change', function() {
-        if (this.value === 'SECRETARIO') document.getElementById('delegacion_perm_socios').checked = true;
+        if (this.value === 'SECRETARIO') {
+            document.getElementById('delegacion_perm_socios').checked = true;
+            document.getElementById('delegacion_perm_mapa').checked = true;
+        }
         if (this.value === 'TESORERO') document.getElementById('delegacion_perm_pagos').checked = true;
         if (this.value === 'DIRECTOR') {
             document.getElementById('delegacion_perm_todos').checked = true;
@@ -1549,6 +1553,8 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('delegacion_perm_todos')?.addEventListener('change', function () {
         if (this.checked) {
             document.getElementById('delegacion_perm_mapa').checked = true;
+            document.getElementById('delegacion_perm_socios').checked = true;
+            document.getElementById('delegacion_perm_pagos').checked = true;
         }
     });
     <?php endif; ?>

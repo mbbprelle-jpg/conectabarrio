@@ -2259,13 +2259,19 @@ class AdminController extends Controller {
                 $this->redirect('/admin/socios');
                 return;
             }
+            $permGestion = !empty($post['permiso_gestion_socios']);
+            $permTodos = !empty($post['permiso_todos']);
+            $permMapa = !empty($post['permiso_mapa_socios']) || $permGestion || $permTodos || $cargo === 'SECRETARIO';
             $this->membresiaModel->updateDelegacion($membresia->id, [
                 'cargo' => $cargo ?: null,
-                'permiso_gestion_socios' => !empty($post['permiso_gestion_socios']),
+                'permiso_gestion_socios' => $permGestion,
                 'permiso_registro_pagos' => !empty($post['permiso_registro_pagos']),
-                'permiso_todos' => !empty($post['permiso_todos']),
-                'permiso_mapa_socios' => !empty($post['permiso_mapa_socios']),
+                'permiso_todos' => $permTodos,
+                'permiso_mapa_socios' => $permMapa,
             ]);
+            if ((int)$usuarioId === (int)$_SESSION['user_id']) {
+                AuthContext::refreshMembershipSession();
+            }
             $_SESSION['success_msg'] = 'Cargo y permisos del socio actualizados correctamente.';
         } catch (Exception $e) {
             $_SESSION['error_msg'] = 'No se pudo guardar la delegación. Verifique que ejecutó la migración sql/create_membresias_and_permisos.sql en la base de datos.';

@@ -13,6 +13,10 @@
 
 <?php
 $useDashboardLayout = isset($_SESSION['user_id']) && empty($data['public_layout'] ?? false);
+if ($useDashboardLayout) {
+    require_once APPROOT . '/core/AuthContext.php';
+    AuthContext::refreshMembershipSession();
+}
 ?>
 <?php if ($useDashboardLayout): ?>
 <div class="app-container">

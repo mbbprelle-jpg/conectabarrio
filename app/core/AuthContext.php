@@ -75,7 +75,61 @@ class AuthContext {
         if (!empty($_SESSION['permiso_todos'])) {
             return true;
         }
-        return !empty($_SESSION['permiso_mapa_socios']);
+        if (!empty($_SESSION['permiso_mapa_socios'])) {
+            return true;
+        }
+        // Secretario/a u otros con gestión de socios pueden ver el mapa si la org lo habilitó.
+        return self::canManageSocios();
+    }
+
+    /**
+     * Recarga permisos y flag del mapa desde BD (evita tener que cerrar sesión tras delegar).
+     */
+    public static function refreshMembershipSession(): void {
+        if (empty($_SESSION['user_id']) || ($_SESSION['user_rol'] ?? '') === 'maestro') {
+            return;
+        }
+
+        require_once APPROOT . '/models/Membresia.php';
+        require_once APPROOT . '/models/JuntaVecinos.php';
+        $memModel = new Membresia();
+        $juntaModel = new JuntaVecinos();
+
+        if (!empty($_SESSION['user_junta_id']) && $juntaModel->hasMapaSociosColumn()) {
+            $junta = $juntaModel->getJuntaById((int)$_SESSION['user_junta_id']);
+            if ($junta) {
+                $_SESSION['mapa_socios_habilitado'] = (int)($junta->mapa_socios_habilitado ?? 0);
+            }
+        }
+
+        if (self::isFullAdmin()) {
+            return;
+        }
+
+        $membership = null;
+        if (!empty($_SESSION['membership_id'])) {
+            $membership = $memModel->getById((int)$_SESSION['membership_id']);
+        }
+        if (!$membership && !empty($_SESSION['user_junta_id'])) {
+            $membership = $memModel->getByUsuarioJunta((int)$_SESSION['user_id'], (int)$_SESSION['user_junta_id']);
+            if ($membership) {
+                $_SESSION['membership_id'] = $membership->id;
+            }
+        }
+        if (!$membership) {
+            return;
+        }
+
+        $_SESSION['user_cargo'] = $membership->cargo ?? null;
+        $_SESSION['permiso_gestion_socios'] = (int)($membership->permiso_gestion_socios ?? 0);
+        $_SESSION['permiso_registro_pagos'] = (int)($membership->permiso_registro_pagos ?? 0);
+        $_SESSION['permiso_todos'] = (int)($membership->permiso_todos ?? 0);
+        if ($memModel->hasPermisoMapaColumn()) {
+            $_SESSION['permiso_mapa_socios'] = (int)($membership->permiso_mapa_socios ?? 0);
+        }
+        if ($memModel->hasMapaSociosJuntaColumn()) {
+            $_SESSION['mapa_socios_habilitado'] = (int)($membership->mapa_socios_habilitado ?? 0);
+        }
     }
 
     public static function adminMethodsForSocioDelegado() {
