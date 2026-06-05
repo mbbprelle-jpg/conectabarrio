@@ -59,6 +59,28 @@ $juntaComuna = $_SESSION['user_junta_comuna'] ?? '';
 $usesCalles = $data['uses_calles'] ?? true;
 $orgTipo = $data['org_tipo'] ?? 'Junta de Vecinos';
 $cambiosPendientes = $data['cambios_pendientes'] ?? [];
+$cambiosRevisionData = [];
+if ($canManageSocios && !empty($cambiosPendientes)) {
+    require_once APPROOT . '/models/SocioCambioSolicitud.php';
+    $callesNombreMapTop = [];
+    foreach ($data['calles'] as $c) {
+        $callesNombreMapTop[(int)$c->id] = $c->nombre;
+    }
+    foreach ($cambiosPendientes as $cambioItem) {
+        $datosItem = SocioCambioSolicitud::decodeDatos($cambioItem);
+        $fieldsItem = SocioCambioSolicitud::buildFieldComparisons($cambioItem, $datosItem, $callesNombreMapTop, $usesCalles);
+        $changedCount = count(array_filter($fieldsItem, static function ($f) {
+            return !empty($f['changed']);
+        }));
+        $cambiosRevisionData[(int)$cambioItem->id] = [
+            'socio_nombre' => trim(($cambioItem->nombre ?? '') . ' ' . ($cambioItem->apellido_paterno ?? '') . ' ' . ($cambioItem->apellido_materno ?? '')),
+            'rut' => $cambioItem->rut ?? '',
+            'fecha' => !empty($cambioItem->created_at) ? date('d-m-Y H:i', strtotime($cambioItem->created_at)) : '—',
+            'changed_count' => $changedCount,
+            'fields' => $fieldsItem,
+        ];
+    }
+}
 $callesGeorefMap = [];
 foreach ($data['calles'] as $calleItem) {
     $callesGeorefMap[(string)$calleItem->id] = $calleItem->nombre;
@@ -190,13 +212,6 @@ foreach ($data['calles'] as $calleItem) {
         <?php endif; ?>
 
         <?php if ($canManageSocios && !empty($cambiosPendientes)): ?>
-        <?php
-        require_once APPROOT . '/models/SocioCambioSolicitud.php';
-        $callesNombreMap = [];
-        foreach ($data['calles'] as $c) {
-            $callesNombreMap[(int)$c->id] = $c->nombre;
-        }
-        ?>
         <div style="border: 1px solid rgba(6, 182, 212, 0.35); border-radius: var(--radius-sm); padding: 1rem; background: rgba(6, 182, 212, 0.05); margin-bottom: 0;">
             <h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -207,33 +222,15 @@ foreach ($data['calles'] as $calleItem) {
                     <thead>
                         <tr>
                             <th>Socio</th>
-                            <th>Cambios solicitados</th>
+                            <th>Resumen</th>
                             <th>Fecha</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($cambiosPendientes as $cambio):
-                            $datos = SocioCambioSolicitud::decodeDatos($cambio);
-                            $resumen = [];
-                            if (!empty($datos['email']) && ($datos['email'] !== ($cambio->email_actual ?? ''))) {
-                                $resumen[] = 'Correo: ' . ($cambio->email_actual ?? '—') . ' → ' . $datos['email'];
-                            }
-                            if (!empty($datos['telefono'])) {
-                                $resumen[] = 'Teléfono: ' . $datos['telefono'];
-                            }
-                            if (!empty($datos['genero']) || !empty($datos['fecha_nacimiento'])) {
-                                $resumen[] = 'Datos personales';
-                            }
-                            if ($usesCalles && !empty($datos['calle_id'])) {
-                                $calleNom = $callesNombreMap[(int)$datos['calle_id']] ?? 'Calle #' . (int)$datos['calle_id'];
-                                $resumen[] = 'Domicilio: ' . $calleNom . ' #' . ($datos['numero_casa'] ?? '');
-                            } elseif (!$usesCalles && !empty($datos['direccion_texto'])) {
-                                $resumen[] = 'Dirección: ' . $datos['direccion_texto'];
-                            }
-                            if (empty($resumen)) {
-                                $resumen[] = 'Ver detalle al aprobar';
-                            }
+                            $rev = $cambiosRevisionData[(int)$cambio->id] ?? null;
+                            $changedCount = $rev['changed_count'] ?? 0;
                         ?>
                         <tr>
                             <td style="font-weight: 600;">
@@ -241,19 +238,17 @@ foreach ($data['calles'] as $calleItem) {
                                 <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;"><?php echo htmlspecialchars($cambio->rut ?? ''); ?></div>
                             </td>
                             <td style="font-size: 0.82rem;">
-                                <?php foreach ($resumen as $line): ?>
-                                    <div><?php echo htmlspecialchars($line); ?></div>
-                                <?php endforeach; ?>
+                                <?php if ($changedCount > 0): ?>
+                                    <span class="badge badge-warning" style="font-size: 0.68rem;"><?php echo (int)$changedCount; ?> campo(s) con cambio</span>
+                                <?php else: ?>
+                                    <span style="color: var(--text-muted);">Revise el detalle completo</span>
+                                <?php endif; ?>
                             </td>
                             <td style="font-size: 0.8rem; color: var(--text-muted);">
                                 <?php echo !empty($cambio->created_at) ? date('d-m-Y H:i', strtotime($cambio->created_at)) : '—'; ?>
                             </td>
                             <td>
-                                <form action="<?php echo URLROOT; ?>/admin/cambio_aprobar" method="POST" style="display: inline;" onsubmit="return confirm('¿Aprobar los cambios solicitados por este socio?');">
-                                    <input type="hidden" name="cambio_id" value="<?php echo (int)$cambio->id; ?>">
-                                    <button type="submit" class="btn btn-success btn-sm" style="font-size: 0.72rem;">Aprobar</button>
-                                </form>
-                                <button type="button" class="btn btn-secondary btn-sm btn-rechazar-cambio" data-cambio-id="<?php echo (int)$cambio->id; ?>" style="font-size: 0.72rem;">Rechazar</button>
+                                <button type="button" class="btn btn-primary btn-sm btn-revisar-cambio" data-cambio-id="<?php echo (int)$cambio->id; ?>" style="font-size: 0.72rem;">Revisar / Decidir</button>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -1071,6 +1066,39 @@ foreach ($data['calles'] as $calleItem) {
 <?php endif; ?>
 
 <?php if ($canManageSocios): ?>
+<div id="revisarCambioModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 820px; max-height: 90vh; overflow-y: auto;">
+        <button type="button" class="modal-close-btn" data-close-modal="revisarCambioModal" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.25rem;">Revisar solicitud de cambio</h3>
+        <p id="revisar_cambio_socio" style="color: var(--primary); font-weight: 600; margin: 0 0 0.25rem;"></p>
+        <p id="revisar_cambio_meta" style="color: var(--text-muted); font-size: 0.82rem; margin: 0 0 1rem;"></p>
+        <p style="font-size: 0.78rem; color: var(--text-muted); margin: 0 0 0.75rem;">
+            Compare el valor <strong>actual</strong> con el <strong>solicitado</strong>. Las filas resaltadas indican cambios.
+        </p>
+        <div class="table-responsive" style="margin-bottom: 1.25rem;">
+            <table class="table cambio-revision-table">
+                <thead>
+                    <tr>
+                        <th style="width: 28%;">Campo</th>
+                        <th style="width: 36%;">Actual</th>
+                        <th style="width: 36%;">Solicitado</th>
+                    </tr>
+                </thead>
+                <tbody id="revisar_cambio_fields"></tbody>
+            </table>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <button type="button" class="btn btn-secondary" data-close-modal="revisarCambioModal">Cerrar</button>
+            <button type="button" class="btn btn-danger" id="btnRechazarDesdeRevision">Rechazar solicitud</button>
+            <form id="formCambioAprobar" action="<?php echo URLROOT; ?>/admin/cambio_aprobar" method="POST" style="margin: 0;" onsubmit="return confirm('¿Aprobar todos los cambios solicitados por este socio?');">
+                <input type="hidden" name="cambio_id" id="revisar_cambio_aprobar_id">
+                <button type="submit" class="btn btn-success">Aprobar cambios</button>
+            </form>
+        </div>
+    </div>
+</div>
 <div id="rechazarCambioModal" class="glass-modal-overlay">
     <div class="glass-modal-container" style="max-width: 480px;">
         <button type="button" class="modal-close-btn" data-close-modal="rechazarCambioModal" aria-label="Cerrar">
@@ -1480,6 +1508,74 @@ document.addEventListener('DOMContentLoaded', function() {
             openModal(document.getElementById('rechazarCambioModal'));
         });
     });
+
+    const cambiosRevisionData = <?php echo json_encode($cambiosRevisionData ?? [], JSON_UNESCAPED_UNICODE); ?>;
+    const revisarCambioModal = document.getElementById('revisarCambioModal');
+    const revisarCambioFields = document.getElementById('revisar_cambio_fields');
+    const revisarCambioSocio = document.getElementById('revisar_cambio_socio');
+    const revisarCambioMeta = document.getElementById('revisar_cambio_meta');
+    const revisarCambioAprobarId = document.getElementById('revisar_cambio_aprobar_id');
+    const btnRechazarDesdeRevision = document.getElementById('btnRechazarDesdeRevision');
+    let revisarCambioActualId = null;
+
+    function escapeHtml(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderCambioFieldValue(label, value) {
+        const text = value || '—';
+        if (label === 'Enlace mapa' && text !== '—' && /^https?:\/\//i.test(text)) {
+            return '<a href="' + escapeHtml(text) + '" target="_blank" rel="noopener noreferrer" class="cambio-val-mono">' + escapeHtml(text) + '</a>';
+        }
+        if (label === 'Coordenadas (pin mapa)' && text !== '—') {
+            return '<span class="cambio-val-mono">' + escapeHtml(text) + '</span>';
+        }
+        return escapeHtml(text);
+    }
+
+    function openRevisarCambioModal(cambioId) {
+        const data = cambiosRevisionData[String(cambioId)] || cambiosRevisionData[cambioId];
+        if (!data || !revisarCambioFields) {
+            return;
+        }
+        revisarCambioActualId = cambioId;
+        if (revisarCambioSocio) {
+            revisarCambioSocio.textContent = data.socio_nombre + ' · RUT ' + data.rut;
+        }
+        if (revisarCambioMeta) {
+            revisarCambioMeta.textContent = 'Solicitud del ' + data.fecha + ' · ' + data.changed_count + ' campo(s) con cambio';
+        }
+        if (revisarCambioAprobarId) {
+            revisarCambioAprobarId.value = cambioId;
+        }
+        revisarCambioFields.innerHTML = (data.fields || []).map(function(field) {
+            const rowClass = field.changed ? ' class="cambio-row-changed"' : '';
+            return '<tr' + rowClass + '>'
+                + '<td><strong>' + escapeHtml(field.label) + '</strong></td>'
+                + '<td>' + renderCambioFieldValue(field.label, field.actual) + '</td>'
+                + '<td>' + renderCambioFieldValue(field.label, field.nuevo) + '</td>'
+                + '</tr>';
+        }).join('');
+        openModal(revisarCambioModal);
+    }
+
+    document.querySelectorAll('.btn-revisar-cambio').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openRevisarCambioModal(this.dataset.cambioId);
+        });
+    });
+
+    if (btnRechazarDesdeRevision) {
+        btnRechazarDesdeRevision.addEventListener('click', function() {
+            if (!revisarCambioActualId) {
+                return;
+            }
+            closeModal(revisarCambioModal);
+            setField('rechazar_cambio_id', revisarCambioActualId);
+            setField('motivo_rechazo', '');
+            openModal(document.getElementById('rechazarCambioModal'));
+        });
+    }
 });
 </script>
 <?php endif; ?>

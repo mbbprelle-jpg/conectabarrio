@@ -23,9 +23,18 @@ class SocioCambioSolicitud extends Model {
         if (!$this->hasTable()) {
             return [];
         }
-        $this->db->query("SELECT s.*, u.rut, u.nombre, u.apellido_paterno, u.apellido_materno, u.email AS email_actual
+        $this->db->query("SELECT s.*, u.rut, u.nombre, u.apellido_paterno, u.apellido_materno, u.email AS email_actual,
+                u.telefono AS telefono_actual, u.genero AS genero_actual, u.fecha_nacimiento AS fecha_nacimiento_actual,
+                u.estado_civil AS estado_civil_actual, u.nacionalidad AS nacionalidad_actual, u.profesion AS profesion_actual,
+                u.calle_id AS usuario_calle_id, u.numero_casa AS usuario_numero_casa,
+                u.latitud AS usuario_latitud, u.longitud AS usuario_longitud, u.link_google AS usuario_link_google,
+                m.calle_id AS mem_calle_id, m.numero_casa AS mem_numero_casa, m.direccion_texto AS mem_direccion_texto,
+                m.latitud AS mem_latitud, m.longitud AS mem_longitud, m.link_google AS mem_link_google,
+                c.nombre AS calle_nombre_actual
             FROM socio_cambio_solicitudes s
             INNER JOIN usuarios u ON u.id = s.usuario_id
+            LEFT JOIN usuario_membresias m ON m.usuario_id = s.usuario_id AND m.junta_id = s.junta_id AND m.estado = 1
+            LEFT JOIN calles c ON c.id = COALESCE(m.calle_id, u.calle_id)
             WHERE s.junta_id = :junta_id AND s.status = 'pending'
             ORDER BY s.created_at ASC");
         $this->db->bind(':junta_id', $juntaId);
@@ -169,5 +178,93 @@ class SocioCambioSolicitud extends Model {
         }
         $decoded = json_decode($row->datos_json, true);
         return is_array($decoded) ? $decoded : [];
+    }
+
+    public static function resolveActualDomicilio($row): array {
+        $calleId = $row->mem_calle_id ?? $row->usuario_calle_id ?? null;
+        $numero = $row->mem_numero_casa ?? $row->usuario_numero_casa ?? '';
+        $direccion = $row->mem_direccion_texto ?? '';
+        $lat = $row->mem_latitud ?? $row->usuario_latitud ?? '';
+        $lng = $row->mem_longitud ?? $row->usuario_longitud ?? '';
+        $link = $row->mem_link_google ?? $row->usuario_link_google ?? '';
+
+        return [
+            'calle_id' => $calleId !== null ? (int)$calleId : 0,
+            'numero_casa' => (string)$numero,
+            'direccion_texto' => (string)$direccion,
+            'calle_nombre' => (string)($row->calle_nombre_actual ?? ''),
+            'latitud' => $lat !== null ? (string)$lat : '',
+            'longitud' => $lng !== null ? (string)$lng : '',
+            'link_google' => (string)$link,
+        ];
+    }
+
+    public static function buildFieldComparisons($row, array $datos, array $callesMap, bool $usesCalles): array {
+        require_once APPROOT . '/core/SocioInput.php';
+
+        $fmtDate = static function ($value): string {
+            if (empty($value)) {
+                return '—';
+            }
+            $ts = strtotime((string)$value);
+            return ($ts !== false) ? date('d-m-Y', $ts) : '—';
+        };
+        $fmtTel = static function ($value): string {
+            $display = SocioInput::formatTelefonoDisplay($value ?? '');
+            return $display !== '' ? $display : '—';
+        };
+        $norm = static function ($value): string {
+            return trim((string)($value ?? ''));
+        };
+
+        $actualDom = self::resolveActualDomicilio($row);
+        if ($usesCalles) {
+            $actualDomicilioText = ($actualDom['calle_nombre'] !== '' ? $actualDom['calle_nombre'] : '—')
+                . ($actualDom['numero_casa'] !== '' ? ' #' . $actualDom['numero_casa'] : '');
+            $nuevoCalleId = (int)($datos['calle_id'] ?? 0);
+            $nuevoCalleNom = $callesMap[$nuevoCalleId] ?? ($nuevoCalleId > 0 ? 'Calle #' . $nuevoCalleId : '—');
+            $nuevoDomicilioText = $nuevoCalleNom
+                . (!empty($datos['numero_casa']) ? ' #' . $datos['numero_casa'] : '');
+        } else {
+            $actualDomicilioText = $actualDom['direccion_texto'] !== '' ? $actualDom['direccion_texto'] : '—';
+            $nuevoDomicilioText = $norm($datos['direccion_texto'] ?? '') ?: '—';
+        }
+
+        $actualCoords = ($actualDom['latitud'] !== '' && $actualDom['longitud'] !== '')
+            ? $actualDom['latitud'] . ', ' . $actualDom['longitud']
+            : '—';
+        $nuevoCoords = (!empty($datos['latitud']) && !empty($datos['longitud']))
+            ? $datos['latitud'] . ', ' . $datos['longitud']
+            : '—';
+
+        $rows = [
+            ['key' => 'email', 'label' => 'Correo electrónico', 'actual' => $norm($row->email_actual ?? '') ?: '—', 'nuevo' => $norm($datos['email'] ?? '') ?: '—'],
+            ['key' => 'telefono', 'label' => 'Teléfono', 'actual' => $fmtTel($row->telefono_actual ?? ''), 'nuevo' => $fmtTel($datos['telefono'] ?? '')],
+            ['key' => 'genero', 'label' => 'Género', 'actual' => SocioInput::generoLabel($row->genero_actual ?? '') ?: '—', 'nuevo' => SocioInput::generoLabel($datos['genero'] ?? '') ?: '—'],
+            ['key' => 'fecha_nacimiento', 'label' => 'Fecha de nacimiento', 'actual' => $fmtDate($row->fecha_nacimiento_actual ?? ''), 'nuevo' => $fmtDate($datos['fecha_nacimiento'] ?? '')],
+            ['key' => 'estado_civil', 'label' => 'Estado civil', 'actual' => SocioInput::estadoCivilLabel($row->estado_civil_actual ?? '') ?: '—', 'nuevo' => SocioInput::estadoCivilLabel($datos['estado_civil'] ?? '') ?: '—'],
+            ['key' => 'nacionalidad', 'label' => 'Nacionalidad', 'actual' => $norm($row->nacionalidad_actual ?? '') ?: '—', 'nuevo' => $norm($datos['nacionalidad'] ?? '') ?: '—'],
+            ['key' => 'profesion', 'label' => 'Profesión u oficio', 'actual' => $norm($row->profesion_actual ?? '') ?: '—', 'nuevo' => $norm($datos['profesion'] ?? '') ?: '—'],
+            ['key' => 'domicilio', 'label' => $usesCalles ? 'Domicilio (calle y número)' : 'Dirección', 'actual' => $actualDomicilioText ?: '—', 'nuevo' => $nuevoDomicilioText ?: '—'],
+            ['key' => 'coordenadas', 'label' => 'Coordenadas (pin mapa)', 'actual' => $actualCoords, 'nuevo' => $nuevoCoords],
+        ];
+
+        $actualLink = $actualDom['link_google'] ?? '';
+        $nuevoLink = $norm($datos['link_google'] ?? '');
+        if ($actualLink !== '' || $nuevoLink !== '') {
+            $rows[] = [
+                'key' => 'link_google',
+                'label' => 'Enlace mapa',
+                'actual' => $actualLink !== '' ? $actualLink : '—',
+                'nuevo' => $nuevoLink !== '' ? $nuevoLink : '—',
+            ];
+        }
+
+        foreach ($rows as &$item) {
+            $item['changed'] = ($item['actual'] !== $item['nuevo']);
+        }
+        unset($item);
+
+        return $rows;
     }
 }

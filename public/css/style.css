@@ -981,6 +981,27 @@ select.form-control {
     text-decoration: underline;
 }
 
+.cambio-revision-table td,
+.cambio-revision-table th {
+    font-size: 0.8rem;
+    vertical-align: top;
+}
+
+.cambio-revision-table tr.cambio-row-changed {
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.cambio-revision-table tr.cambio-row-changed td:nth-child(3) {
+    font-weight: 600;
+    color: var(--warning);
+}
+
+.cambio-revision-table .cambio-val-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    word-break: break-all;
+}
+
 
 .grid-2col {
     display: grid;
