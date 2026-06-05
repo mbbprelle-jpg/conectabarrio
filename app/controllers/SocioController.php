@@ -108,6 +108,7 @@ class SocioController extends Controller {
             'header_subtitle' => 'Los cambios quedarán pendientes hasta que un administrador los apruebe',
             'active_menu' => 'solicitar_cambio',
             'socio' => $socio,
+            'membresia' => $membresia,
             'calles' => $calles,
             'values' => $values,
             'cambio_pendiente' => $cambioPendiente,

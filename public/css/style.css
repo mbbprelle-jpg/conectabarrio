@@ -1919,3 +1919,126 @@ html {
     min-width: 120px;
 }
 
+/* Socio — solicitar cambio de datos */
+.socio-solicitud-page {
+    width: 100%;
+    max-width: 1120px;
+}
+
+.socio-solicitud-alert {
+    margin-bottom: 1.5rem;
+}
+
+.socio-solicitud-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+}
+
+.socio-ficha-identidad {
+    position: sticky;
+    top: 1rem;
+}
+
+.socio-ficha-title {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+}
+
+.socio-ficha-hint {
+    margin: 0 0 1.25rem;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.socio-ficha-dl {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.socio-ficha-row {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.socio-ficha-row dt {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.socio-ficha-row dd {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.socio-ficha-nombre {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.socio-ficha-row--full {
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.socio-solicitud-form .card-title {
+    margin-bottom: 0.35rem;
+}
+
+.socio-solicitud-intro {
+    margin: 0 0 1.5rem;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.socio-solicitud-form .form-section {
+    margin-bottom: 1.75rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.socio-solicitud-form .form-section--last {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.socio-solicitud-form .form-section-title {
+    margin: 0 0 1rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.socio-solicitud-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    margin-top: 1.75rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 960px) {
+    .socio-solicitud-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .socio-ficha-identidad {
+        position: static;
+    }
+}
+
