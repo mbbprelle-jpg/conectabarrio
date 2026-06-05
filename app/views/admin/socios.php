@@ -1125,9 +1125,9 @@ foreach ($data['calles'] as $calleItem) {
         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; padding-top: 1rem; border-top: 1px solid var(--border-color);">
             <button type="button" class="btn btn-secondary" data-close-modal="revisarCambioModal">Cerrar</button>
             <button type="button" class="btn btn-danger" id="btnRechazarDesdeRevision">Rechazar solicitud</button>
-            <form id="formCambioAprobar" action="<?php echo URLROOT; ?>/admin/cambio_aprobar" method="POST" style="margin: 0;" onsubmit="return confirm('¿Aprobar todos los cambios solicitados por este socio?');">
+            <form id="formCambioAprobar" action="<?php echo URLROOT; ?>/admin/cambio_aprobar" method="POST" style="margin: 0;">
                 <input type="hidden" name="cambio_id" id="revisar_cambio_aprobar_id">
-                <button type="submit" class="btn btn-success">Aprobar cambios</button>
+                <button type="button" class="btn btn-success" id="btnConfirmarAprobarCambio">Aprobar cambios</button>
             </form>
         </div>
     </div>
@@ -1147,7 +1147,14 @@ foreach ($data['calles'] as $calleItem) {
             </div>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" data-close-modal="rechazarCambioModal">Cancelar</button>
-                <button type="submit" class="btn btn-danger">Rechazar solicitud</button>
+                <button type="submit"
+                        class="btn btn-danger confirm-action"
+                        data-confirm-title="Rechazar solicitud de cambio"
+                        data-confirm-message="Se descartarán los cambios propuestos y se conservará la información actual del socio. Puede indicar un motivo antes de confirmar."
+                        data-confirm-variant="danger"
+                        data-confirm-label="Rechazar solicitud">
+                    Rechazar solicitud
+                </button>
             </div>
         </form>
     </div>
@@ -1619,6 +1626,35 @@ document.addEventListener('DOMContentLoaded', function() {
             setField('rechazar_cambio_id', revisarCambioActualId);
             setField('motivo_rechazo', '');
             openModal(document.getElementById('rechazarCambioModal'));
+        });
+    }
+
+    const formCambioAprobar = document.getElementById('formCambioAprobar');
+    const btnConfirmarAprobarCambio = document.getElementById('btnConfirmarAprobarCambio');
+    if (btnConfirmarAprobarCambio && formCambioAprobar) {
+        btnConfirmarAprobarCambio.addEventListener('click', function() {
+            const socioLabel = revisarCambioSocio ? revisarCambioSocio.textContent.trim() : 'este socio';
+            const metaLabel = revisarCambioMeta ? revisarCambioMeta.textContent.trim() : '';
+            let message = 'Se aplicarán los cambios solicitados por ' + socioLabel + '.';
+            if (metaLabel) {
+                message += ' ' + metaLabel + '.';
+            }
+            message += ' La información actual del padrón será actualizada de forma definitiva.';
+            const submitAprobacion = function() {
+                closeModal(revisarCambioModal);
+                formCambioAprobar.submit();
+            };
+            if (typeof window.cbOpenConfirm === 'function') {
+                window.cbOpenConfirm({
+                    title: 'Aprobar solicitud de cambio',
+                    message: message,
+                    variant: 'success',
+                    confirmLabel: 'Aprobar cambios',
+                    onConfirm: submitAprobacion
+                });
+            } else {
+                submitAprobacion();
+            }
         });
     }
 });
