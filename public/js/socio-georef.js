@@ -21,12 +21,32 @@
         return opt ? opt.text.trim() : '';
     }
 
+    function getCalleCentro(selectEl) {
+        if (!selectEl || !selectEl.value) {
+            return null;
+        }
+        var opt = selectEl.options[selectEl.selectedIndex];
+        if (!opt) {
+            return null;
+        }
+        var lat = parseFloat(opt.getAttribute('data-lat-centro'));
+        var lng = parseFloat(opt.getAttribute('data-lng-centro'));
+        if (isNaN(lat) || isNaN(lng)) {
+            return null;
+        }
+        return { lat: lat, lng: lng };
+    }
+
     function SocioGeorefMap(container, options) {
         this.container = container;
         this.prefix = container.getAttribute('data-prefix') || '';
+        this.freeText = container.getAttribute('data-free-text') === '1';
         this.calleSelect = document.getElementById(container.getAttribute('data-calle-select') || 'calle_id');
         this.numeroInput = document.getElementById(container.getAttribute('data-numero-input') || 'numero_casa');
+        this.direccionInput = this.freeText && this.numeroInput ? this.numeroInput : null;
         this.comuna = container.getAttribute('data-comuna') || '';
+        this.latSede = parseFloat(container.getAttribute('data-lat-sede'));
+        this.lngSede = parseFloat(container.getAttribute('data-lng-sede'));
         this.callesMap = options.callesMap || {};
         this.latInput = document.getElementById(this.prefix + 'latitud');
         this.lngInput = document.getElementById(this.prefix + 'longitud');
@@ -61,13 +81,20 @@
         }
     };
 
+    SocioGeorefMap.prototype.getFallbackCenter = function () {
+        if (!isNaN(this.latSede) && !isNaN(this.lngSede)) {
+            return [this.latSede, this.lngSede];
+        }
+        return DEFAULT_CENTER.slice();
+    };
+
     SocioGeorefMap.prototype.ensureMap = function () {
         if (this.map || !this.mapEl || typeof L === 'undefined') {
             return;
         }
         var lat = parseFloat(this.latInput && this.latInput.value);
         var lng = parseFloat(this.lngInput && this.lngInput.value);
-        var center = (!isNaN(lat) && !isNaN(lng)) ? [lat, lng] : DEFAULT_CENTER.slice();
+        var center = (!isNaN(lat) && !isNaN(lng)) ? [lat, lng] : this.getFallbackCenter();
         var zoom = (!isNaN(lat) && !isNaN(lng)) ? 17 : DEFAULT_ZOOM;
 
         this.map = L.map(this.mapEl, { scrollWheelZoom: true }).setView(center, zoom);
@@ -101,42 +128,104 @@
         this.map.setView([lat, lng], 17);
     };
 
-    SocioGeorefMap.prototype.geocode = function () {
-        var calle = getCalleName(this.calleSelect, this.callesMap);
-        var numero = this.numeroInput ? this.numeroInput.value.trim() : '';
-        if (!calle || !numero || !this.comuna) {
-            this.setStatus('Seleccione calle e ingrese número para ubicar en el mapa.');
-            return;
-        }
+    SocioGeorefMap.prototype.centerOnCoords = function (lat, lng, message) {
+        this.ensureMap();
+        this.setCoords(lat.toFixed(7), lng.toFixed(7), true);
+        this.marker.setLatLng([lat, lng]);
+        this.map.setView([lat, lng], 17);
+        this.setStatus(message || 'Ubicación aproximada. Ajuste el marcador si es necesario.');
+    };
 
+    SocioGeorefMap.prototype.fetchNominatim = function (query, onSuccess, onFail) {
         var self = this;
         this.setStatus('Buscando ubicación…');
-        var query = numero + ' ' + calle + ', ' + this.comuna + ', Chile';
         var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=cl&q=' + encodeURIComponent(query);
-
         fetch(url, { headers: { 'Accept': 'application/json' } })
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 if (!Array.isArray(data) || !data.length) {
-                    self.setStatus('No se encontró la dirección. Mueva el mapa manualmente.', true);
-                    self.ensureMap();
+                    onFail();
                     return;
                 }
                 var lat = parseFloat(data[0].lat);
                 var lng = parseFloat(data[0].lon);
                 if (isNaN(lat) || isNaN(lng)) {
-                    self.setStatus('No se pudo interpretar la ubicación.', true);
+                    onFail();
                     return;
                 }
-                self.ensureMap();
-                self.setCoords(lat.toFixed(7), lng.toFixed(7));
-                self.marker.setLatLng([lat, lng]);
-                self.map.setView([lat, lng], 17);
+                onSuccess(lat, lng);
             })
             .catch(function () {
-                self.setStatus('Error al geocodificar. Intente nuevamente.', true);
-                self.ensureMap();
+                onFail();
             });
+    };
+
+    SocioGeorefMap.prototype.geocode = function () {
+        var self = this;
+
+        if (this.freeText) {
+            var direccion = this.direccionInput ? this.direccionInput.value.trim() : '';
+            if (!direccion || !this.comuna) {
+                this.setStatus('Indique su dirección para ubicar en el mapa.');
+                return;
+            }
+            this.fetchNominatim(
+                direccion + ', ' + this.comuna + ', Chile',
+                function (lat, lng) {
+                    self.centerOnCoords(lat, lng);
+                },
+                function () {
+                    self.setStatus('No se encontró la dirección. Mueva el mapa manualmente.', true);
+                    self.ensureMap();
+                }
+            );
+            return;
+        }
+
+        var calle = getCalleName(this.calleSelect, this.callesMap);
+        var numero = this.numeroInput ? this.numeroInput.value.trim() : '';
+        if (!calle || !numero) {
+            var centro = getCalleCentro(this.calleSelect);
+            if (centro) {
+                this.centerOnCoords(centro.lat, centro.lng, 'Centro de la calle. Ingrese número para afinar.');
+                return;
+            }
+            this.setStatus('Seleccione calle e ingrese número para ubicar en el mapa.');
+            return;
+        }
+
+        if (!this.comuna) {
+            this.setStatus('Comuna de la organización no configurada.', true);
+            return;
+        }
+
+        this.fetchNominatim(
+            numero + ' ' + calle + ', ' + this.comuna + ', Chile',
+            function (lat, lng) {
+                self.centerOnCoords(lat, lng);
+            },
+            function () {
+                var centro = getCalleCentro(self.calleSelect);
+                if (centro) {
+                    self.centerOnCoords(centro.lat, centro.lng, 'No se encontró el número. Centrado en la calle; ajuste el marcador.', true);
+                    return;
+                }
+                if (!isNaN(self.latSede) && !isNaN(self.lngSede)) {
+                    self.centerOnCoords(self.latSede, self.lngSede, 'No se encontró la dirección. Centrado en sede de la organización.', true);
+                    return;
+                }
+                self.setStatus('No se encontró la dirección. Mueva el mapa manualmente.', true);
+                self.ensureMap();
+            }
+        );
+    };
+
+    SocioGeorefMap.prototype.onCalleChange = function () {
+        var centro = getCalleCentro(this.calleSelect);
+        if (centro) {
+            this.centerOnCoords(centro.lat, centro.lng, 'Centro de la calle cargado. Ingrese número para afinar.');
+        }
+        this.scheduleGeocode();
     };
 
     SocioGeorefMap.prototype.scheduleGeocode = function () {
@@ -149,11 +238,15 @@
 
     SocioGeorefMap.prototype.bindEvents = function () {
         if (this.calleSelect) {
-            this.calleSelect.addEventListener('change', this._boundSchedule);
+            this.calleSelect.addEventListener('change', this.onCalleChange.bind(this));
         }
-        if (this.numeroInput) {
+        if (this.numeroInput && !this.freeText) {
             this.numeroInput.addEventListener('input', this._boundSchedule);
             this.numeroInput.addEventListener('change', this._boundSchedule);
+        }
+        if (this.direccionInput) {
+            this.direccionInput.addEventListener('input', this._boundSchedule);
+            this.direccionInput.addEventListener('change', this._boundSchedule);
         }
     };
 

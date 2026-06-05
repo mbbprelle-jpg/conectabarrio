@@ -133,11 +133,21 @@ class InviteController extends Controller {
 
         if ($dataSocio['rut'] === '' || $dataSocio['nombres'] === '' || $dataSocio['apellido_paterno'] === ''
             || $dataSocio['email'] === ''
-            || empty($dataSocio['calle_id']) || $dataSocio['numero_casa'] === ''
             || empty($dataSocio['genero']) || empty($dataSocio['fecha_nacimiento'])
             || empty($dataSocio['estado_civil']) || empty($dataSocio['nacionalidad'])
             || empty($dataSocio['profesion'])) {
             $renderForm('Complete todos los campos obligatorios.');
+            return;
+        }
+
+        require_once APPROOT . '/core/OrgHelper.php';
+        $usesCalles = OrgHelper::usesCallesJurisdiccion($invitation->junta_tipo ?? '');
+        if ($usesCalles && (empty($dataSocio['calle_id']) || $dataSocio['numero_casa'] === '')) {
+            $renderForm('Seleccione calle e indique número de casa.');
+            return;
+        }
+        if (!$usesCalles && ($dataSocio['direccion_texto'] ?? '') === '') {
+            $renderForm('Indique su dirección.');
             return;
         }
 
@@ -227,6 +237,12 @@ class InviteController extends Controller {
     }
 
     private function viewRegistro(array $data) {
+        if (!empty($data['invitation'])) {
+            require_once APPROOT . '/core/OrgHelper.php';
+            $tipo = $data['invitation']->junta_tipo ?? 'Junta de Vecinos';
+            $data['org_tipo'] = $tipo;
+            $data['uses_calles'] = OrgHelper::usesCallesJurisdiccion($tipo);
+        }
         $data['public_layout'] = true;
         $this->view('auth/registro_invitacion', $data);
     }
@@ -267,6 +283,7 @@ class InviteController extends Controller {
             'estado' => 1,
             'calle_id' => $post['calle_id'] ?? null,
             'numero_casa' => trim($post['numero_casa'] ?? ''),
+            'direccion_texto' => trim($post['direccion_texto'] ?? ''),
             'fecha_inicio' => !empty($post['fecha_inicio']) ? $post['fecha_inicio'] : date('Y-m-d'),
             'genero' => $profile['genero'],
             'fecha_nacimiento' => $profile['fecha_nacimiento'],

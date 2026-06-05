@@ -19,7 +19,7 @@ class Invitation extends Model {
     }
 
     public function getValidByToken($token) {
-        $this->db->query("SELECT i.*, j.nombre AS junta_nombre, j.comuna
+        $this->db->query("SELECT i.*, j.nombre AS junta_nombre, j.comuna, j.tipo AS junta_tipo, j.lat_sede, j.lng_sede
             FROM invitations i
             INNER JOIN juntas_vecinos j ON j.id = i.junta_id
             WHERE i.token = :token AND i.status = 'pending' AND i.expires_at > NOW()

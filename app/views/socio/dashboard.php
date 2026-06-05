@@ -71,7 +71,14 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                 Ficha Personal del Vecino
             </h3>
-            <span class="badge badge-info" style="font-size: 0.75rem;">Socio #<?php echo $data['socio']->id; ?></span>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <span class="badge badge-info" style="font-size: 0.75rem;">Socio #<?php echo $data['socio']->id; ?></span>
+                <?php if (!empty($data['cambio_pendiente'])): ?>
+                    <span class="badge badge-warning" style="font-size: 0.72rem;">Cambio en revisión</span>
+                <?php else: ?>
+                    <a href="<?php echo URLROOT; ?>/socio/solicitar_cambio" class="btn btn-secondary btn-sm" style="font-size: 0.72rem;">Actualizar mis datos</a>
+                <?php endif; ?>
+            </div>
         </div>
         
         <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -130,13 +137,15 @@
             <?php endif; ?>
 
             <div style="display: flex; flex-direction: column; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem;">
-                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Dirección Jurisdicción</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Domicilio</span>
                 <span style="font-size: 1rem; color: var(--text-color);">
-                    <?php 
+                    <?php
                     if (!empty($data['socio']->calle_nombre)) {
-                        echo htmlspecialchars($data['socio']->calle_nombre) . ' #' . htmlspecialchars($data['socio']->numero_casa);
+                        echo htmlspecialchars($data['socio']->calle_nombre) . ' #' . htmlspecialchars($data['socio']->numero_casa ?? '');
+                    } elseif (!empty($data['socio']->direccion_texto)) {
+                        echo htmlspecialchars($data['socio']->direccion_texto);
                     } else {
-                        echo 'Dirección No Registrada';
+                        echo 'Dirección no registrada';
                     }
                     ?>
                 </span>

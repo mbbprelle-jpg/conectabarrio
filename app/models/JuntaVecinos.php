@@ -88,4 +88,23 @@ class JuntaVecinos extends Model {
 
         return $stats;
     }
+
+    public function updateJunta(int $id, array $data): bool {
+        $sql = "UPDATE juntas_vecinos SET nombre = :nombre, tipo = :tipo, direccion = :direccion, comuna = :comuna";
+        if (array_key_exists('lat_sede', $data)) {
+            $sql .= ', lat_sede = :lat_sede, lng_sede = :lng_sede';
+        }
+        $sql .= ' WHERE id = :id';
+        $this->db->query($sql);
+        $this->db->bind(':nombre', $data['nombre']);
+        $this->db->bind(':tipo', $data['tipo']);
+        $this->db->bind(':direccion', $data['direccion']);
+        $this->db->bind(':comuna', $data['comuna']);
+        if (array_key_exists('lat_sede', $data)) {
+            $this->db->bind(':lat_sede', $data['lat_sede']);
+            $this->db->bind(':lng_sede', $data['lng_sede']);
+        }
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
 }

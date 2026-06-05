@@ -56,6 +56,9 @@ $invitacionesActivas = $data['invitaciones_activas'] ?? [];
 $cuotaVigente = !empty($data['cuotas_historial']) ? $data['cuotas_historial'][0] : null;
 $cuotaVigenteMonto = $cuotaVigente ? number_format($cuotaVigente->monto, 0, ',', '.') : '0';
 $juntaComuna = $_SESSION['user_junta_comuna'] ?? '';
+$usesCalles = $data['uses_calles'] ?? true;
+$orgTipo = $data['org_tipo'] ?? 'Junta de Vecinos';
+$cambiosPendientes = $data['cambios_pendientes'] ?? [];
 $callesGeorefMap = [];
 foreach ($data['calles'] as $calleItem) {
     $callesGeorefMap[(string)$calleItem->id] = $calleItem->nombre;
@@ -66,6 +69,13 @@ foreach ($data['calles'] as $calleItem) {
     <div class="alert alert-warning" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
         <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
         <span>Hay <strong><?php echo count($sociosPendientes); ?></strong> solicitud(es) de registro pendiente(s) de aprobación.</span>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($cambiosPendientes) && $canManageSocios): ?>
+    <div class="alert alert-info" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        <span>Hay <strong><?php echo count($cambiosPendientes); ?></strong> solicitud(es) de actualización de datos de socios por revisar.</span>
     </div>
 <?php endif; ?>
 
@@ -170,6 +180,80 @@ foreach ($data['calles'] as $calleItem) {
                                     style="font-size: 0.75rem;">
                                     Revisar / Aprobar
                                 </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($canManageSocios && !empty($cambiosPendientes)): ?>
+        <?php
+        require_once APPROOT . '/models/SocioCambioSolicitud.php';
+        $callesNombreMap = [];
+        foreach ($data['calles'] as $c) {
+            $callesNombreMap[(int)$c->id] = $c->nombre;
+        }
+        ?>
+        <div style="border: 1px solid rgba(6, 182, 212, 0.35); border-radius: var(--radius-sm); padding: 1rem; background: rgba(6, 182, 212, 0.05); margin-bottom: 0;">
+            <h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                Solicitudes de actualización de datos
+            </h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Socio</th>
+                            <th>Cambios solicitados</th>
+                            <th>Fecha</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($cambiosPendientes as $cambio):
+                            $datos = SocioCambioSolicitud::decodeDatos($cambio);
+                            $resumen = [];
+                            if (!empty($datos['email']) && ($datos['email'] !== ($cambio->email_actual ?? ''))) {
+                                $resumen[] = 'Correo: ' . ($cambio->email_actual ?? '—') . ' → ' . $datos['email'];
+                            }
+                            if (!empty($datos['telefono'])) {
+                                $resumen[] = 'Teléfono: ' . $datos['telefono'];
+                            }
+                            if (!empty($datos['genero']) || !empty($datos['fecha_nacimiento'])) {
+                                $resumen[] = 'Datos personales';
+                            }
+                            if ($usesCalles && !empty($datos['calle_id'])) {
+                                $calleNom = $callesNombreMap[(int)$datos['calle_id']] ?? 'Calle #' . (int)$datos['calle_id'];
+                                $resumen[] = 'Domicilio: ' . $calleNom . ' #' . ($datos['numero_casa'] ?? '');
+                            } elseif (!$usesCalles && !empty($datos['direccion_texto'])) {
+                                $resumen[] = 'Dirección: ' . $datos['direccion_texto'];
+                            }
+                            if (empty($resumen)) {
+                                $resumen[] = 'Ver detalle al aprobar';
+                            }
+                        ?>
+                        <tr>
+                            <td style="font-weight: 600;">
+                                <?php echo htmlspecialchars(trim(($cambio->nombre ?? '') . ' ' . ($cambio->apellido_paterno ?? ''))); ?>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;"><?php echo htmlspecialchars($cambio->rut ?? ''); ?></div>
+                            </td>
+                            <td style="font-size: 0.82rem;">
+                                <?php foreach ($resumen as $line): ?>
+                                    <div><?php echo htmlspecialchars($line); ?></div>
+                                <?php endforeach; ?>
+                            </td>
+                            <td style="font-size: 0.8rem; color: var(--text-muted);">
+                                <?php echo !empty($cambio->created_at) ? date('d-m-Y H:i', strtotime($cambio->created_at)) : '—'; ?>
+                            </td>
+                            <td>
+                                <form action="<?php echo URLROOT; ?>/admin/cambio_aprobar" method="POST" style="display: inline;" onsubmit="return confirm('¿Aprobar los cambios solicitados por este socio?');">
+                                    <input type="hidden" name="cambio_id" value="<?php echo (int)$cambio->id; ?>">
+                                    <button type="submit" class="btn btn-success btn-sm" style="font-size: 0.72rem;">Aprobar</button>
+                                </form>
+                                <button type="button" class="btn btn-secondary btn-sm btn-rechazar-cambio" data-cambio-id="<?php echo (int)$cambio->id; ?>" style="font-size: 0.72rem;">Rechazar</button>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -366,6 +450,7 @@ foreach ($data['calles'] as $calleItem) {
                                                 data-fecha-inicio="<?php echo htmlspecialchars(cbFechaSocioInput($socio)); ?>"
                                                 data-calle-id="<?php echo (int)($socio->calle_id ?? 0); ?>"
                                                 data-numero-casa="<?php echo htmlspecialchars($socio->numero_casa ?? ''); ?>"
+                                                data-direccion-texto="<?php echo htmlspecialchars($socio->direccion_texto ?? ''); ?>"
                                                 data-latitud="<?php echo htmlspecialchars($socio->latitud ?? ''); ?>"
                                                 data-longitud="<?php echo htmlspecialchars($socio->longitud ?? ''); ?>"
                                                 data-link-google="<?php echo htmlspecialchars($socio->link_google ?? ''); ?>"
@@ -513,33 +598,12 @@ foreach ($data['calles'] as $calleItem) {
                 <label for="fecha_inicio" class="form-label">Fecha de Inicio como Socio *</label>
                 <input type="date" name="fecha_inicio" id="fecha_inicio" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
             </div>
-            <div class="form-group">
-                <label for="calle_id" class="form-label">Calle (Jurisdicción) *</label>
-                <?php if (empty($data['calles'])): ?>
-                    <div class="alert alert-danger" style="padding: 0.5rem; font-size: 0.75rem; margin-bottom: 0.5rem;">
-                        No hay calles registradas. Agréguelas desde el botón <strong>Calles</strong>.
-                    </div>
-                    <select name="calle_id" id="calle_id" class="form-control" disabled required><option value="">-- Cree una calle primero --</option></select>
-                <?php else: ?>
-                    <select name="calle_id" id="calle_id" class="form-control" required>
-                        <option value="">-- Seleccionar Calle --</option>
-                        <?php foreach ($data['calles'] as $calle): ?>
-                            <option value="<?php echo $calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                <?php endif; ?>
-            </div>
-            <div class="form-group">
-                <label for="numero_casa" class="form-label">Número de Casa *</label>
-                <input type="text" name="numero_casa" id="numero_casa" class="form-control" required>
-            </div>
             <?php
-            $georefPrefix = '';
-            $calleSelectId = 'calle_id';
-            $numeroInputId = 'numero_casa';
-            $georefValues = [];
-            $georefComuna = $juntaComuna;
-            require APPROOT . '/views/partials/socio_georef_map.php';
+            $domPrefix = '';
+            $domValues = [];
+            $domRequired = true;
+            $calles = $data['calles'] ?? [];
+            require APPROOT . '/views/partials/socio_domicilio_fields.php';
             ?>
             <div class="alert alert-success" id="inscribirSocioClaveHint" style="padding: 0.8rem; font-size: 0.75rem; margin-bottom: 1rem;">
                 <span id="inscribirClaveConCorreo">Con correo: clave inicial <strong>socio123</strong>.</span>
@@ -547,7 +611,7 @@ foreach ($data['calles'] as $calleItem) {
             </div>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" data-close-modal="inscribirSocioModal">Cancelar</button>
-                <button type="submit" class="btn btn-primary" <?php echo empty($data['calles']) ? 'disabled' : ''; ?>>Inscribir Socio</button>
+                <button type="submit" class="btn btn-primary" <?php echo ($usesCalles && empty($data['calles'])) ? 'disabled' : ''; ?>>Inscribir Socio</button>
             </div>
         </form>
     </div>
@@ -725,28 +789,12 @@ foreach ($data['calles'] as $calleItem) {
                 <label class="form-label">Fecha inicio como socio *</label>
                 <input type="date" name="fecha_inicio" id="edit_fecha_inicio" class="form-control" required>
             </div>
-            <div class="grid-2col">
-                <div class="form-group">
-                    <label class="form-label">Calle *</label>
-                    <select name="calle_id" id="edit_calle_id" class="form-control" required>
-                        <option value="">-- Seleccionar --</option>
-                        <?php foreach ($data['calles'] as $calle): ?>
-                            <option value="<?php echo (int)$calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">N° Casa *</label>
-                    <input type="text" name="numero_casa" id="edit_numero_casa" class="form-control" required>
-                </div>
-            </div>
             <?php
-            $georefPrefix = 'edit_';
-            $calleSelectId = 'edit_calle_id';
-            $numeroInputId = 'edit_numero_casa';
-            $georefValues = [];
-            $georefComuna = $juntaComuna;
-            require APPROOT . '/views/partials/socio_georef_map.php';
+            $domPrefix = 'edit_';
+            $domValues = [];
+            $domRequired = true;
+            $calles = $data['calles'] ?? [];
+            require APPROOT . '/views/partials/socio_domicilio_fields.php';
             ?>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
                 <button type="button" class="btn btn-secondary" id="cancelEditarSocioModal">Cancelar</button>
@@ -812,28 +860,12 @@ foreach ($data['calles'] as $calleItem) {
                 <label class="form-label">Fecha inicio *</label>
                 <input type="date" name="fecha_inicio" id="pend_fecha_inicio" class="form-control" required>
             </div>
-            <div class="grid-2col">
-                <div class="form-group">
-                    <label class="form-label">Calle *</label>
-                    <select name="calle_id" id="pend_calle_id" class="form-control" required>
-                        <option value="">-- Seleccionar --</option>
-                        <?php foreach ($data['calles'] as $calle): ?>
-                            <option value="<?php echo (int)$calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">N° Casa *</label>
-                    <input type="text" name="numero_casa" id="pend_numero_casa" class="form-control" required>
-                </div>
-            </div>
             <?php
-            $georefPrefix = 'pend_';
-            $calleSelectId = 'pend_calle_id';
-            $numeroInputId = 'pend_numero_casa';
-            $georefValues = [];
-            $georefComuna = $juntaComuna;
-            require APPROOT . '/views/partials/socio_georef_map.php';
+            $domPrefix = 'pend_';
+            $domValues = [];
+            $domRequired = true;
+            $calles = $data['calles'] ?? [];
+            require APPROOT . '/views/partials/socio_domicilio_fields.php';
             ?>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
                 <button type="button" class="btn btn-secondary" id="cancelPendienteSocioModal">Cancelar</button>
@@ -862,6 +894,7 @@ foreach ($data['calles'] as $calleItem) {
                 <input type="hidden" name="fecha_inicio" id="pend_aprobar_fecha_inicio">
                 <input type="hidden" name="calle_id" id="pend_aprobar_calle_id">
                 <input type="hidden" name="numero_casa" id="pend_aprobar_numero_casa">
+                <input type="hidden" name="direccion_texto" id="pend_aprobar_direccion_texto">
                 <input type="hidden" name="latitud" id="pend_aprobar_latitud">
                 <input type="hidden" name="longitud" id="pend_aprobar_longitud">
                 <input type="hidden" name="link_google" id="pend_aprobar_link_google">
@@ -992,28 +1025,12 @@ foreach ($data['calles'] as $calleItem) {
                 <label class="form-label">Fecha inicio</label>
                 <input type="date" name="fecha_inicio" id="prev_fecha_inicio" class="form-control">
             </div>
-            <div class="grid-2col">
-                <div class="form-group">
-                    <label class="form-label">Calle</label>
-                    <select name="calle_id" id="prev_calle_id" class="form-control">
-                        <option value="">-- Seleccionar --</option>
-                        <?php foreach ($data['calles'] as $calle): ?>
-                            <option value="<?php echo (int)$calle->id; ?>"><?php echo htmlspecialchars($calle->nombre); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">N° Casa</label>
-                    <input type="text" name="numero_casa" id="prev_numero_casa" class="form-control cb-uppercase">
-                </div>
-            </div>
             <?php
-            $georefPrefix = 'prev_';
-            $calleSelectId = 'prev_calle_id';
-            $numeroInputId = 'prev_numero_casa';
-            $georefValues = [];
-            $georefComuna = $juntaComuna;
-            require APPROOT . '/views/partials/socio_georef_map.php';
+            $domPrefix = 'prev_';
+            $domValues = [];
+            $domRequired = false;
+            $calles = $data['calles'] ?? [];
+            require APPROOT . '/views/partials/socio_domicilio_fields.php';
             ?>
             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
                 <button type="button" class="btn btn-secondary" id="cancelPrevalidarSocioModal">Cancelar</button>
@@ -1042,12 +1059,36 @@ foreach ($data['calles'] as $calleItem) {
                 <input type="hidden" name="fecha_inicio" id="prev_aprobar_fecha_inicio">
                 <input type="hidden" name="calle_id" id="prev_aprobar_calle_id">
                 <input type="hidden" name="numero_casa" id="prev_aprobar_numero_casa">
+                <input type="hidden" name="direccion_texto" id="prev_aprobar_direccion_texto">
                 <input type="hidden" name="latitud" id="prev_aprobar_latitud">
                 <input type="hidden" name="longitud" id="prev_aprobar_longitud">
                 <input type="hidden" name="link_google" id="prev_aprobar_link_google">
                 <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Activar socio y enviar correo con clave temporal? (requiere correo válido)">Activar y enviar acceso</button>
             </form>
         </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($canManageSocios): ?>
+<div id="rechazarCambioModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 480px;">
+        <button type="button" class="modal-close-btn" data-close-modal="rechazarCambioModal" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.5rem;">Rechazar solicitud de cambio</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Opcionalmente indique un motivo para el socio.</p>
+        <form action="<?php echo URLROOT; ?>/admin/cambio_rechazar" method="POST">
+            <input type="hidden" name="cambio_id" id="rechazar_cambio_id">
+            <div class="form-group">
+                <label for="motivo_rechazo" class="form-label">Motivo (opcional)</label>
+                <textarea name="motivo_rechazo" id="motivo_rechazo" class="form-control" rows="3" placeholder="Ej: Falta documentación de respaldo"></textarea>
+            </div>
+            <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" data-close-modal="rechazarCambioModal">Cancelar</button>
+                <button type="submit" class="btn btn-danger">Rechazar solicitud</button>
+            </div>
+        </form>
     </div>
 </div>
 <?php endif; ?>
@@ -1119,6 +1160,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         instance.loadFromValues(lat || '', lng || '', link || '');
         instance.refreshLayout();
+    }
+
+    function setField(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val || '';
+    }
+
+    function setDomicilioFromDataset(prefix, dataset) {
+        setField(prefix + 'calle_id', dataset.calleId);
+        setField(prefix + 'numero_casa', dataset.numeroCasa);
+        setField(prefix + 'direccion_texto', dataset.direccionTexto);
     }
 
     function telefonoDigits(value) {
@@ -1215,8 +1267,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_nacionalidad').value = this.dataset.nacionalidad || '';
             document.getElementById('edit_profesion').value = this.dataset.profesion || '';
             document.getElementById('edit_fecha_inicio').value = this.dataset.fechaInicio || '';
-            document.getElementById('edit_calle_id').value = this.dataset.calleId || '';
-            document.getElementById('edit_numero_casa').value = this.dataset.numeroCasa || '';
+            setDomicilioFromDataset('edit_', this.dataset);
             loadGeoref('edit_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');
             openModal(editModal);
         });
@@ -1241,8 +1292,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('pend_aprobar_profesion').value = document.getElementById('pend_profesion').value;
         document.getElementById('pend_aprobar_telefono').value = document.getElementById('pend_telefono').value;
         document.getElementById('pend_aprobar_fecha_inicio').value = document.getElementById('pend_fecha_inicio').value;
-        document.getElementById('pend_aprobar_calle_id').value = document.getElementById('pend_calle_id').value;
-        document.getElementById('pend_aprobar_numero_casa').value = document.getElementById('pend_numero_casa').value;
+        setField('pend_aprobar_calle_id', document.getElementById('pend_calle_id')?.value);
+        setField('pend_aprobar_numero_casa', document.getElementById('pend_numero_casa')?.value);
+        setField('pend_aprobar_direccion_texto', document.getElementById('pend_direccion_texto')?.value);
         document.getElementById('pend_aprobar_latitud').value = document.getElementById('pend_latitud').value;
         document.getElementById('pend_aprobar_longitud').value = document.getElementById('pend_longitud').value;
         document.getElementById('pend_aprobar_link_google').value = document.getElementById('pend_link_google').value;
@@ -1264,8 +1316,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('pend_estado_civil').value = this.dataset.estadoCivil || '';
             document.getElementById('pend_nacionalidad').value = this.dataset.nacionalidad || '';
             document.getElementById('pend_profesion').value = this.dataset.profesion || '';
-            document.getElementById('pend_calle_id').value = this.dataset.calleId || '';
-            document.getElementById('pend_numero_casa').value = this.dataset.numeroCasa || '';
+            setDomicilioFromDataset('pend_', this.dataset);
             loadGeoref('pend_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');
             document.getElementById('formPendienteRechazar').action = '<?php echo URLROOT; ?>/admin/socio_pendiente_rechazar/' + id;
             syncPendienteApproveFields();
@@ -1301,8 +1352,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('prev_aprobar_profesion').value = document.getElementById('prev_profesion').value;
         document.getElementById('prev_aprobar_telefono').value = document.getElementById('prev_telefono').value;
         document.getElementById('prev_aprobar_fecha_inicio').value = document.getElementById('prev_fecha_inicio').value;
-        document.getElementById('prev_aprobar_calle_id').value = document.getElementById('prev_calle_id').value;
-        document.getElementById('prev_aprobar_numero_casa').value = document.getElementById('prev_numero_casa').value;
+        setField('prev_aprobar_calle_id', document.getElementById('prev_calle_id')?.value);
+        setField('prev_aprobar_numero_casa', document.getElementById('prev_numero_casa')?.value);
+        setField('prev_aprobar_direccion_texto', document.getElementById('prev_direccion_texto')?.value);
         document.getElementById('prev_aprobar_latitud').value = document.getElementById('prev_latitud').value;
         document.getElementById('prev_aprobar_longitud').value = document.getElementById('prev_longitud').value;
         document.getElementById('prev_aprobar_link_google').value = document.getElementById('prev_link_google').value;
@@ -1324,8 +1376,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('prev_estado_civil').value = this.dataset.estadoCivil || '';
             document.getElementById('prev_nacionalidad').value = this.dataset.nacionalidad || '';
             document.getElementById('prev_profesion').value = this.dataset.profesion || '';
-            document.getElementById('prev_calle_id').value = this.dataset.calleId || '';
-            document.getElementById('prev_numero_casa').value = this.dataset.numeroCasa || '';
+            setDomicilioFromDataset('prev_', this.dataset);
             loadGeoref('prev_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');
             document.getElementById('formPrevalidarEliminar').action = '<?php echo URLROOT; ?>/admin/socio_prevalidar_eliminar/' + id;
             syncPrevalidarApproveFields();
@@ -1421,6 +1472,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (this.value === 'DIRECTOR') document.getElementById('delegacion_perm_todos').checked = true;
     });
     <?php endif; ?>
+
+    document.querySelectorAll('.btn-rechazar-cambio').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            setField('rechazar_cambio_id', this.dataset.cambioId);
+            setField('motivo_rechazo', '');
+            openModal(document.getElementById('rechazarCambioModal'));
+        });
+    });
 });
 </script>
 <?php endif; ?>

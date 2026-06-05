@@ -4,6 +4,9 @@ $calleSelectId = $calleSelectId ?? 'calle_id';
 $numeroInputId = $numeroInputId ?? 'numero_casa';
 $georefValues = $georefValues ?? [];
 $georefComuna = trim((string)($georefComuna ?? ''));
+$latSede = $latSede ?? ($_SESSION['user_junta_lat_sede'] ?? '');
+$lngSede = $lngSede ?? ($_SESSION['user_junta_lng_sede'] ?? '');
+$usesFreeText = !empty($usesFreeText);
 $latitud = $georefValues['latitud'] ?? '';
 $longitud = $georefValues['longitud'] ?? '';
 $linkGoogle = $georefValues['link_google'] ?? '';
@@ -12,10 +15,17 @@ $linkGoogle = $georefValues['link_google'] ?? '';
      data-prefix="<?php echo htmlspecialchars($georefPrefix); ?>"
      data-calle-select="<?php echo htmlspecialchars($calleSelectId); ?>"
      data-numero-input="<?php echo htmlspecialchars($numeroInputId); ?>"
-     data-comuna="<?php echo htmlspecialchars($georefComuna); ?>">
+     data-comuna="<?php echo htmlspecialchars($georefComuna); ?>"
+     data-lat-sede="<?php echo htmlspecialchars((string)$latSede); ?>"
+     data-lng-sede="<?php echo htmlspecialchars((string)$lngSede); ?>"
+     data-free-text="<?php echo $usesFreeText ? '1' : '0'; ?>">
     <label class="form-label">Ubicación en mapa</label>
     <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0 0 0.5rem;">
-        Seleccione calle y número; luego ajuste el marcador si la ubicación no es exacta.
+        <?php if ($usesFreeText): ?>
+            Escriba su dirección y ajuste el marcador si no es exacta.
+        <?php else: ?>
+            Seleccione calle y número; luego ajuste el marcador si la ubicación no es exacta.
+        <?php endif; ?>
     </p>
     <div id="<?php echo htmlspecialchars($georefPrefix); ?>georef_map" class="socio-georef-map" role="region" aria-label="Mapa de ubicación del domicilio"></div>
     <input type="hidden" name="latitud" id="<?php echo htmlspecialchars($georefPrefix); ?>latitud" value="<?php echo htmlspecialchars((string)$latitud); ?>">

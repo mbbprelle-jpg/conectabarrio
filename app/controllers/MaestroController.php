@@ -191,6 +191,49 @@ class MaestroController extends Controller {
         }
         $this->redirect('/maestro/dashboard');
     }
+
+    public function actualizar_junta() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        require_once APPROOT . '/core/OrgHelper.php';
+        require_once APPROOT . '/core/SocioGeoref.php';
+        $post = $this->sanitizePost();
+        $juntaId = (int)($post['junta_id'] ?? 0);
+        $nombre = trim($post['nombre'] ?? '');
+        $tipo = $post['tipo'] ?? 'Junta de Vecinos';
+        $comuna = OrgHelper::normalizeComuna($post['comuna'] ?? '');
+        $direccion = trim($post['direccion'] ?? '');
+
+        if ($juntaId <= 0 || $nombre === '' || $comuna === '' || $direccion === '') {
+            $_SESSION['error_msg'] = 'Complete todos los campos de la organización.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $validTipos = ['Junta de Vecinos', 'Comité', 'Organización'];
+        if (!in_array($tipo, $validTipos, true)) {
+            $_SESSION['error_msg'] = 'Tipo de organización inválido.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+
+        $georef = SocioGeoref::geocodeFreeText($direccion, $comuna, new Database());
+        $payload = [
+            'nombre' => $nombre,
+            'tipo' => $tipo,
+            'comuna' => $comuna,
+            'direccion' => $direccion,
+            'lat_sede' => $georef['latitud'] ?? null,
+            'lng_sede' => $georef['longitud'] ?? null,
+        ];
+        if ($this->juntaModel->updateJunta($juntaId, $payload)) {
+            $_SESSION['success_msg'] = 'Organización "' . $nombre . '" actualizada correctamente.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo actualizar la organización.';
+        }
+        $this->redirect('/maestro/dashboard');
+    }
     // ==================== Pagos de Organizaciones (Suscripción ConectaBarrio) ====================
 
     public function payments() {

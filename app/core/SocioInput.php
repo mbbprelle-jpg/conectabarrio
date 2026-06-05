@@ -65,7 +65,7 @@ class SocioInput {
     ];
 
     public static function normalizeTextFields(array $data, array $skipKeys = []) {
-        $defaultSkip = ['email', 'password', 'token', 'calle_id', 'fecha_inicio', 'fecha_nacimiento', 'genero', 'estado_civil', 'nacionalidad', 'telefono', 'latitud', 'longitud', 'link_google'];
+        $defaultSkip = ['email', 'password', 'token', 'calle_id', 'fecha_inicio', 'fecha_nacimiento', 'genero', 'estado_civil', 'nacionalidad', 'telefono', 'latitud', 'longitud', 'link_google', 'direccion_texto'];
         $skipKeys = array_unique(array_merge($defaultSkip, $skipKeys));
         foreach ($data as $key => $value) {
             if (in_array($key, $skipKeys, true) || !is_string($value)) {

@@ -210,41 +210,24 @@
                         <input type="date" name="fecha_inicio" class="form-control" required value="<?php echo htmlspecialchars($old['fecha_inicio'] ?? date('Y-m-d')); ?>">
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">Calle (Jurisdicción) *</label>
-                        <?php if (empty($data['calles'])): ?>
-                            <div class="alert alert-danger alert-block alert-persistent" style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-                                <div class="alert-content">No hay calles configuradas. Contacte a la directiva.</div>
-                            </div>
-                            <select name="calle_id" id="calle_id" class="form-control" disabled required><option value="">—</option></select>
-                        <?php else: ?>
-                            <select name="calle_id" id="calle_id" class="form-control" required>
-                                <option value="">-- Seleccionar Calle --</option>
-                                <?php foreach ($data['calles'] as $calle): ?>
-                                    <option value="<?php echo (int)$calle->id; ?>" <?php echo (($old['calle_id'] ?? '') == $calle->id) ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars(mb_strtoupper($calle->nombre, 'UTF-8')); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Número de Casa *</label>
-                        <input type="text" name="numero_casa" id="numero_casa" class="form-control cb-uppercase" required value="<?php echo htmlspecialchars($old['numero_casa'] ?? ''); ?>">
-                    </div>
-
                     <?php
-                    $georefPrefix = '';
-                    $calleSelectId = 'calle_id';
-                    $numeroInputId = 'numero_casa';
-                    $georefValues = [
+                    $domPrefix = '';
+                    $domValues = [
+                        'calle_id' => $old['calle_id'] ?? '',
+                        'numero_casa' => $old['numero_casa'] ?? '',
+                        'direccion_texto' => $old['direccion_texto'] ?? '',
                         'latitud' => $old['latitud'] ?? '',
                         'longitud' => $old['longitud'] ?? '',
                         'link_google' => $old['link_google'] ?? '',
                     ];
+                    $domRequired = true;
+                    $orgTipo = $data['org_tipo'] ?? 'Junta de Vecinos';
+                    $usesCalles = $data['uses_calles'] ?? true;
+                    $calles = $data['calles'] ?? [];
                     $georefComuna = $data['invitation']->comuna ?? '';
-                    require APPROOT . '/views/partials/socio_georef_map.php';
+                    $latSede = $data['invitation']->lat_sede ?? null;
+                    $lngSede = $data['invitation']->lng_sede ?? null;
+                    require APPROOT . '/views/partials/socio_domicilio_fields.php';
                     ?>
 
                     <div class="alert alert-info alert-block invite-registro-notice alert-persistent">
@@ -253,7 +236,7 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn btn-primary invite-registro-submit" <?php echo empty($data['calles']) ? 'disabled' : ''; ?>>
+                    <button type="submit" class="btn btn-primary invite-registro-submit" <?php echo (($data['uses_calles'] ?? true) && empty($data['calles'])) ? 'disabled' : ''; ?>>
                         Enviar solicitud de registro
                     </button>
                 </form>

@@ -17,6 +17,9 @@ class AuthContext {
         self::syncAccountCompletionFlag($user);
         $_SESSION['user_junta_nombre'] = $membership->junta_nombre ?? 'Organización';
         $_SESSION['user_junta_comuna'] = $membership->comuna ?? '';
+        $_SESSION['user_junta_tipo'] = $membership->junta_tipo ?? 'Junta de Vecinos';
+        $_SESSION['user_junta_lat_sede'] = $membership->lat_sede ?? null;
+        $_SESSION['user_junta_lng_sede'] = $membership->lng_sede ?? null;
         $_SESSION['user_junta_plan'] = $membership->plan ?? 'basico';
         $_SESSION['user_junta_precio_anual'] = $membership->precio_anual ?? 0;
     }
@@ -57,7 +60,7 @@ class AuthContext {
     public static function adminMethodsForSocioDelegado() {
         $methods = [];
         if (self::canManageSocios()) {
-            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_actualizar', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion', 'generar_invitacion', 'invitacion_revocar', 'socio_pendiente_actualizar', 'socio_pendiente_aprobar', 'socio_pendiente_rechazar', 'socio_importar_validar', 'socio_importar_confirmar', 'socio_prevalidar_actualizar', 'socio_prevalidar_aprobar', 'socio_prevalidar_eliminar']);
+            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_actualizar', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion', 'generar_invitacion', 'invitacion_revocar', 'socio_pendiente_actualizar', 'socio_pendiente_aprobar', 'socio_pendiente_rechazar', 'socio_importar_validar', 'socio_importar_confirmar', 'socio_prevalidar_actualizar', 'socio_prevalidar_aprobar', 'socio_prevalidar_eliminar', 'cambio_aprobar', 'cambio_rechazar', 'cambio_actualizar']);
         }
         if (self::canRegisterPayments()) {
             $methods = array_merge($methods, ['finanzas', 'registrar_pago_cuota', 'registrar_transaccion', 'get_socio_cuotas']);

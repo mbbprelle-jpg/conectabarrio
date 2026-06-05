@@ -21,6 +21,7 @@ class AdminController extends Controller {
         $this->cierreModel = $this->model('CierreMensual');
         $this->membresiaModel = $this->model('Membresia');
         $this->invitationModel = $this->model('Invitation');
+        $this->cambioModel = $this->model('SocioCambioSolicitud');
         $this->db = new Database();
     }
 
@@ -145,6 +146,7 @@ class AdminController extends Controller {
     // Mostrar listado de socios y configuración de cuotas de la Junta
     public function socios() {
         $this->requireManageSocios();
+        require_once APPROOT . '/core/OrgHelper.php';
         $juntaId = $_SESSION['user_junta_id'];
 
         // Obtener historial completo de cuotas
@@ -161,15 +163,22 @@ class AdminController extends Controller {
         $row = $this->db->single();
         $proposedIdSocio = $row && $row->max_id ? (int)$row->max_id + 1 : 1;
 
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        $orgTipo = $junta->tipo ?? 'Junta de Vecinos';
+        $socios = $this->membresiaModel->overlayDomicilioOnUsers($this->userModel->getPadronByJunta($juntaId), $juntaId);
+
         $data = [
             'title' => 'Gestión de Socios',
             'header_title' => 'Padrón de Socios y Jurisdicción',
             'header_subtitle' => 'Administre los vecinos afiliados, controle las calles de la junta y programe ajustes de cuotas',
             'active_menu' => 'socios',
-            'socios' => $this->userModel->getPadronByJunta($juntaId),
+            'socios' => $socios,
             'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
             'socios_pendientes' => $this->userModel->getPendingByJunta($juntaId),
             'socios_prevalidar' => $this->userModel->getPrevalidarByJunta($juntaId),
+            'cambios_pendientes' => $this->cambioModel->getPendingByJunta($juntaId),
+            'org_tipo' => $orgTipo,
+            'uses_calles' => OrgHelper::usesCallesJurisdiccion($orgTipo),
             'invitaciones_activas' => $this->invitationModel->getActiveByJunta($juntaId),
             'cuotas_historial' => $cuotasHistorial,
             'calles' => $calles,
@@ -254,6 +263,7 @@ class AdminController extends Controller {
                 $dataSocio['password'] = 'socio123';
                 if ($newUserId = $this->userModel->register($dataSocio)) {
                     $this->membresiaModel->upsert($newUserId, $dataSocio['junta_id'], 'socio', ['id_socio' => $idSocio]);
+                    $this->syncDomicilioMembresia((int)$newUserId, $juntaId, $dataSocio);
                     $_SESSION['success_msg'] = 'Socio "' . $dataSocio['nombres'] . ' ' . $dataSocio['apellido_paterno'] . '" inscrito con éxito con ID #' . $idSocio . '. Clave inicial: socio123';
                 } else {
                     $_SESSION['error_msg'] = 'Error al registrar al socio en la base de datos.';
@@ -265,12 +275,14 @@ class AdminController extends Controller {
                     $dataSocio['id'] = (int)$existingRut->id;
                     if ($this->userModel->updatePrevalidar($dataSocio)) {
                         $this->membresiaModel->upsert((int)$existingRut->id, $juntaId, 'socio', ['id_socio' => $idSocio]);
+                        $this->syncDomicilioMembresia((int)$existingRut->id, $juntaId, $dataSocio);
                         $_SESSION['success_msg'] = 'Alta provisional actualizada para "' . $dataSocio['nombres'] . '". Puede registrar pagos; el vecino ingresa con RUT y clave ' . SocioInitialPassword::fromRut($dataSocio['rut']) . '.';
                     } else {
                         $_SESSION['error_msg'] = 'No se pudo actualizar el registro provisional.';
                     }
                 } elseif ($newUserId = $this->userModel->createPrevalidar($dataSocio)) {
                     $this->membresiaModel->upsert($newUserId, $juntaId, 'socio', ['id_socio' => $idSocio]);
+                    $this->syncDomicilioMembresia((int)$newUserId, $juntaId, $dataSocio);
                     $_SESSION['success_msg'] = 'Socio "' . $dataSocio['nombres'] . ' ' . $dataSocio['apellido_paterno'] . '" registrado en alta provisional (sin correo). '
                         . 'Puede asociar pagos ya. Clave inicial del vecino: primeros 6 dígitos del RUT (' . SocioInitialPassword::fromRut($dataSocio['rut']) . ').';
                 } else {
@@ -339,8 +351,39 @@ class AdminController extends Controller {
             'latitud' => $georef['latitud'],
             'longitud' => $georef['longitud'],
             'link_google' => $georef['link_google'],
+            'direccion_texto' => trim($post['direccion_texto'] ?? ''),
         ];
-        return SocioInput::normalizeTextFields($data);
+        return SocioInput::normalizeTextFields($data, ['direccion_texto']);
+    }
+
+    private function orgUsesCalles(): bool {
+        require_once APPROOT . '/core/OrgHelper.php';
+        return OrgHelper::usesCallesJurisdiccion($_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos');
+    }
+
+    private function syncDomicilioMembresia(int $userId, int $juntaId, array $data): void {
+        try {
+            $extra = [];
+            if (!empty($data['id_socio'])) {
+                $extra['id_socio'] = (int)$data['id_socio'];
+            }
+            $this->membresiaModel->upsert($userId, $juntaId, 'socio', $extra);
+            $this->membresiaModel->updateDomicilio($userId, $juntaId, $data);
+        } catch (Exception $e) {
+            // Migración opcional
+        }
+    }
+
+    private function buildCallesGeorefIndex(array $calles): array {
+        $index = [];
+        foreach ($calles as $c) {
+            $index[(int)$c->id] = [
+                'nombre' => $c->nombre,
+                'lat_centro' => $c->lat_centro ?? null,
+                'lng_centro' => $c->lng_centro ?? null,
+            ];
+        }
+        return $index;
     }
 
     private function validateSocioFormData(array $data, $requireIdSocio = true, $requireProfile = true, $requireApellidoMaterno = true, $requireEmail = true) {
@@ -351,9 +394,15 @@ class AdminController extends Controller {
         }
         if ($data['rut'] === '' || $data['nombres'] === '' || $data['apellido_paterno'] === ''
             || ($requireApellidoMaterno && $data['apellido_materno'] === '')
-            || ($requireEmail && $data['email'] === '')
-            || empty($data['calle_id']) || $data['numero_casa'] === '') {
+            || ($requireEmail && $data['email'] === '')) {
             return 'Complete todos los campos obligatorios.';
+        }
+        if ($this->orgUsesCalles()) {
+            if (empty($data['calle_id']) || ($data['numero_casa'] ?? '') === '') {
+                return 'Seleccione calle e indique número de casa.';
+            }
+        } elseif (trim($data['direccion_texto'] ?? '') === '') {
+            return 'Indique la dirección.';
         }
         if ($requireEmail && $data['email'] !== '' && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
             return 'El correo electrónico no es válido.';
@@ -488,6 +537,7 @@ class AdminController extends Controller {
         }
 
         $this->membresiaModel->upsert($socioId, $juntaId, 'socio', ['id_socio' => (int)$data['id_socio']]);
+        $this->syncDomicilioMembresia($socioId, $juntaId, $data);
 
         $socioActivo = $this->userModel->getSocioById($socioId);
         $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Su organización';
@@ -614,13 +664,10 @@ class AdminController extends Controller {
             return;
         }
 
-        $this->db->query('SELECT id, nombre FROM calles WHERE junta_id = :junta_id');
+        $this->db->query('SELECT id, nombre, lat_centro, lng_centro FROM calles WHERE junta_id = :junta_id');
         $this->db->bind(':junta_id', $juntaId);
         $callesRows = $this->db->resultSet();
-        $callesById = [];
-        foreach ($callesRows as $calleRow) {
-            $callesById[(int)$calleRow->id] = $calleRow->nombre;
-        }
+        $callesById = $this->buildCallesGeorefIndex($callesRows);
         $comuna = $_SESSION['user_junta_comuna'] ?? '';
 
         $inserted = 0;
@@ -629,7 +676,7 @@ class AdminController extends Controller {
             $data['junta_id'] = $juntaId;
             $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
             if (empty($data['latitud']) || empty($data['longitud'])) {
-                $data = SocioGeoref::resolveForSocio($data, $callesById, $comuna);
+                $data = SocioGeoref::resolveForMembresia($data, $callesById, $comuna, $this->db);
                 usleep(1100000);
             }
             $existing = $this->userModel->findUserByRut($data['rut']);
@@ -637,6 +684,7 @@ class AdminController extends Controller {
                 if (($existing->status ?? '') === 'prevalidar' && (int)$existing->junta_id === $juntaId) {
                     $data['id'] = (int)$existing->id;
                     if ($this->userModel->updatePrevalidar($data)) {
+                        $this->syncDomicilioMembresia((int)$existing->id, $juntaId, $data);
                         $inserted++;
                     } else {
                         $skipped++;
@@ -646,7 +694,9 @@ class AdminController extends Controller {
                 }
                 continue;
             }
-            if ($this->userModel->createPrevalidar($data)) {
+            $newId = $this->userModel->createPrevalidar($data);
+            if ($newId) {
+                $this->syncDomicilioMembresia((int)$newId, $juntaId, $data);
                 $inserted++;
             } else {
                 $skipped++;
@@ -784,6 +834,7 @@ class AdminController extends Controller {
         }
 
         $this->membresiaModel->upsert($socioId, $juntaId, 'socio', ['id_socio' => (int)$data['id_socio']]);
+        $this->syncDomicilioMembresia($socioId, $juntaId, $data);
         $socioActivo = $this->userModel->getSocioById($socioId);
         $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Su organización';
         $mailResult = SocioApprovalMail::send($socioActivo, $juntaNombre, $tempPwd);
@@ -896,6 +947,9 @@ class AdminController extends Controller {
                 $memRol = $isAdminMiembro ? 'admin' : 'socio';
                 $memExtra = $idSocio > 0 ? ['id_socio' => $idSocio] : [];
                 $this->membresiaModel->upsert($socioId, $juntaId, $memRol, $memExtra);
+                if (!$isAdminMiembro) {
+                    $this->syncDomicilioMembresia($socioId, $juntaId, $data);
+                }
             } catch (Exception $e) {
                 // Tabla de membresías opcional hasta migración SQL
             }
@@ -911,17 +965,18 @@ class AdminController extends Controller {
     public function calle_crear() {
         $this->requireManageSocios();
         if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
+            require_once APPROOT . '/core/SocioGeoref.php';
             $post = $this->sanitizePost();
-            $nombre = trim($post['nombre'] ?? '');
+            $nombre = mb_strtoupper(trim($post['nombre'] ?? ''), 'UTF-8');
             $juntaId = $_SESSION['user_junta_id'];
+            $comuna = $_SESSION['user_junta_comuna'] ?? '';
 
-            if (empty($nombre)) {
+            if ($nombre === '') {
                 $_SESSION['error_msg'] = 'El nombre de la calle no puede estar vacío.';
                 $this->redirect('/admin/socios');
                 return;
             }
 
-            // Validar si la calle ya existe en la misma junta
             $this->db->query("SELECT * FROM calles WHERE junta_id = :junta_id AND nombre = :nombre");
             $this->db->bind(':junta_id', $juntaId);
             $this->db->bind(':nombre', $nombre);
@@ -931,13 +986,31 @@ class AdminController extends Controller {
                 return;
             }
 
-            // Insertar calle
-            $this->db->query("INSERT INTO calles (junta_id, nombre) VALUES (:junta_id, :nombre)");
+            $georef = SocioGeoref::geocodeStreet($nombre, $comuna, $this->db);
+            try {
+                $this->db->query('SELECT lat_centro FROM calles LIMIT 1');
+                $this->db->execute();
+                $hasGeoref = true;
+            } catch (Exception $e) {
+                $hasGeoref = false;
+            }
+
+            if ($hasGeoref && $georef) {
+                $this->db->query('INSERT INTO calles (junta_id, nombre, lat_centro, lng_centro) VALUES (:junta_id, :nombre, :lat, :lng)');
+                $this->db->bind(':lat', $georef['latitud']);
+                $this->db->bind(':lng', $georef['longitud']);
+            } else {
+                $this->db->query('INSERT INTO calles (junta_id, nombre) VALUES (:junta_id, :nombre)');
+            }
             $this->db->bind(':junta_id', $juntaId);
             $this->db->bind(':nombre', $nombre);
 
             if ($this->db->execute()) {
-                $_SESSION['success_msg'] = 'Calle "' . htmlspecialchars($nombre) . '" registrada correctamente en la jurisdicción.';
+                $msg = 'Calle "' . htmlspecialchars($nombre) . '" registrada correctamente en la jurisdicción.';
+                if ($georef) {
+                    $msg .= ' Ubicación aproximada guardada en el mapa.';
+                }
+                $_SESSION['success_msg'] = $msg;
             } else {
                 $_SESSION['error_msg'] = 'Error al registrar la calle.';
             }
@@ -2173,6 +2246,81 @@ class AdminController extends Controller {
             $_SESSION['success_msg'] = 'Cargo y permisos del socio actualizados correctamente.';
         } catch (Exception $e) {
             $_SESSION['error_msg'] = 'No se pudo guardar la delegación. Verifique que ejecutó la migración sql/create_membresias_and_permisos.sql en la base de datos.';
+        }
+        $this->redirect('/admin/socios');
+    }
+
+    public function cambio_aprobar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        require_once APPROOT . '/models/SocioCambioSolicitud.php';
+        $post = $this->sanitizePost();
+        $cambioId = (int)($post['cambio_id'] ?? 0);
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $solicitud = $this->cambioModel->getPendingById($cambioId, $juntaId);
+        if (!$solicitud) {
+            $_SESSION['error_msg'] = 'Solicitud de cambio no encontrada.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $datos = SocioCambioSolicitud::decodeDatos($solicitud);
+        $userId = (int)$solicitud->usuario_id;
+        $socio = $this->userModel->getPadronMiembroById($userId, $juntaId);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'Socio no válido para esta organización.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $update = [
+            'id' => $userId,
+            'id_socio' => $socio->id_socio,
+            'rut' => $socio->rut,
+            'nombres' => $socio->nombre,
+            'apellido_paterno' => $socio->apellido_paterno,
+            'apellido_materno' => $socio->apellido_materno,
+            'email' => $datos['email'] ?? $socio->email,
+            'telefono' => $datos['telefono'] ?? $socio->telefono,
+            'calle_id' => $datos['calle_id'] ?? $socio->calle_id,
+            'numero_casa' => $datos['numero_casa'] ?? $socio->numero_casa,
+            'fecha_inicio' => !empty($socio->fecha_inicio) ? substr($socio->fecha_inicio, 0, 10) : date('Y-m-d'),
+            'genero' => $datos['genero'] ?? $socio->genero,
+            'fecha_nacimiento' => $datos['fecha_nacimiento'] ?? $socio->fecha_nacimiento,
+            'estado_civil' => $datos['estado_civil'] ?? $socio->estado_civil,
+            'nacionalidad' => $datos['nacionalidad'] ?? $socio->nacionalidad,
+            'profesion' => $datos['profesion'] ?? $socio->profesion,
+            'latitud' => $datos['latitud'] ?? null,
+            'longitud' => $datos['longitud'] ?? null,
+            'link_google' => $datos['link_google'] ?? null,
+            'direccion_texto' => $datos['direccion_texto'] ?? null,
+        ];
+        if (!$this->userModel->updatePadronMiembro($update)) {
+            $_SESSION['error_msg'] = 'No se pudieron aplicar los cambios al socio.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $this->syncDomicilioMembresia($userId, $juntaId, $update);
+        $this->cambioModel->approve($cambioId, $juntaId, (int)$_SESSION['user_id']);
+        $_SESSION['success_msg'] = 'Cambios de datos aprobados para "' . $socio->nombre . '".';
+        $this->redirect('/admin/socios');
+    }
+
+    public function cambio_rechazar() {
+        $this->requireManageSocios();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $cambioId = (int)($post['cambio_id'] ?? 0);
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $motivo = trim($post['motivo_rechazo'] ?? '');
+        if ($this->cambioModel->reject($cambioId, $juntaId, (int)$_SESSION['user_id'], $motivo)) {
+            $_SESSION['success_msg'] = 'Solicitud de cambio rechazada.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo rechazar la solicitud.';
         }
         $this->redirect('/admin/socios');
     }

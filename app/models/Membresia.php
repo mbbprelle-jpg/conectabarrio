@@ -1,8 +1,27 @@
 <?php
 class Membresia extends Model {
 
+    private static $hasDomicilioColumn = null;
+
+    public function hasDomicilioColumn(): bool {
+        if (self::$hasDomicilioColumn === null) {
+            try {
+                $this->db->query('SELECT calle_id FROM usuario_membresias LIMIT 1');
+                $this->db->execute();
+                self::$hasDomicilioColumn = true;
+            } catch (Exception $e) {
+                self::$hasDomicilioColumn = false;
+            }
+        }
+        return self::$hasDomicilioColumn;
+    }
+
+    private function juntaSelectFields(): string {
+        return 'j.nombre AS junta_nombre, j.comuna, j.plan, j.precio_anual, j.tipo AS junta_tipo, j.lat_sede, j.lng_sede';
+    }
+
     public function getActiveByUsuario($usuarioId) {
-        $this->db->query("SELECT m.*, j.nombre AS junta_nombre, j.comuna, j.plan, j.precio_anual
+        $this->db->query("SELECT m.*, {$this->juntaSelectFields()}
             FROM usuario_membresias m
             INNER JOIN juntas_vecinos j ON j.id = m.junta_id
             WHERE m.usuario_id = :usuario_id AND m.estado = 1
@@ -12,7 +31,7 @@ class Membresia extends Model {
     }
 
     public function getById($id) {
-        $this->db->query("SELECT m.*, j.nombre AS junta_nombre, j.comuna, j.plan, j.precio_anual
+        $this->db->query("SELECT m.*, {$this->juntaSelectFields()}
             FROM usuario_membresias m
             INNER JOIN juntas_vecinos j ON j.id = m.junta_id
             WHERE m.id = :id");
@@ -61,10 +80,78 @@ class Membresia extends Model {
     }
 
     public function getByUsuarioJunta($usuarioId, $juntaId) {
-        $this->db->query("SELECT * FROM usuario_membresias WHERE usuario_id = :usuario_id AND junta_id = :junta_id LIMIT 1");
+        $this->db->query("SELECT m.*, c.nombre AS calle_nombre
+            FROM usuario_membresias m
+            LEFT JOIN calles c ON c.id = m.calle_id
+            WHERE m.usuario_id = :usuario_id AND m.junta_id = :junta_id LIMIT 1");
         $this->db->bind(':usuario_id', $usuarioId);
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->single();
+    }
+
+    public function updateDomicilio(int $usuarioId, int $juntaId, array $data): bool {
+        if (!$this->hasDomicilioColumn()) {
+            return false;
+        }
+        $mem = $this->getByUsuarioJunta($usuarioId, $juntaId);
+        if (!$mem) {
+            return false;
+        }
+        $this->db->query("UPDATE usuario_membresias SET
+            calle_id = :calle_id,
+            numero_casa = :numero_casa,
+            direccion_texto = :direccion_texto,
+            latitud = :latitud,
+            longitud = :longitud,
+            link_google = :link_google
+            WHERE id = :id");
+        $this->db->bind(':calle_id', !empty($data['calle_id']) ? (int)$data['calle_id'] : null);
+        $this->db->bind(':numero_casa', !empty($data['numero_casa']) ? $data['numero_casa'] : null);
+        $this->db->bind(':direccion_texto', !empty($data['direccion_texto']) ? $data['direccion_texto'] : null);
+        $this->db->bind(':latitud', isset($data['latitud']) && $data['latitud'] !== '' ? $data['latitud'] : null);
+        $this->db->bind(':longitud', isset($data['longitud']) && $data['longitud'] !== '' ? $data['longitud'] : null);
+        $this->db->bind(':link_google', !empty($data['link_google']) ? $data['link_google'] : null);
+        $this->db->bind(':id', $mem->id);
+        return $this->db->execute();
+    }
+
+    public function overlayDomicilioOnUser($user, int $juntaId) {
+        if (!$user || !$this->hasDomicilioColumn()) {
+            return $user;
+        }
+        $mem = $this->getByUsuarioJunta((int)$user->id, $juntaId);
+        if (!$mem) {
+            return $user;
+        }
+        if ($mem->calle_id !== null) {
+            $user->calle_id = $mem->calle_id;
+        }
+        if ($mem->numero_casa !== null) {
+            $user->numero_casa = $mem->numero_casa;
+        }
+        if (!empty($mem->direccion_texto)) {
+            $user->direccion_texto = $mem->direccion_texto;
+        }
+        if ($mem->latitud !== null) {
+            $user->latitud = $mem->latitud;
+        }
+        if ($mem->longitud !== null) {
+            $user->longitud = $mem->longitud;
+        }
+        if (!empty($mem->link_google)) {
+            $user->link_google = $mem->link_google;
+        }
+        if (!empty($mem->calle_nombre)) {
+            $user->calle_nombre = $mem->calle_nombre;
+        }
+        return $user;
+    }
+
+    public function overlayDomicilioOnUsers(array $users, int $juntaId): array {
+        foreach ($users as $idx => $user) {
+            $users[$idx] = $this->overlayDomicilioOnUser($user, $juntaId);
+        }
+        return $users;
     }
 
     public function updateDelegacion($membresiaId, $data) {

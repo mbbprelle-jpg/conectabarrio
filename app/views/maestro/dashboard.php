@@ -152,6 +152,16 @@
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                                         Configurar Plan
                                     </button>
+                                    <button class="btn btn-primary btn-sm btn-editar-org"
+                                            data-id="<?php echo $junta->id; ?>"
+                                            data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>"
+                                            data-tipo="<?php echo htmlspecialchars($junta->tipo ?? 'Junta de Vecinos'); ?>"
+                                            data-comuna="<?php echo htmlspecialchars($junta->comuna ?? ''); ?>"
+                                            data-direccion="<?php echo htmlspecialchars($junta->direccion ?? ''); ?>"
+                                            style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                        Editar org
+                                    </button>
                                     <button class="btn btn-secondary btn-sm btn-gestionar-equipo"
                                             data-id="<?php echo $junta->id; ?>"
                                             data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>"
@@ -224,6 +234,53 @@
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button id="cancelPagoBtn" type="button" class="btn btn-secondary">Cancelar</button>
                 <button type="submit" class="btn btn-success">Registrar Pago</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Editar Organización -->
+<div id="orgEditModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 560px;">
+        <button id="closeOrgEditModalBtn" type="button" style="position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <div style="text-align: center; margin-bottom: 1.5rem;">
+            <h3 style="font-family: var(--font-heading); color: var(--text-main); font-size: 1.35rem; margin-bottom: 0.25rem;">Editar organización</h3>
+            <p id="org_edit_modal_nombre" style="color: var(--primary); font-weight: bold; font-size: 0.95rem; margin: 0;">Organización</p>
+        </div>
+        <form action="<?php echo URLROOT; ?>/maestro/actualizar_junta" method="POST">
+            <input type="hidden" name="junta_id" id="org_edit_junta_id">
+            <div class="form-group">
+                <label for="org_edit_nombre" class="form-label">Nombre *</label>
+                <input type="text" name="nombre" id="org_edit_nombre" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="org_edit_tipo" class="form-label">Tipo *</label>
+                <select name="tipo" id="org_edit_tipo" class="form-control" required>
+                    <option value="Junta de Vecinos">Junta de Vecinos</option>
+                    <option value="Comité">Comité</option>
+                    <option value="Organización">Organización</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="org_edit_comuna" class="form-label">Comuna *</label>
+                <?php
+                $id = 'org_edit_comuna';
+                $name = 'comuna';
+                $selected = '';
+                $required = true;
+                require APPROOT . '/views/partials/comunas_select.php';
+                ?>
+            </div>
+            <div class="form-group">
+                <label for="org_edit_direccion" class="form-label">Dirección sede *</label>
+                <input type="text" name="direccion" id="org_edit_direccion" class="form-control" required placeholder="Ej: Pasaje Los Aromos 123">
+                <small style="color: var(--text-muted); font-size: 0.72rem;">Se geocodifica para centrar el mapa de socios sin calle registrada.</small>
+            </div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
+                <button id="cancelOrgEditBtn" type="button" class="btn btn-secondary">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
             </div>
         </form>
     </div>
@@ -458,10 +515,13 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('planModal');
+    const orgEditModal = document.getElementById('orgEditModal');
     const pagoModal = document.getElementById('pagoModal');
     const equipoModal = document.getElementById('equipoModal');
     const closeBtn = document.getElementById('closePlanModalBtn');
     const cancelBtn = document.getElementById('cancelPlanBtn');
+    const closeOrgEditBtn = document.getElementById('closeOrgEditModalBtn');
+    const cancelOrgEditBtn = document.getElementById('cancelOrgEditBtn');
     const closePagoBtn = document.getElementById('closePagoModalBtn');
     const cancelPagoBtn = document.getElementById('cancelPagoBtn');
     const closeEquipoBtn = document.getElementById('closeEquipoModalBtn');
@@ -683,6 +743,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    document.querySelectorAll('.btn-editar-org').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('org_edit_junta_id').value = this.getAttribute('data-id') || '';
+            document.getElementById('org_edit_modal_nombre').textContent = this.getAttribute('data-nombre') || '';
+            document.getElementById('org_edit_nombre').value = this.getAttribute('data-nombre') || '';
+            document.getElementById('org_edit_tipo').value = this.getAttribute('data-tipo') || 'Junta de Vecinos';
+            document.getElementById('org_edit_comuna').value = this.getAttribute('data-comuna') || '';
+            document.getElementById('org_edit_direccion').value = this.getAttribute('data-direccion') || '';
+            openModal(orgEditModal);
+        });
+    });
+
     document.querySelectorAll('.btn-registrar-pago').forEach(btn => {
         btn.addEventListener('click', function() {
             const orgId = this.getAttribute('data-id');
@@ -775,6 +847,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (closeBtn) closeBtn.addEventListener('click', () => closeModal(modal));
     if (cancelBtn) cancelBtn.addEventListener('click', () => closeModal(modal));
+    if (closeOrgEditBtn) closeOrgEditBtn.addEventListener('click', () => closeModal(orgEditModal));
+    if (cancelOrgEditBtn) cancelOrgEditBtn.addEventListener('click', () => closeModal(orgEditModal));
     if (closePagoBtn) closePagoBtn.addEventListener('click', () => closeModal(pagoModal));
     if (cancelPagoBtn) cancelPagoBtn.addEventListener('click', () => closeModal(pagoModal));
     if (closeEquipoBtn) closeEquipoBtn.addEventListener('click', () => closeModal(equipoModal));
