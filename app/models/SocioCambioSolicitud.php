@@ -110,29 +110,57 @@ class SocioCambioSolicitud extends Model {
 
     public function approve(int $id, int $juntaId, int $reviewerId): bool {
         if (!$this->hasTable()) {
+            $this->lastError = 'Falta la tabla socio_cambio_solicitudes.';
             return false;
         }
-        $this->db->query("UPDATE socio_cambio_solicitudes
-            SET status = 'approved', reviewed_by = :reviewer, reviewed_at = NOW()
-            WHERE id = :id AND junta_id = :junta_id AND status = 'pending'");
-        $this->db->bind(':reviewer', $reviewerId);
-        $this->db->bind(':id', $id);
-        $this->db->bind(':junta_id', $juntaId);
-        return $this->db->execute();
+        try {
+            $this->db->query("UPDATE socio_cambio_solicitudes
+                SET status = 'approved', reviewed_by = :reviewer, reviewed_at = NOW()
+                WHERE id = :id AND junta_id = :junta_id AND status = 'pending'");
+            $this->db->bind(':reviewer', $reviewerId);
+            $this->db->bind(':id', $id);
+            $this->db->bind(':junta_id', $juntaId);
+            if (!$this->db->execute()) {
+                $this->lastError = 'No se pudo aprobar la solicitud.';
+                return false;
+            }
+            if ($this->db->rowCount() < 1) {
+                $this->lastError = 'Solicitud no encontrada o ya fue procesada.';
+                return false;
+            }
+            return true;
+        } catch (Exception $e) {
+            $this->lastError = $e->getMessage();
+            return false;
+        }
     }
 
     public function reject(int $id, int $juntaId, int $reviewerId, string $motivo = ''): bool {
         if (!$this->hasTable()) {
+            $this->lastError = 'Falta la tabla socio_cambio_solicitudes.';
             return false;
         }
-        $this->db->query("UPDATE socio_cambio_solicitudes
-            SET status = 'rejected', motivo_rechazo = :motivo, reviewed_by = :reviewer, reviewed_at = NOW()
-            WHERE id = :id AND junta_id = :junta_id AND status = 'pending'");
-        $this->db->bind(':motivo', $motivo !== '' ? $motivo : null);
-        $this->db->bind(':reviewer', $reviewerId);
-        $this->db->bind(':id', $id);
-        $this->db->bind(':junta_id', $juntaId);
-        return $this->db->execute();
+        try {
+            $this->db->query("UPDATE socio_cambio_solicitudes
+                SET status = 'rejected', motivo_rechazo = :motivo, reviewed_by = :reviewer, reviewed_at = NOW()
+                WHERE id = :id AND junta_id = :junta_id AND status = 'pending'");
+            $this->db->bind(':motivo', $motivo !== '' ? $motivo : null);
+            $this->db->bind(':reviewer', $reviewerId);
+            $this->db->bind(':id', $id);
+            $this->db->bind(':junta_id', $juntaId);
+            if (!$this->db->execute()) {
+                $this->lastError = 'No se pudo rechazar la solicitud.';
+                return false;
+            }
+            if ($this->db->rowCount() < 1) {
+                $this->lastError = 'Solicitud no encontrada o ya fue procesada.';
+                return false;
+            }
+            return true;
+        } catch (Exception $e) {
+            $this->lastError = $e->getMessage();
+            return false;
+        }
     }
 
     public static function decodeDatos($row): array {

@@ -9,6 +9,7 @@ class AdminController extends Controller {
     private $cierreModel;
     private $membresiaModel;
     private $invitationModel;
+    private $cambioModel;
     private $db;
 
     public function __construct() {
@@ -29,7 +30,11 @@ class AdminController extends Controller {
         require_once APPROOT . '/core/AuthContext.php';
         if (!AuthContext::canManageSocios()) {
             $_SESSION['error_msg'] = 'No tiene permisos para gestionar socios ni calles.';
-            $this->redirect('/admin/dashboard');
+            if (($_SESSION['user_rol'] ?? '') === 'socio') {
+                $this->redirect('/socio/dashboard');
+            } else {
+                $this->redirect('/admin/dashboard');
+            }
             exit;
         }
     }
@@ -2317,10 +2322,26 @@ class AdminController extends Controller {
         $cambioId = (int)($post['cambio_id'] ?? 0);
         $juntaId = (int)$_SESSION['user_junta_id'];
         $motivo = trim($post['motivo_rechazo'] ?? '');
+
+        if ($cambioId <= 0) {
+            $_SESSION['error_msg'] = 'Solicitud de cambio inválida.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
+        if (!$this->cambioModel->getPendingById($cambioId, $juntaId)) {
+            $_SESSION['error_msg'] = 'Solicitud no encontrada o ya fue procesada.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+
         if ($this->cambioModel->reject($cambioId, $juntaId, (int)$_SESSION['user_id'], $motivo)) {
             $_SESSION['success_msg'] = 'Solicitud de cambio rechazada.';
         } else {
-            $_SESSION['error_msg'] = 'No se pudo rechazar la solicitud.';
+            $detail = trim($this->cambioModel->getLastError());
+            $_SESSION['error_msg'] = $detail !== ''
+                ? $detail
+                : 'No se pudo rechazar la solicitud.';
         }
         $this->redirect('/admin/socios');
     }
