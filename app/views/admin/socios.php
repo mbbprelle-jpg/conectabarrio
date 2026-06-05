@@ -131,7 +131,7 @@ foreach ($data['calles'] as $calleItem) {
         <?php if (AuthContext::canViewMapaSocios()): ?>
         <a href="<?php echo URLROOT; ?>/admin/mapa_socios" class="socios-action-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
-            Mapa de socios
+            Mapa comunitario
         </a>
         <?php endif; ?>
     </div>
@@ -154,9 +154,10 @@ foreach ($data['calles'] as $calleItem) {
     <div class="card mapa-socios-config-card" style="margin-bottom: 1.5rem;">
         <div class="mapa-socios-config-body">
             <div>
-                <h3 class="mapa-socios-config-title">Mapa de socios</h3>
+                <h3 class="mapa-socios-config-title">Mapa comunitario</h3>
                 <p class="mapa-socios-config-text">
-                    Visualice la concentración geográfica del padrón. Puede delegar el acceso a directivos desde el botón <strong>Delegar</strong> de cada socio.
+                    Visualice la concentración geográfica de <strong>todos los miembros</strong> de la organización (administrador y socios).
+                    Al habilitarlo, cualquier usuario activo de la junta podrá verlo en su menú.
                 </p>
             </div>
             <form action="<?php echo URLROOT; ?>/admin/mapa_socios_config" method="POST" class="mapa-socios-config-form">
@@ -426,7 +427,6 @@ foreach ($data['calles'] as $calleItem) {
                                     $cargo = $mem->cargo ?? '';
                                     $permSocios = !empty($mem->permiso_gestion_socios) || !empty($mem->permiso_todos);
                                     $permPagos = !empty($mem->permiso_registro_pagos) || !empty($mem->permiso_todos);
-                                    $permMapa = !empty($mem->permiso_mapa_socios) || !empty($mem->permiso_todos);
                                     ?>
                                     <?php if ($cargo): ?>
                                         <span class="badge badge-info" style="margin-bottom: 0.25rem; display: inline-block;"><?php echo htmlspecialchars($cargo); ?></span><br>
@@ -435,9 +435,7 @@ foreach ($data['calles'] as $calleItem) {
                                         <?php if ($permSocios): ?>Socios<?php endif; ?>
                                         <?php if ($permSocios && $permPagos): ?> · <?php endif; ?>
                                         <?php if ($permPagos): ?>Pagos<?php endif; ?>
-                                        <?php if (($permSocios || $permPagos) && $permMapa): ?> · <?php endif; ?>
-                                        <?php if ($permMapa): ?>Mapa<?php endif; ?>
-                                        <?php if (!$cargo && !$permSocios && !$permPagos && !$permMapa): ?>Sin delegación<?php endif; ?>
+                                        <?php if (!$cargo && !$permSocios && !$permPagos): ?>Sin delegación<?php endif; ?>
                                     </small>
                                     <div style="margin-top: 0.35rem;">
                                         <button type="button" class="btn btn-secondary btn-sm btn-delegar-socio"
@@ -446,7 +444,6 @@ foreach ($data['calles'] as $calleItem) {
                                                 data-cargo="<?php echo htmlspecialchars($cargo); ?>"
                                                 data-perm-socios="<?php echo $permSocios ? '1' : '0'; ?>"
                                                 data-perm-pagos="<?php echo $permPagos ? '1' : '0'; ?>"
-                                                data-perm-mapa="<?php echo $permMapa ? '1' : '0'; ?>"
                                                 data-perm-todos="<?php echo !empty($mem->permiso_todos) ? '1' : '0'; ?>"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">
                                             Delegar
@@ -1191,17 +1188,13 @@ foreach ($data['calles'] as $calleItem) {
                     Registrar pagos y movimientos de caja
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
-                    <input type="checkbox" name="permiso_mapa_socios" id="delegacion_perm_mapa" value="1">
-                    Ver mapa de socios (concentración geográfica)
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
                     <input type="checkbox" name="permiso_todos" id="delegacion_perm_todos" value="1">
                     Todos los permisos (director)
                 </label>
             </div>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
-                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa la gestión de socios y el mapa; al asignar <strong>Tesorero</strong>, el registro de pagos.
-                Recuerde también habilitar el mapa para la organización en la tarjeta superior «Mapa de socios».
+                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa la gestión de socios; al asignar <strong>Tesorero</strong>, el registro de pagos.
+                El <strong>mapa comunitario</strong> lo ve cualquier miembro cuando el administrador lo habilita para la organización.
             </p>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" id="cancelDelegacionModal">Cancelar</button>
@@ -1532,7 +1525,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_cargo').value = this.dataset.cargo || '';
             document.getElementById('delegacion_perm_socios').checked = this.dataset.permSocios === '1';
             document.getElementById('delegacion_perm_pagos').checked = this.dataset.permPagos === '1';
-            document.getElementById('delegacion_perm_mapa').checked = this.dataset.permMapa === '1';
             document.getElementById('delegacion_perm_todos').checked = this.dataset.permTodos === '1';
             openModal(delegacionModal);
         });
@@ -1541,10 +1533,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('cancelDelegacionModal')?.addEventListener('click', () => closeModal(delegacionModal));
     delegacionModal?.addEventListener('click', e => { if (e.target === delegacionModal) closeModal(delegacionModal); });
     document.getElementById('delegacion_cargo')?.addEventListener('change', function() {
-        if (this.value === 'SECRETARIO') {
-            document.getElementById('delegacion_perm_socios').checked = true;
-            document.getElementById('delegacion_perm_mapa').checked = true;
-        }
+        if (this.value === 'SECRETARIO') document.getElementById('delegacion_perm_socios').checked = true;
         if (this.value === 'TESORERO') document.getElementById('delegacion_perm_pagos').checked = true;
         if (this.value === 'DIRECTOR') {
             document.getElementById('delegacion_perm_todos').checked = true;
@@ -1552,7 +1541,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.getElementById('delegacion_perm_todos')?.addEventListener('change', function () {
         if (this.checked) {
-            document.getElementById('delegacion_perm_mapa').checked = true;
             document.getElementById('delegacion_perm_socios').checked = true;
             document.getElementById('delegacion_perm_pagos').checked = true;
         }

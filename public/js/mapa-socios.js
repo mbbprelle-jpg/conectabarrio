@@ -74,7 +74,10 @@
                 fillColor: '#3b82f6',
                 fillOpacity: 0.75
             });
-            var popup = '<strong>' + (p.label || 'Socio') + '</strong>';
+            var popup = '<strong>' + (p.label || 'Miembro') + '</strong>';
+            if (p.rol) {
+                popup += '<br><span style="font-size:0.85rem;color:#64748b;">' + p.rol + '</span>';
+            }
             if (p.id_socio) {
                 popup += '<br><span style="font-size:0.85rem;color:#64748b;">N° socio: ' + p.id_socio + '</span>';
             }

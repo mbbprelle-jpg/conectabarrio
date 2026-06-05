@@ -51,7 +51,7 @@ class AdminController extends Controller {
     private function requireViewMapaSocios() {
         require_once APPROOT . '/core/AuthContext.php';
         if (!AuthContext::canViewMapaSocios()) {
-            $_SESSION['error_msg'] = 'No tiene permiso para ver el mapa de socios. El administrador debe habilitarlo y otorgarle acceso.';
+            $_SESSION['error_msg'] = 'El mapa comunitario no está habilitado para su organización. El administrador debe activarlo en Socios y Ajustes.';
             if (($_SESSION['user_rol'] ?? '') === 'socio') {
                 $this->redirect('/socio/dashboard');
             } else {
@@ -2259,15 +2259,12 @@ class AdminController extends Controller {
                 $this->redirect('/admin/socios');
                 return;
             }
-            $permGestion = !empty($post['permiso_gestion_socios']);
-            $permTodos = !empty($post['permiso_todos']);
-            $permMapa = !empty($post['permiso_mapa_socios']) || $permGestion || $permTodos || $cargo === 'SECRETARIO';
             $this->membresiaModel->updateDelegacion($membresia->id, [
                 'cargo' => $cargo ?: null,
-                'permiso_gestion_socios' => $permGestion,
+                'permiso_gestion_socios' => !empty($post['permiso_gestion_socios']),
                 'permiso_registro_pagos' => !empty($post['permiso_registro_pagos']),
-                'permiso_todos' => $permTodos,
-                'permiso_mapa_socios' => $permMapa,
+                'permiso_todos' => !empty($post['permiso_todos']),
+                'permiso_mapa_socios' => false,
             ]);
             if ((int)$usuarioId === (int)$_SESSION['user_id']) {
                 AuthContext::refreshMembershipSession();
@@ -2375,13 +2372,16 @@ class AdminController extends Controller {
         require_once APPROOT . '/core/AuthContext.php';
         $juntaId = (int)$_SESSION['user_junta_id'];
         $junta = $this->juntaModel->getJuntaById($juntaId);
-        $sociosActivos = $this->userModel->getSociosByJunta($juntaId);
-        $mapaData = $this->membresiaModel->buildMapaSociosDataset($juntaId, $sociosActivos);
+        $padron = $this->membresiaModel->overlayDomicilioOnUsers(
+            $this->userModel->getPadronByJunta($juntaId),
+            $juntaId
+        );
+        $mapaData = $this->membresiaModel->buildMapaSociosDataset($juntaId, $padron);
 
         $data = [
-            'title' => 'Mapa de Socios',
-            'header_title' => 'Mapa de Socios',
-            'header_subtitle' => 'Distribución geográfica y concentración del padrón activo',
+            'title' => 'Mapa comunitario',
+            'header_title' => 'Mapa comunitario',
+            'header_subtitle' => 'Distribución geográfica de todos los miembros de la organización',
             'active_menu' => 'mapa_socios',
             'junta' => $junta,
             'mapa' => $mapaData,

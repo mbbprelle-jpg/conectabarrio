@@ -210,16 +210,16 @@ class Membresia extends Model {
         return $this->db->execute();
     }
 
-    /** Socios activos con coordenadas para el mapa de concentración. */
-    public function buildMapaSociosDataset(int $juntaId, array $socios): array {
-        $total = count($socios);
+    /** Miembros del padrón (socios + administradores) con coordenadas para el mapa. */
+    public function buildMapaSociosDataset(int $juntaId, array $miembros): array {
+        $total = count($miembros);
         $puntos = [];
         $geolocalizados = 0;
 
-        foreach ($socios as $socio) {
-            $socio = $this->overlayDomicilioOnUser($socio, $juntaId);
-            $lat = $socio->latitud ?? null;
-            $lng = $socio->longitud ?? null;
+        foreach ($miembros as $miembro) {
+            $miembro = $this->overlayDomicilioOnUser($miembro, $juntaId);
+            $lat = $miembro->latitud ?? null;
+            $lng = $miembro->longitud ?? null;
             if ($lat === null || $lng === null || $lat === '' || $lng === '' || !is_numeric($lat) || !is_numeric($lng)) {
                 continue;
             }
@@ -229,12 +229,15 @@ class Membresia extends Model {
                 continue;
             }
             $geolocalizados++;
-            $nombre = trim(($socio->nombre ?? '') . ' ' . ($socio->apellido_paterno ?? ''));
+            $nombre = trim(($miembro->nombre ?? '') . ' ' . ($miembro->apellido_paterno ?? ''));
+            $esAdmin = ($miembro->rol ?? '') === 'admin';
+            $rolLabel = $esAdmin ? 'Administrador' : 'Socio';
             $puntos[] = [
                 'lat' => $lat,
                 'lng' => $lng,
-                'id_socio' => $socio->id_socio ?? null,
-                'label' => $nombre !== '' ? $nombre : ('Socio #' . ($socio->id_socio ?? $socio->id)),
+                'id_socio' => $miembro->id_socio ?? null,
+                'rol' => $rolLabel,
+                'label' => $nombre !== '' ? $nombre : ('Miembro #' . ($miembro->id_socio ?? $miembro->id)),
             ];
         }
 

@@ -69,17 +69,11 @@ class AuthContext {
         if (!self::isMapaSociosEnabled()) {
             return false;
         }
-        if (self::isFullAdmin()) {
-            return true;
+        if (($_SESSION['user_rol'] ?? '') === 'maestro') {
+            return false;
         }
-        if (!empty($_SESSION['permiso_todos'])) {
-            return true;
-        }
-        if (!empty($_SESSION['permiso_mapa_socios'])) {
-            return true;
-        }
-        // Secretario/a u otros con gestión de socios pueden ver el mapa si la org lo habilitó.
-        return self::canManageSocios();
+        // Todos los miembros activos de la organización (administrador y socios).
+        return !empty($_SESSION['user_junta_id']);
     }
 
     /**

@@ -25,15 +25,14 @@ $comuna = $_SESSION['user_junta_comuna'] ?? '';
         <div>
             <h3 class="mapa-socios-config-title">Configuración del mapa</h3>
             <p class="mapa-socios-config-text">
-                Habilite esta función para su organización y delegue el permiso <strong>Ver mapa de socios</strong>
-                a miembros de la directiva desde el padrón de socios.
+                Al habilitarlo, <strong>todos los miembros</strong> de la organización (administrador y socios) podrán ver el mapa comunitario en su menú lateral.
             </p>
         </div>
         <form action="<?php echo URLROOT; ?>/admin/mapa_socios_config" method="POST" class="mapa-socios-config-form">
             <input type="hidden" name="redirect_mapa" value="1">
             <label class="mapa-socios-toggle">
                 <input type="checkbox" name="mapa_socios_habilitado" value="1" <?php echo !empty($data['mapa_habilitado']) ? 'checked' : ''; ?>>
-                <span>Mapa de socios habilitado</span>
+                <span>Mapa comunitario habilitado</span>
             </label>
             <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
         </form>
@@ -44,7 +43,7 @@ $comuna = $_SESSION['user_junta_comuna'] ?? '';
 <div class="mapa-socios-page">
     <div class="mapa-socios-stats">
         <div class="mapa-stat-card">
-            <span class="mapa-stat-label">Total socios activos</span>
+            <span class="mapa-stat-label">Total miembros activos</span>
             <strong class="mapa-stat-value"><?php echo number_format($total, 0, ',', '.'); ?></strong>
         </div>
         <div class="mapa-stat-card mapa-stat-card--ok">
@@ -64,9 +63,9 @@ $comuna = $_SESSION['user_junta_comuna'] ?? '';
     <div class="card mapa-socios-map-card">
         <div class="mapa-socios-map-toolbar">
             <div>
-                <h3 class="card-title" style="margin-bottom: 0.25rem;">Concentración de socios</h3>
+                <h3 class="card-title" style="margin-bottom: 0.25rem;">Concentración de miembros</h3>
                 <p class="mapa-socios-map-hint">
-                    Las zonas más cálidas indican mayor concentración. Los puntos muestran domicilios con coordenadas registradas.
+                    Las zonas más cálidas indican mayor concentración. Incluye socios y administradores con domicilio georreferenciado.
                 </p>
             </div>
             <div class="mapa-socios-layer-toggles">
@@ -83,8 +82,8 @@ $comuna = $_SESSION['user_junta_comuna'] ?? '';
 
         <?php if ($geo === 0): ?>
             <div class="mapa-socios-empty">
-                <p>Aún no hay socios con coordenadas registradas.</p>
-                <p class="mapa-socios-empty-hint">Complete el domicilio y la ubicación en el mapa al inscribir o editar socios.</p>
+                <p>Aún no hay miembros con coordenadas registradas.</p>
+                <p class="mapa-socios-empty-hint">Complete el domicilio y la ubicación en el mapa al inscribir o editar socios y administradores.</p>
                 <?php if (AuthContext::canManageSocios()): ?>
                     <a href="<?php echo URLROOT; ?>/admin/socios" class="btn btn-primary btn-sm">Ir al padrón</a>
                 <?php endif; ?>
