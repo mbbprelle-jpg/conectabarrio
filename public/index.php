@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../app/bootstrap/errors.php';
+
 $autoload = __DIR__ . '/../vendor/autoload.php';
 if (file_exists($autoload)) {
     require_once $autoload;

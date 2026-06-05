@@ -2,7 +2,8 @@
 // Asegurar integridad de codificaciÃ³n de caracteres en todas las respuestas
 header('Content-Type: text/html; charset=UTF-8');
 
-// ConfiguraciÃ³n de la base de datos
+// Configuraci?n de la base de datos
+define('APP_ENV', strtolower(trim((string)(getenv('APP_ENV') ?: 'production'))));
 define('DB_HOST', getenv('DB_HOST') ?: '127.0.0.1');
 define('DB_USER', getenv('DB_USER') ?: 'root');
 define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
@@ -21,7 +22,7 @@ define('URLROOT', 'https://conectabarrio.cl');
 // Nombre del sitio
 define('SITENAME', 'CONECTABARRIO');
 
-// SMTP Brevo (PHPMailer) â€” trim para evitar espacios ocultos al copiar/pegar secretos.
+// SMTP Brevo (PHPMailer) âÿÿ trim para evitar espacios ocultos al copiar/pegar secretos.
 $smtpHost = trim((string) (getenv('SMTP_HOST') ?: ''));
 $smtpPortRaw = trim((string) (getenv('SMTP_PORT') ?: '587'));
 $smtpUser = trim((string) (getenv('SMTP_USER') ?: ''));
