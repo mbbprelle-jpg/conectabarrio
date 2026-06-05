@@ -17,7 +17,41 @@ class Membresia extends Model {
     }
 
     private function juntaSelectFields(): string {
-        return 'j.nombre AS junta_nombre, j.comuna, j.plan, j.precio_anual, j.tipo AS junta_tipo, j.lat_sede, j.lng_sede';
+        $fields = 'j.nombre AS junta_nombre, j.comuna, j.plan, j.precio_anual, j.tipo AS junta_tipo, j.lat_sede, j.lng_sede';
+        if ($this->hasMapaSociosJuntaColumn()) {
+            $fields .= ', j.mapa_socios_habilitado';
+        }
+        return $fields;
+    }
+
+    private static $hasMapaSociosJuntaColumn = null;
+
+    public function hasMapaSociosJuntaColumn(): bool {
+        if (self::$hasMapaSociosJuntaColumn === null) {
+            try {
+                $this->db->query('SELECT mapa_socios_habilitado FROM juntas_vecinos LIMIT 1');
+                $this->db->execute();
+                self::$hasMapaSociosJuntaColumn = true;
+            } catch (Exception $e) {
+                self::$hasMapaSociosJuntaColumn = false;
+            }
+        }
+        return self::$hasMapaSociosJuntaColumn;
+    }
+
+    private static $hasPermisoMapaColumn = null;
+
+    public function hasPermisoMapaColumn(): bool {
+        if (self::$hasPermisoMapaColumn === null) {
+            try {
+                $this->db->query('SELECT permiso_mapa_socios FROM usuario_membresias LIMIT 1');
+                $this->db->execute();
+                self::$hasPermisoMapaColumn = true;
+            } catch (Exception $e) {
+                self::$hasPermisoMapaColumn = false;
+            }
+        }
+        return self::$hasPermisoMapaColumn;
     }
 
     public function getActiveByUsuario($usuarioId) {
@@ -155,24 +189,68 @@ class Membresia extends Model {
     }
 
     public function updateDelegacion($membresiaId, $data) {
-        $this->db->query("UPDATE usuario_membresias SET
+        $sql = "UPDATE usuario_membresias SET
             cargo = :cargo,
             permiso_gestion_socios = :permiso_gestion_socios,
             permiso_registro_pagos = :permiso_registro_pagos,
-            permiso_todos = :permiso_todos
-            WHERE id = :id");
+            permiso_todos = :permiso_todos";
+        if ($this->hasPermisoMapaColumn()) {
+            $sql .= ', permiso_mapa_socios = :permiso_mapa_socios';
+        }
+        $sql .= ' WHERE id = :id';
+        $this->db->query($sql);
         $this->db->bind(':cargo', $data['cargo'] ?: null);
         $this->db->bind(':permiso_gestion_socios', !empty($data['permiso_gestion_socios']) ? 1 : 0);
         $this->db->bind(':permiso_registro_pagos', !empty($data['permiso_registro_pagos']) ? 1 : 0);
         $this->db->bind(':permiso_todos', !empty($data['permiso_todos']) ? 1 : 0);
+        if ($this->hasPermisoMapaColumn()) {
+            $this->db->bind(':permiso_mapa_socios', !empty($data['permiso_mapa_socios']) ? 1 : 0);
+        }
         $this->db->bind(':id', $membresiaId);
         return $this->db->execute();
     }
 
+    /** Socios activos con coordenadas para el mapa de concentración. */
+    public function buildMapaSociosDataset(int $juntaId, array $socios): array {
+        $total = count($socios);
+        $puntos = [];
+        $geolocalizados = 0;
+
+        foreach ($socios as $socio) {
+            $socio = $this->overlayDomicilioOnUser($socio, $juntaId);
+            $lat = $socio->latitud ?? null;
+            $lng = $socio->longitud ?? null;
+            if ($lat === null || $lng === null || $lat === '' || $lng === '' || !is_numeric($lat) || !is_numeric($lng)) {
+                continue;
+            }
+            $lat = (float)$lat;
+            $lng = (float)$lng;
+            if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
+                continue;
+            }
+            $geolocalizados++;
+            $nombre = trim(($socio->nombre ?? '') . ' ' . ($socio->apellido_paterno ?? ''));
+            $puntos[] = [
+                'lat' => $lat,
+                'lng' => $lng,
+                'id_socio' => $socio->id_socio ?? null,
+                'label' => $nombre !== '' ? $nombre : ('Socio #' . ($socio->id_socio ?? $socio->id)),
+            ];
+        }
+
+        return [
+            'total' => $total,
+            'geolocalizados' => $geolocalizados,
+            'sin_geolocalizar' => max(0, $total - $geolocalizados),
+            'puntos' => $puntos,
+        ];
+    }
+
     public function getEquipoByJunta($juntaId) {
         $this->db->query("SELECT u.id, u.nombre, u.apellido_paterno, u.email, u.rut, u.estado, u.rol AS usuario_rol,
-            m.id AS membresia_id, m.rol, m.cargo, m.permiso_gestion_socios, m.permiso_registro_pagos, m.permiso_todos
-            FROM usuario_membresias m
+            m.id AS membresia_id, m.rol, m.cargo, m.permiso_gestion_socios, m.permiso_registro_pagos, m.permiso_todos"
+            . ($this->hasPermisoMapaColumn() ? ', m.permiso_mapa_socios' : '')
+            . " FROM usuario_membresias m
             INNER JOIN usuarios u ON u.id = m.usuario_id
             WHERE m.junta_id = :junta_id AND m.estado = 1 AND u.rol != 'maestro'
             ORDER BY FIELD(m.rol, 'admin', 'socio'), u.nombre ASC");

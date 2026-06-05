@@ -48,6 +48,19 @@ class AdminController extends Controller {
         }
     }
 
+    private function requireViewMapaSocios() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canViewMapaSocios()) {
+            $_SESSION['error_msg'] = 'No tiene permiso para ver el mapa de socios. El administrador debe habilitarlo y otorgarle acceso.';
+            if (($_SESSION['user_rol'] ?? '') === 'socio') {
+                $this->redirect('/socio/dashboard');
+            } else {
+                $this->redirect('/admin/socios');
+            }
+            exit;
+        }
+    }
+
     // Enviar correo de prueba (GET muestra formulario, POST envía)
     public function email_prueba() {
         if (!isset($_SESSION['user_id']) || ($_SESSION['user_rol'] ?? '') !== 'admin') {
@@ -171,6 +184,8 @@ class AdminController extends Controller {
         $junta = $this->juntaModel->getJuntaById($juntaId);
         $orgTipo = $junta->tipo ?? 'Junta de Vecinos';
         $socios = $this->membresiaModel->overlayDomicilioOnUsers($this->userModel->getPadronByJunta($juntaId), $juntaId);
+        $mapaHabilitado = $this->juntaModel->hasMapaSociosColumn()
+            && !empty($junta->mapa_socios_habilitado);
 
         $data = [
             'title' => 'Gestión de Socios',
@@ -178,6 +193,8 @@ class AdminController extends Controller {
             'header_subtitle' => 'Administre los vecinos afiliados, controle las calles de la junta y programe ajustes de cuotas',
             'active_menu' => 'socios',
             'socios' => $socios,
+            'junta' => $junta,
+            'mapa_socios_habilitado' => $mapaHabilitado,
             'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
             'socios_pendientes' => $this->userModel->getPendingByJunta($juntaId),
             'socios_prevalidar' => $this->userModel->getPrevalidarByJunta($juntaId),
@@ -2247,6 +2264,7 @@ class AdminController extends Controller {
                 'permiso_gestion_socios' => !empty($post['permiso_gestion_socios']),
                 'permiso_registro_pagos' => !empty($post['permiso_registro_pagos']),
                 'permiso_todos' => !empty($post['permiso_todos']),
+                'permiso_mapa_socios' => !empty($post['permiso_mapa_socios']),
             ]);
             $_SESSION['success_msg'] = 'Cargo y permisos del socio actualizados correctamente.';
         } catch (Exception $e) {
@@ -2344,5 +2362,59 @@ class AdminController extends Controller {
                 : 'No se pudo rechazar la solicitud.';
         }
         $this->redirect('/admin/socios');
+    }
+
+    public function mapa_socios() {
+        $this->requireViewMapaSocios();
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        $sociosActivos = $this->userModel->getSociosByJunta($juntaId);
+        $mapaData = $this->membresiaModel->buildMapaSociosDataset($juntaId, $sociosActivos);
+
+        $data = [
+            'title' => 'Mapa de Socios',
+            'header_title' => 'Mapa de Socios',
+            'header_subtitle' => 'Distribución geográfica y concentración del padrón activo',
+            'active_menu' => 'mapa_socios',
+            'junta' => $junta,
+            'mapa' => $mapaData,
+            'mapa_habilitado' => AuthContext::isMapaSociosEnabled(),
+            'is_full_admin' => AuthContext::isFullAdmin(),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/mapa_socios', $data);
+    }
+
+    public function mapa_socios_config() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::isFullAdmin()) {
+            $_SESSION['error_msg'] = 'Solo el administrador puede habilitar el mapa de socios.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $habilitar = !empty($this->sanitizePost()['mapa_socios_habilitado']);
+        if (!$this->juntaModel->hasMapaSociosColumn()) {
+            $_SESSION['error_msg'] = 'Ejecute la migración sql/add_mapa_socios_permiso.sql en la base de datos.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->juntaModel->updateMapaSociosHabilitado($juntaId, $habilitar)) {
+            $_SESSION['mapa_socios_habilitado'] = $habilitar ? 1 : 0;
+            $_SESSION['success_msg'] = $habilitar
+                ? 'Mapa de socios habilitado para su organización.'
+                : 'Mapa de socios deshabilitado.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo actualizar la configuración del mapa.';
+        }
+        $redirect = !empty($this->sanitizePost()['redirect_mapa']) ? '/admin/mapa_socios' : '/admin/socios';
+        $this->redirect($redirect);
     }
 }

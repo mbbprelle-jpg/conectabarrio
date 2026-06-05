@@ -2042,3 +2042,156 @@ html {
     }
 }
 
+/* Admin — mapa de socios */
+.mapa-socios-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.mapa-socios-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.mapa-stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.mapa-stat-card--ok {
+    border-color: rgba(34, 197, 94, 0.35);
+    background: rgba(34, 197, 94, 0.06);
+}
+
+.mapa-stat-card--warn {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.06);
+}
+
+.mapa-stat-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.mapa-stat-value {
+    font-size: 1.75rem;
+    line-height: 1.1;
+    color: var(--text-primary);
+}
+
+.mapa-stat-meta {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.mapa-socios-map-card {
+    padding: 1.25rem;
+}
+
+.mapa-socios-map-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.mapa-socios-map-hint {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.mapa-socios-layer-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.mapa-layer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.mapa-socios-container {
+    width: 100%;
+    height: min(68vh, 620px);
+    min-height: 360px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+}
+
+.mapa-socios-empty {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--text-muted);
+}
+
+.mapa-socios-empty-hint {
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.mapa-socios-config-card {
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.25rem;
+}
+
+.mapa-socios-config-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.mapa-socios-config-title {
+    margin: 0 0 0.35rem;
+    font-size: 1rem;
+}
+
+.mapa-socios-config-text {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    max-width: 640px;
+    line-height: 1.45;
+}
+
+.mapa-socios-config-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.mapa-socios-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .mapa-socios-stats {
+        grid-template-columns: 1fr;
+    }
+}
+

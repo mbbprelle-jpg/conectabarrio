@@ -166,6 +166,8 @@ class AuthController extends Controller {
         $_SESSION['permiso_gestion_socios'] = 0;
         $_SESSION['permiso_registro_pagos'] = 0;
         $_SESSION['permiso_todos'] = 0;
+        $_SESSION['permiso_mapa_socios'] = 0;
+        $_SESSION['mapa_socios_habilitado'] = 0;
 
         if ($user->junta_id) {
             $juntaModel = $this->model('JuntaVecinos');
@@ -175,6 +177,9 @@ class AuthController extends Controller {
                 $_SESSION['user_junta_comuna'] = $junta->comuna;
                 $_SESSION['user_junta_plan'] = $junta->plan ?? 'basico';
                 $_SESSION['user_junta_precio_anual'] = $junta->precio_anual ?? 0;
+                if ($juntaModel->hasMapaSociosColumn()) {
+                    $_SESSION['mapa_socios_habilitado'] = (int)($junta->mapa_socios_habilitado ?? 0);
+                }
             } else {
                 $_SESSION['user_junta_nombre'] = 'Junta Sin Nombre';
             }
