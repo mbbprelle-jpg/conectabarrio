@@ -150,11 +150,17 @@ class Membresia extends Model {
     }
 
     public function overlayDomicilioOnUser($user, int $juntaId) {
-        if (!$user || !$this->hasDomicilioColumn()) {
+        if (!$user) {
             return $user;
         }
         $mem = $this->getByUsuarioJunta((int)$user->id, $juntaId);
         if (!$mem) {
+            return $user;
+        }
+        if ($mem->id_socio !== null && $mem->id_socio !== '') {
+            $user->id_socio = (int)$mem->id_socio;
+        }
+        if (!$this->hasDomicilioColumn()) {
             return $user;
         }
         if ($mem->calle_id !== null) {

@@ -72,7 +72,12 @@
                 Ficha Personal del Vecino
             </h3>
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                <span class="badge badge-info" style="font-size: 0.75rem;">Socio #<?php echo $data['socio']->id; ?></span>
+                <?php
+                $idSocioOrg = $data['socio']->id_socio ?? null;
+                if ($idSocioOrg !== null && $idSocioOrg !== ''):
+                ?>
+                <span class="badge badge-info" style="font-size: 0.75rem;">Socio #<?php echo (int)$idSocioOrg; ?></span>
+                <?php endif; ?>
                 <?php if (!empty($data['cambio_pendiente'])): ?>
                     <span class="badge badge-warning" style="font-size: 0.72rem;">Cambio en revisión</span>
                 <?php else: ?>
