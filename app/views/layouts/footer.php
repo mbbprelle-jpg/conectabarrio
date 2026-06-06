@@ -22,19 +22,25 @@
 </div>
 
 <div id="cbLoadingOverlay" class="cb-loading-overlay" aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="cbLoadingTitle">
+    <div class="cb-loading-backdrop" aria-hidden="true"></div>
     <div class="cb-loading-box">
-        <div class="cb-loading-spinner" aria-hidden="true"></div>
-        <h3 id="cbLoadingTitle" class="cb-loading-title">Procesando…</h3>
-        <p id="cbLoadingMessage" class="cb-loading-message">Espere un momento, por favor.</p>
+        <div class="cb-loading-visual" aria-hidden="true">
+            <div class="cb-loading-ring"></div>
+            <div class="cb-loading-spinner"></div>
+        </div>
+        <p class="cb-loading-eyebrow">ConectaBarrio</p>
+        <h3 id="cbLoadingTitle" class="cb-loading-title">Por favor espere…</h3>
+        <p id="cbLoadingMessage" class="cb-loading-message">Estamos procesando su solicitud.</p>
         <div class="cb-loading-progress" aria-hidden="true">
             <div class="cb-loading-progress-bar"></div>
         </div>
         <p id="cbLoadingStatus" class="cb-loading-status">Iniciando…</p>
+        <p id="cbLoadingElapsed" class="cb-loading-elapsed" hidden></p>
         <p class="cb-loading-hint">No cierre ni recargue esta pestaña. La página se actualizará sola al terminar.</p>
     </div>
 </div>
 
-<script src="<?php echo URLROOT; ?>/js/main.js"></script>
+<script src="<?php echo URLROOT; ?>/js/main.js?v=<?php echo time(); ?>"></script>
 
 </body>
 </html>

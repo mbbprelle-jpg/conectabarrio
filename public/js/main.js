@@ -39,11 +39,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const confirmCancel = document.getElementById('cbConfirmCancel');
     let pendingConfirmAction = null;
 
-    function closeConfirmModal() {
+    function closeConfirmModal(skipOverflowReset) {
         if (!confirmOverlay) return;
         confirmOverlay.classList.remove('is-open');
         confirmOverlay.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
+        if (!skipOverflowReset) {
+            document.body.style.overflow = '';
+        }
         pendingConfirmAction = null;
     }
 
@@ -88,8 +90,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (confirmOk) {
         confirmOk.addEventListener('click', function() {
             const action = pendingConfirmAction;
-            closeConfirmModal();
-            if (typeof action === 'function') action();
+            pendingConfirmAction = null;
+            closeConfirmModal(true);
+            if (typeof action === 'function') {
+                requestAnimationFrame(function() {
+                    requestAnimationFrame(action);
+                });
+            } else {
+                document.body.style.overflow = '';
+            }
         });
     }
     if (confirmCancel) {
@@ -112,8 +121,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var loadingTitle = document.getElementById('cbLoadingTitle');
     var loadingMessage = document.getElementById('cbLoadingMessage');
     var loadingStatus = document.getElementById('cbLoadingStatus');
+    var loadingElapsed = document.getElementById('cbLoadingElapsed');
     var loadingActive = false;
     var loadingStatusTimer = null;
+    var loadingElapsedTimer = null;
+    var loadingStartedAt = 0;
     var loadingStatusSteps = [
         'Preparando datos…',
         'Validando información…',
@@ -121,6 +133,73 @@ document.addEventListener('DOMContentLoaded', function() {
         'Georreferenciando domicilios…',
         'Casi listo…'
     ];
+
+    function ensureLoadingOverlay() {
+        if (loadingOverlay) {
+            return loadingOverlay;
+        }
+        var wrapper = document.createElement('div');
+        wrapper.id = 'cbLoadingOverlay';
+        wrapper.className = 'cb-loading-overlay';
+        wrapper.setAttribute('aria-hidden', 'true');
+        wrapper.setAttribute('role', 'alertdialog');
+        wrapper.setAttribute('aria-modal', 'true');
+        wrapper.innerHTML = ''
+            + '<div class="cb-loading-backdrop" aria-hidden="true"></div>'
+            + '<div class="cb-loading-box">'
+            + '  <div class="cb-loading-visual" aria-hidden="true">'
+            + '    <div class="cb-loading-ring"></div>'
+            + '    <div class="cb-loading-spinner"></div>'
+            + '  </div>'
+            + '  <p class="cb-loading-eyebrow">ConectaBarrio</p>'
+            + '  <h3 id="cbLoadingTitle" class="cb-loading-title">Por favor espere…</h3>'
+            + '  <p id="cbLoadingMessage" class="cb-loading-message">Estamos procesando su solicitud.</p>'
+            + '  <div class="cb-loading-progress" aria-hidden="true"><div class="cb-loading-progress-bar"></div></div>'
+            + '  <p id="cbLoadingStatus" class="cb-loading-status">Iniciando…</p>'
+            + '  <p id="cbLoadingElapsed" class="cb-loading-elapsed" hidden></p>'
+            + '  <p class="cb-loading-hint">No cierre ni recargue esta pestaña. La página se actualizará sola al terminar.</p>'
+            + '</div>';
+        document.body.appendChild(wrapper);
+        loadingOverlay = wrapper;
+        loadingTitle = document.getElementById('cbLoadingTitle');
+        loadingMessage = document.getElementById('cbLoadingMessage');
+        loadingStatus = document.getElementById('cbLoadingStatus');
+        loadingElapsed = document.getElementById('cbLoadingElapsed');
+        return loadingOverlay;
+    }
+
+    function stopLoadingTimers() {
+        if (loadingStatusTimer) {
+            window.clearInterval(loadingStatusTimer);
+            loadingStatusTimer = null;
+        }
+        if (loadingElapsedTimer) {
+            window.clearInterval(loadingElapsedTimer);
+            loadingElapsedTimer = null;
+        }
+    }
+
+    function formatElapsed(seconds) {
+        if (seconds < 60) {
+            return seconds + ' s';
+        }
+        var mins = Math.floor(seconds / 60);
+        var secs = seconds % 60;
+        return mins + ' min' + (secs > 0 ? ' ' + secs + ' s' : '');
+    }
+
+    function startLoadingElapsed() {
+        if (!loadingElapsed) {
+            return;
+        }
+        loadingStartedAt = Date.now();
+        loadingElapsed.hidden = false;
+        loadingElapsed.textContent = 'Tiempo transcurrido: 0 s';
+        loadingElapsedTimer = window.setInterval(function() {
+            var seconds = Math.floor((Date.now() - loadingStartedAt) / 1000);
+            loadingElapsed.textContent = 'Tiempo transcurrido: ' + formatElapsed(seconds);
+        }, 1000);
+    }
 
     function closeUiForLoading() {
         document.querySelectorAll('.glass-modal-overlay.is-open').forEach(function(el) {
@@ -134,32 +213,43 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!loadingStatus) {
             return;
         }
+        stopLoadingTimers();
         var step = 0;
         loadingStatus.textContent = loadingStatusSteps[0];
         loadingStatusTimer = window.setInterval(function() {
             step = (step + 1) % loadingStatusSteps.length;
             loadingStatus.textContent = loadingStatusSteps[step];
         }, 2800);
+        startLoadingElapsed();
     }
 
     function showLoadingOverlay(title, message, longRunning) {
+        ensureLoadingOverlay();
         if (!loadingOverlay) {
             return;
         }
+        stopLoadingTimers();
         closeUiForLoading();
         if (loadingOverlay.parentNode !== document.body) {
             document.body.appendChild(loadingOverlay);
         }
         loadingActive = true;
+        loadingOverlay.classList.remove('is-open');
         if (loadingTitle) {
-            loadingTitle.textContent = title || 'Procesando…';
+            loadingTitle.textContent = title || 'Por favor espere…';
         }
         if (loadingMessage) {
-            loadingMessage.textContent = message || 'Espere un momento, por favor.';
+            loadingMessage.textContent = message || 'Estamos procesando su solicitud.';
         }
-        loadingOverlay.classList.add('is-open');
-        loadingOverlay.setAttribute('aria-hidden', 'false');
+        if (loadingElapsed) {
+            loadingElapsed.hidden = !longRunning;
+            loadingElapsed.textContent = '';
+        }
         document.body.classList.add('cb-loading-active');
+        document.body.style.overflow = 'hidden';
+        loadingOverlay.setAttribute('aria-hidden', 'false');
+        void loadingOverlay.offsetWidth;
+        loadingOverlay.classList.add('is-open');
         if (longRunning) {
             startLoadingStatusCycle();
         } else if (loadingStatus) {
@@ -181,13 +271,19 @@ document.addEventListener('DOMContentLoaded', function() {
             form.getAttribute('data-loading-message'),
             longRunning
         );
-        form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function(btn) {
+        form.querySelectorAll('button, input[type="submit"]').forEach(function(btn) {
             btn.disabled = true;
         });
         window.setTimeout(function() {
-            form.submit();
-        }, 100);
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+            } else {
+                form.submit();
+            }
+        }, 320);
     }
+
+    window.cbTriggerFormLoadingSubmit = triggerFormLoadingSubmit;
 
     window.addEventListener('beforeunload', function(e) {
         if (loadingActive) {

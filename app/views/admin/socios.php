@@ -977,8 +977,8 @@ foreach ($data['calles'] as $calleItem) {
         <?php endif; ?>
 
         <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST" class="cb-loading-form"
-              data-loading-title="Validando planilla"
-              data-loading-message="Estamos revisando fila por fila. En unos segundos verá el resultado abajo.">
+              data-loading-title="Validando planilla — por favor espere"
+              data-loading-message="Estamos revisando fila por fila. En unos segundos verá el resultado en esta misma ventana.">
             <div class="form-group">
                 <label class="form-label">Datos (Excel / planilla)</label>
                 <textarea name="bulk_data" class="form-control" rows="8" placeholder="Pegue aquí las filas copiadas desde Excel..." required></textarea>
@@ -989,20 +989,46 @@ foreach ($data['calles'] as $calleItem) {
             </div>
         </form>
 
-        <?php if (!empty($bulkPreview['result']['rows'])): ?>
+        <?php if (!empty($bulkPreview['result']['rows'])):
+            $bulkValidCount = (int)($bulkPreview['result']['valid_count'] ?? 0);
+            $bulkErrorCount = (int)($bulkPreview['result']['error_count'] ?? 0);
+            $bulkWarnCount = (int)($bulkPreview['result']['warning_count'] ?? 0);
+            $bulkTotalRows = count($bulkPreview['result']['rows']);
+            $bulkOkCount = max(0, $bulkValidCount - $bulkWarnCount);
+            $bulkIssueCount = $bulkErrorCount + $bulkWarnCount;
+            $bulkDefaultFilter = $bulkErrorCount > 0 ? 'error' : ($bulkIssueCount > 0 ? 'issues' : 'all');
+        ?>
         <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
             <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem;">Resultado de validación</h4>
-            <p style="font-size: 0.82rem; margin-bottom: 0.75rem;">
-                <span style="color: var(--success);"><?php echo (int)($bulkPreview['result']['valid_count'] ?? 0); ?> importable(s)</span>
-                ·
-                <span style="color: var(--danger);"><?php echo (int)($bulkPreview['result']['error_count'] ?? 0); ?> con error(es)</span>
-                <?php if (!empty($bulkPreview['result']['warning_count'])): ?>
-                ·
-                <span style="color: var(--warning);"><?php echo (int)$bulkPreview['result']['warning_count']; ?> con observaciones</span>
+            <div class="bulk-import-filters" id="bulkImportFilters" data-default-filter="<?php echo htmlspecialchars($bulkDefaultFilter); ?>">
+                <span class="bulk-import-filters-label">Filtrar filas:</span>
+                <button type="button" class="bulk-import-filter-chip" data-bulk-filter="all">
+                    Todos <span class="bulk-import-filter-count"><?php echo $bulkTotalRows; ?></span>
+                </button>
+                <?php if ($bulkIssueCount > 0): ?>
+                <button type="button" class="bulk-import-filter-chip bulk-import-filter-chip--issues" data-bulk-filter="issues">
+                    Con problemas <span class="bulk-import-filter-count"><?php echo $bulkIssueCount; ?></span>
+                </button>
                 <?php endif; ?>
-            </p>
-            <div class="table-responsive" style="max-height: 320px; overflow-y: auto; margin-bottom: 1rem;">
-                <table class="table bulk-import-preview-table" style="font-size: 0.75rem;">
+                <?php if ($bulkErrorCount > 0): ?>
+                <button type="button" class="bulk-import-filter-chip bulk-import-filter-chip--error" data-bulk-filter="error">
+                    Errores <span class="bulk-import-filter-count"><?php echo $bulkErrorCount; ?></span>
+                </button>
+                <?php endif; ?>
+                <?php if ($bulkWarnCount > 0): ?>
+                <button type="button" class="bulk-import-filter-chip bulk-import-filter-chip--warn" data-bulk-filter="warn">
+                    Observaciones <span class="bulk-import-filter-count"><?php echo $bulkWarnCount; ?></span>
+                </button>
+                <?php endif; ?>
+                <?php if ($bulkOkCount > 0): ?>
+                <button type="button" class="bulk-import-filter-chip bulk-import-filter-chip--ok" data-bulk-filter="ok">
+                    OK <span class="bulk-import-filter-count"><?php echo $bulkOkCount; ?></span>
+                </button>
+                <?php endif; ?>
+            </div>
+            <p class="bulk-import-filter-meta" id="bulkImportFilterMeta"></p>
+            <div class="table-responsive bulk-import-preview-scroll" id="bulkImportPreviewScroll" style="max-height: 320px; overflow-y: auto; margin-bottom: 1rem;">
+                <table class="table bulk-import-preview-table" id="bulkImportPreviewTable" style="font-size: 0.75rem;">
                     <thead>
                         <tr>
                             <th>Fila</th>
@@ -1016,8 +1042,10 @@ foreach ($data['calles'] as $calleItem) {
                     <?php foreach ($bulkPreview['result']['rows'] as $brow):
                         $d = $brow['data'] ?? [];
                         $fechaInicio = !empty($d['fecha_inicio']) ? date('d-m-Y', strtotime($d['fecha_inicio'])) : '—';
+                        $bulkRowStatus = !$brow['valid'] ? 'error' : (!empty($brow['warnings']) ? 'warn' : 'ok');
                     ?>
-                        <tr class="<?php echo !$brow['valid'] ? 'bulk-import-row--error' : (!empty($brow['warnings']) ? 'bulk-import-row--warn' : 'bulk-import-row--ok'); ?>">
+                        <tr class="<?php echo !$brow['valid'] ? 'bulk-import-row--error' : (!empty($brow['warnings']) ? 'bulk-import-row--warn' : 'bulk-import-row--ok'); ?>"
+                            data-bulk-status="<?php echo $bulkRowStatus; ?>">
                             <td><?php echo (int)$brow['line']; ?></td>
                             <td style="font-family: monospace;"><?php echo htmlspecialchars($d['rut'] ?? ''); ?></td>
                             <td><?php echo htmlspecialchars(trim(($d['nombres'] ?? '') . ' ' . ($d['apellido_paterno'] ?? ''))); ?></td>
@@ -1065,6 +1093,7 @@ foreach ($data['calles'] as $calleItem) {
                     <?php endforeach; ?>
                     </tbody>
                 </table>
+                <p class="bulk-import-filter-empty" id="bulkImportFilterEmpty" hidden>No hay filas con este filtro.</p>
             </div>
             <?php if (!empty($bulkPreview['valid_rows'])):
                 $importCount = count($bulkPreview['valid_rows']);
@@ -1080,9 +1109,11 @@ foreach ($data['calles'] as $calleItem) {
                 Tiempo estimado: <strong><?php echo $estTimeLabel; ?></strong>. Debe permanecer en esta pestaña hasta que termine.
             </p>
             <form action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST" class="cb-loading-form cb-loading-form--long"
-                  data-loading-title="Importando socios"
-                  data-loading-message="Registrando <?php echo $importCount; ?> socio(s). Tiempo estimado: <?php echo $estTimeLabel; ?>. No cierre ni recargue esta ventana; no podrá usar el portal hasta que finalice.">
-                <button type="submit" class="btn btn-success confirm-action" data-confirm-message="¿Importar <?php echo $importCount; ?> registro(s) como PRE-VALIDAR?">
+                  data-loading-title="Importando socios — por favor espere"
+                  data-loading-message="Registrando <?php echo $importCount; ?> socio(s). Tiempo estimado: <?php echo $estTimeLabel; ?>. No cierre ni recargue esta ventana.">
+                <button type="button" class="btn btn-success confirm-action" data-confirm-variant="success"
+                        data-confirm-label="Sí, importar"
+                        data-confirm-message="¿Importar <?php echo $importCount; ?> registro(s) como PRE-VALIDAR?">
                     Confirmar importación (<?php echo $importCount; ?>)
                 </button>
             </form>
@@ -1543,6 +1574,58 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('closeCargaMasivaModal')?.addEventListener('click', () => closeModal(cargaMasivaModal));
     document.getElementById('cancelCargaMasivaModal')?.addEventListener('click', () => closeModal(cargaMasivaModal));
     cargaMasivaModal?.addEventListener('click', e => { if (e.target === cargaMasivaModal) closeModal(cargaMasivaModal); });
+
+    function initBulkImportPreviewFilter() {
+        const filtersEl = document.getElementById('bulkImportFilters');
+        const table = document.getElementById('bulkImportPreviewTable');
+        if (!filtersEl || !table) {
+            return;
+        }
+        const rows = table.querySelectorAll('tbody tr[data-bulk-status]');
+        const chips = filtersEl.querySelectorAll('[data-bulk-filter]');
+        const emptyEl = document.getElementById('bulkImportFilterEmpty');
+        const metaEl = document.getElementById('bulkImportFilterMeta');
+        const scrollEl = document.getElementById('bulkImportPreviewScroll');
+
+        function applyBulkFilter(filter) {
+            let visible = 0;
+            rows.forEach(function(row) {
+                const status = row.getAttribute('data-bulk-status');
+                const show = filter === 'all'
+                    || (filter === 'issues' && (status === 'error' || status === 'warn'))
+                    || status === filter;
+                row.hidden = !show;
+                if (show) {
+                    visible++;
+                }
+            });
+            chips.forEach(function(chip) {
+                chip.classList.toggle('is-active', chip.getAttribute('data-bulk-filter') === filter);
+            });
+            if (emptyEl) {
+                emptyEl.hidden = visible > 0;
+            }
+            if (metaEl) {
+                metaEl.textContent = visible === rows.length
+                    ? 'Mostrando las ' + visible + ' filas de la planilla.'
+                    : 'Mostrando ' + visible + ' de ' + rows.length + ' filas.';
+            }
+            if (scrollEl) {
+                scrollEl.scrollTop = 0;
+            }
+        }
+
+        chips.forEach(function(chip) {
+            chip.addEventListener('click', function() {
+                applyBulkFilter(chip.getAttribute('data-bulk-filter'));
+            });
+        });
+
+        applyBulkFilter(filtersEl.getAttribute('data-default-filter') || 'all');
+    }
+
+    initBulkImportPreviewFilter();
+
     <?php if (!empty($bulkPreview['result']['rows'])): ?>
     openModal(cargaMasivaModal);
     <?php endif; ?>
