@@ -408,6 +408,136 @@ class AdminController extends Controller {
         return $index;
     }
 
+    private function finalizeBulkImportValidation(array $result, int $juntaId): array {
+        require_once APPROOT . '/core/SocioBulkImport.php';
+        require_once APPROOT . '/core/RutChile.php';
+
+        $pending = [];
+        $ruts = [];
+        $emails = [];
+        $idSocios = [];
+
+        foreach ($result['rows'] as $idx => $row) {
+            if (!$row['valid']) {
+                continue;
+            }
+            $data = SocioBulkImport::stripInternalFields($row['data']);
+            $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
+            $pending[$idx] = $data;
+            $ruts[] = $data['rut'];
+            if (!empty($data['email']) && !str_contains($data['email'], '@prevalidar.conectabarrio')) {
+                $emails[] = $data['email'];
+            }
+            if (!empty($data['id_socio'])) {
+                $idSocios[] = (int)$data['id_socio'];
+            }
+        }
+
+        $usersByRut = $this->userModel->findUsersByRuts($ruts);
+        $usersByEmail = $this->userModel->findUsersByEmails($emails);
+        $takenIdSocios = $this->fetchTakenIdSociosForBulk($juntaId, $idSocios);
+
+        $validRows = [];
+        foreach ($pending as $idx => $data) {
+            $rowErrors = [];
+            $existing = $usersByRut[$data['rut']] ?? null;
+            if ($existing) {
+                if (($existing->status ?? '') !== 'prevalidar' || (int)$existing->junta_id !== $juntaId) {
+                    $rowErrors[] = 'RUT ya registrado';
+                }
+            }
+            if (!empty($data['email']) && !str_contains($data['email'], '@prevalidar.conectabarrio')) {
+                $emailKey = mb_strtolower($data['email'], 'UTF-8');
+                $byEmail = $usersByEmail[$emailKey] ?? null;
+                if ($byEmail && (($byEmail->status ?? '') !== 'prevalidar' || (int)$byEmail->junta_id !== $juntaId)) {
+                    $rowErrors[] = 'Correo ya registrado';
+                }
+            }
+            if (!empty($data['id_socio'])) {
+                $taken = $takenIdSocios[(int)$data['id_socio']] ?? null;
+                if ($taken && ($taken->status ?? '') !== 'prevalidar') {
+                    $rowErrors[] = 'ID socio en uso';
+                }
+            }
+            if (!empty($rowErrors)) {
+                $result['rows'][$idx]['valid'] = false;
+                $result['rows'][$idx]['errors'] = array_merge($result['rows'][$idx]['errors'], $rowErrors);
+            } else {
+                $validRows[] = $data;
+            }
+        }
+
+        return [$result, $validRows];
+    }
+
+    /** @return array<int, object> id_socio => usuario */
+    private function fetchTakenIdSociosForBulk(int $juntaId, array $idSocios): array {
+        $idSocios = array_values(array_unique(array_filter(array_map('intval', $idSocios))));
+        if (empty($idSocios)) {
+            return [];
+        }
+        $parts = [];
+        foreach ($idSocios as $i => $idSocio) {
+            $parts[] = ':id' . $i;
+        }
+        $this->db->query('SELECT id, id_socio, status FROM usuarios WHERE junta_id = :junta_id AND id_socio IN (' . implode(', ', $parts) . ')');
+        $this->db->bind(':junta_id', $juntaId);
+        foreach ($idSocios as $i => $idSocio) {
+            $this->db->bind(':id' . $i, $idSocio);
+        }
+        $map = [];
+        foreach ($this->db->resultSet() as $row) {
+            $map[(int)$row->id_socio] = $row;
+        }
+        return $map;
+    }
+
+    private function runBulkImportRows(array $rows, int $juntaId, bool $cacheCalles = true): array {
+        require_once APPROOT . '/core/RutChile.php';
+        require_once APPROOT . '/core/SocioGeoref.php';
+
+        static $callesById = null;
+        if (!$cacheCalles || $callesById === null) {
+            $this->db->query('SELECT id, nombre, lat_centro, lng_centro FROM calles WHERE junta_id = :junta_id');
+            $this->db->bind(':junta_id', $juntaId);
+            $callesById = $this->buildCallesGeorefIndex($this->db->resultSet());
+        }
+
+        $inserted = 0;
+        $skipped = 0;
+        foreach ($rows as $data) {
+            $data['junta_id'] = $juntaId;
+            $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
+            $data = SocioGeoref::resolveForMembresiaBulk($data, $callesById);
+
+            $existing = $this->userModel->findUserByRut($data['rut']);
+            if ($existing) {
+                if (($existing->status ?? '') === 'prevalidar' && (int)$existing->junta_id === $juntaId) {
+                    $data['id'] = (int)$existing->id;
+                    if ($this->userModel->updatePrevalidar($data)) {
+                        $this->syncDomicilioMembresia((int)$existing->id, $juntaId, $data);
+                        $inserted++;
+                    } else {
+                        $skipped++;
+                    }
+                } else {
+                    $skipped++;
+                }
+                continue;
+            }
+
+            $newId = $this->userModel->createPrevalidar($data);
+            if ($newId) {
+                $this->syncDomicilioMembresia((int)$newId, $juntaId, $data);
+                $inserted++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        return ['inserted' => $inserted, 'skipped' => $skipped];
+    }
+
     private function validateSocioFormData(array $data, $requireIdSocio = true, $requireProfile = true, $requireApellidoMaterno = true, $requireEmail = true) {
         require_once APPROOT . '/core/RutChile.php';
         require_once APPROOT . '/core/SocioInput.php';
@@ -615,42 +745,7 @@ class AdminController extends Controller {
         $calles = $this->db->resultSet();
 
         $result = SocioBulkImport::parse($raw, $calles, $juntaId, $usesCalles);
-        $validRows = [];
-        foreach ($result['rows'] as $idx => $row) {
-            if (!$row['valid']) {
-                continue;
-            }
-            $data = SocioBulkImport::stripInternalFields($row['data']);
-            $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
-            $rowErrors = [];
-            $existing = $this->userModel->findUserByRut($data['rut']);
-            if ($existing) {
-                if (($existing->status ?? '') !== 'prevalidar' || (int)$existing->junta_id !== $juntaId) {
-                    $rowErrors[] = 'RUT ya registrado';
-                }
-            }
-            if (!empty($data['email']) && !str_contains($data['email'], '@prevalidar.conectabarrio')) {
-                $byEmail = $this->userModel->findUserByEmail($data['email']);
-                if ($byEmail && (($byEmail->status ?? '') !== 'prevalidar' || (int)$byEmail->junta_id !== $juntaId)) {
-                    $rowErrors[] = 'Correo ya registrado';
-                }
-            }
-            if (!empty($data['id_socio'])) {
-                $this->db->query('SELECT id, status FROM usuarios WHERE junta_id = :junta_id AND id_socio = :id_socio LIMIT 1');
-                $this->db->bind(':junta_id', $juntaId);
-                $this->db->bind(':id_socio', (int)$data['id_socio']);
-                $taken = $this->db->single();
-                if ($taken && ($taken->status ?? '') !== 'prevalidar') {
-                    $rowErrors[] = 'ID socio en uso';
-                }
-            }
-            if (!empty($rowErrors)) {
-                $result['rows'][$idx]['valid'] = false;
-                $result['rows'][$idx]['errors'] = array_merge($row['errors'], $rowErrors);
-            } else {
-                $validRows[] = $data;
-            }
-        }
+        [$result, $validRows] = $this->finalizeBulkImportValidation($result, $juntaId);
         $validCount = 0;
         $errorCount = 0;
         $warningCount = 0;
@@ -691,8 +786,6 @@ class AdminController extends Controller {
             $this->redirect('/admin/socios');
             return;
         }
-        require_once APPROOT . '/core/RutChile.php';
-        require_once APPROOT . '/core/SocioGeoref.php';
 
         $preview = $_SESSION['bulk_import_preview'] ?? null;
         $juntaId = (int)$_SESSION['user_junta_id'];
@@ -702,49 +795,82 @@ class AdminController extends Controller {
             return;
         }
 
-        $this->db->query('SELECT id, nombre, lat_centro, lng_centro FROM calles WHERE junta_id = :junta_id');
-        $this->db->bind(':junta_id', $juntaId);
-        $callesRows = $this->db->resultSet();
-        $callesById = $this->buildCallesGeorefIndex($callesRows);
-        $comuna = $_SESSION['user_junta_comuna'] ?? '';
+        $stats = $this->runBulkImportRows($preview['valid_rows'], $juntaId);
+        unset($_SESSION['bulk_import_preview'], $_SESSION['bulk_import_offset'], $_SESSION['bulk_import_stats']);
+        $_SESSION['success_msg'] = $stats['inserted'] . ' socio(s) quedaron en alta provisional (sin correo). Puede registrar pagos; clave inicial: primeros 6 dígitos del RUT.'
+            . ($stats['skipped'] > 0 ? ' ' . $stats['skipped'] . ' fila(s) omitida(s).' : '')
+            . ' La georreferencia precisa puede completarse al revisar cada socio.';
+        $this->redirect('/admin/socios');
+    }
 
-        $inserted = 0;
-        $skipped = 0;
-        foreach ($preview['valid_rows'] as $data) {
-            $data['junta_id'] = $juntaId;
-            $data['rut'] = RutChile::normalize($data['rut']) ?: $data['rut'];
-            if (empty($data['latitud']) || empty($data['longitud'])) {
-                $data = SocioGeoref::resolveForMembresia($data, $callesById, $comuna, $this->db);
-                usleep(1100000);
-            }
-            $existing = $this->userModel->findUserByRut($data['rut']);
-            if ($existing) {
-                if (($existing->status ?? '') === 'prevalidar' && (int)$existing->junta_id === $juntaId) {
-                    $data['id'] = (int)$existing->id;
-                    if ($this->userModel->updatePrevalidar($data)) {
-                        $this->syncDomicilioMembresia((int)$existing->id, $juntaId, $data);
-                        $inserted++;
-                    } else {
-                        $skipped++;
-                    }
-                } else {
-                    $skipped++;
-                }
-                continue;
-            }
-            $newId = $this->userModel->createPrevalidar($data);
-            if ($newId) {
-                $this->syncDomicilioMembresia((int)$newId, $juntaId, $data);
-                $inserted++;
-            } else {
-                $skipped++;
-            }
+    public function socio_importar_chunk() {
+        $this->requireManageSocios();
+        header('Content-Type: application/json; charset=utf-8');
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['ok' => false, 'error' => 'Método no permitido']);
+            return;
         }
 
-        unset($_SESSION['bulk_import_preview']);
-        $_SESSION['success_msg'] = $inserted . ' socio(s) quedaron en alta provisional (sin correo). Puede registrar pagos; clave inicial: primeros 6 dígitos del RUT.'
-            . ($skipped > 0 ? ' ' . $skipped . ' fila(s) omitida(s).' : '');
-        $this->redirect('/admin/socios');
+        $preview = $_SESSION['bulk_import_preview'] ?? null;
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        if (!$preview || (int)($preview['junta_id'] ?? 0) !== $juntaId || empty($preview['valid_rows'])) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => 'No hay datos validados para importar. Valide la planilla primero.']);
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        if (!empty($post['reset'])) {
+            $_SESSION['bulk_import_offset'] = 0;
+            $_SESSION['bulk_import_stats'] = ['inserted' => 0, 'skipped' => 0];
+        }
+
+        $rows = $preview['valid_rows'];
+        $total = count($rows);
+        $offset = (int)($_SESSION['bulk_import_offset'] ?? 0);
+        if ($offset < 0) {
+            $offset = 0;
+        }
+        if ($offset >= $total) {
+            $offset = 0;
+            $_SESSION['bulk_import_stats'] = ['inserted' => 0, 'skipped' => 0];
+        }
+
+        $batchSize = 20;
+        $slice = array_slice($rows, $offset, $batchSize);
+        $stats = $this->runBulkImportRows($slice, $juntaId, false);
+        $sessionStats = $_SESSION['bulk_import_stats'] ?? ['inserted' => 0, 'skipped' => 0];
+        $sessionStats['inserted'] += $stats['inserted'];
+        $sessionStats['skipped'] += $stats['skipped'];
+        $_SESSION['bulk_import_stats'] = $sessionStats;
+
+        $processed = $offset + count($slice);
+        $_SESSION['bulk_import_offset'] = $processed;
+        $done = $processed >= $total;
+        $percent = $total > 0 ? (int)round(($processed / $total) * 100) : 100;
+
+        if ($done) {
+            unset($_SESSION['bulk_import_preview'], $_SESSION['bulk_import_offset']);
+            $_SESSION['success_msg'] = $sessionStats['inserted'] . ' socio(s) quedaron en alta provisional (sin correo). Puede registrar pagos; clave inicial: primeros 6 dígitos del RUT.'
+                . ($sessionStats['skipped'] > 0 ? ' ' . $sessionStats['skipped'] . ' fila(s) omitida(s).' : '')
+                . ' La georreferencia precisa puede completarse al revisar cada socio.';
+            unset($_SESSION['bulk_import_stats']);
+        }
+
+        echo json_encode([
+            'ok' => true,
+            'done' => $done,
+            'processed' => $processed,
+            'total' => $total,
+            'percent' => $percent,
+            'inserted' => $sessionStats['inserted'],
+            'skipped' => $sessionStats['skipped'],
+            'status' => $done
+                ? 'Importación finalizada'
+                : ('Registrando socios… ' . $processed . ' de ' . $total),
+            'redirect' => $done ? (URLROOT . '/admin/socios') : null,
+        ]);
     }
 
     public function socio_prevalidar_actualizar() {

@@ -154,6 +154,51 @@ class User extends Model {
         return $this->db->single();
     }
 
+    /** @return array<string, object> mapa rut => usuario */
+    public function findUsersByRuts(array $ruts): array {
+        $ruts = array_values(array_unique(array_filter(array_map('strval', $ruts))));
+        if (empty($ruts)) {
+            return [];
+        }
+        $parts = [];
+        foreach ($ruts as $i => $rut) {
+            $parts[] = ':rut' . $i;
+        }
+        $this->db->query('SELECT * FROM usuarios WHERE rut IN (' . implode(', ', $parts) . ')');
+        foreach ($ruts as $i => $rut) {
+            $this->db->bind(':rut' . $i, $rut);
+        }
+        $map = [];
+        foreach ($this->db->resultSet() as $row) {
+            $map[$row->rut] = $row;
+        }
+        return $map;
+    }
+
+    /** @return array<string, object> mapa email => usuario */
+    public function findUsersByEmails(array $emails): array {
+        $emails = array_values(array_unique(array_filter(array_map(
+            fn($e) => mb_strtolower(trim((string)$e), 'UTF-8'),
+            $emails
+        ))));
+        if (empty($emails)) {
+            return [];
+        }
+        $parts = [];
+        foreach ($emails as $i => $email) {
+            $parts[] = ':email' . $i;
+        }
+        $this->db->query('SELECT * FROM usuarios WHERE email IN (' . implode(', ', $parts) . ')');
+        foreach ($emails as $i => $email) {
+            $this->db->bind(':email' . $i, $email);
+        }
+        $map = [];
+        foreach ($this->db->resultSet() as $row) {
+            $map[mb_strtolower($row->email, 'UTF-8')] = $row;
+        }
+        return $map;
+    }
+
     // Iniciar Sesión (Validar RUT/Email y Contraseña)
     public function login($rutOrEmail, $password) {
         // Permitir ingresar con RUT o Email

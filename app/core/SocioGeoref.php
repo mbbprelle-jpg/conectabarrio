@@ -223,6 +223,39 @@ class SocioGeoref {
         return $data;
     }
 
+    /**
+     * Georreferencia rápida para carga masiva: sin llamadas externas.
+     * Usa coordenadas del Excel o el centro de la calle registrada.
+     */
+    public static function resolveForMembresiaBulk(array $data, array $callesById): array {
+        if (!empty($data['latitud']) && !empty($data['longitud'])) {
+            $data['link_google'] = self::buildGoogleMapsLink($data['latitud'], $data['longitud']);
+            return $data;
+        }
+
+        $calleId = (int)($data['calle_id'] ?? 0);
+        if ($calleId <= 0 || empty($callesById[$calleId])) {
+            return $data;
+        }
+
+        $latCentro = $callesById[$calleId]['lat_centro'] ?? null;
+        $lngCentro = $callesById[$calleId]['lng_centro'] ?? null;
+        if ($latCentro === null || $lngCentro === null) {
+            return $data;
+        }
+
+        $lat = self::parseCoord($latCentro);
+        $lng = self::parseCoord($lngCentro);
+        if ($lat === null || $lng === null) {
+            return $data;
+        }
+
+        $data['latitud'] = $lat;
+        $data['longitud'] = $lng;
+        $data['link_google'] = self::buildGoogleMapsLink($lat, $lng);
+        return $data;
+    }
+
     /** @deprecated Use resolveForMembresia */
     public static function resolveForSocio(array $data, array $callesById, string $comuna): array {
         $normalized = [];

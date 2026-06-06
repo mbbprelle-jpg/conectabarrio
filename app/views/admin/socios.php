@@ -976,16 +976,14 @@ foreach ($data['calles'] as $calleItem) {
         </div>
         <?php endif; ?>
 
-        <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST" class="cb-loading-form"
-              data-loading-title="Validando planilla — por favor espere"
-              data-loading-message="Estamos revisando fila por fila. En unos segundos verá el resultado en esta misma ventana.">
+        <form action="<?php echo URLROOT; ?>/admin/socio_importar_validar" method="POST" class="cb-loading-form--light">
             <div class="form-group">
                 <label class="form-label">Datos (Excel / planilla)</label>
                 <textarea name="bulk_data" class="form-control" rows="8" placeholder="Pegue aquí las filas copiadas desde Excel..." required></textarea>
             </div>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" id="cancelCargaMasivaModal">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Validar datos</button>
+                <button type="submit" class="btn btn-primary" id="bulkValidateSubmitBtn">Validar datos</button>
             </div>
         </form>
 
@@ -1097,21 +1095,17 @@ foreach ($data['calles'] as $calleItem) {
             </div>
             <?php if (!empty($bulkPreview['valid_rows'])):
                 $importCount = count($bulkPreview['valid_rows']);
-                $estSeconds = max(8, (int)ceil($importCount * 1.2));
-                if ($estSeconds >= 60) {
-                    $estTimeLabel = 'aprox. ' . (int)ceil($estSeconds / 60) . ' min';
-                } else {
-                    $estTimeLabel = 'aprox. ' . $estSeconds . ' seg';
-                }
             ?>
             <p class="bulk-import-processing-note">
-                Al confirmar, el sistema registrará <?php echo $importCount; ?> socio(s) y georreferenciará domicilios si hace falta.
-                Tiempo estimado: <strong><?php echo $estTimeLabel; ?></strong>. Debe permanecer en esta pestaña hasta que termine.
+                Al confirmar, el sistema registrará <?php echo $importCount; ?> socio(s) de forma rápida (sin geocoding externo).
+                Usará coordenadas del Excel o el centro de la calle; la ubicación precisa puede ajustarse al revisar cada socio.
             </p>
-            <form action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST" class="cb-loading-form cb-loading-form--long"
+            <form id="bulkImportConfirmForm" action="<?php echo URLROOT; ?>/admin/socio_importar_confirmar" method="POST" class="cb-loading-form cb-loading-form--long"
+                  data-chunk-url="<?php echo URLROOT; ?>/admin/socio_importar_chunk"
+                  data-import-count="<?php echo $importCount; ?>"
                   data-loading-title="Importando socios — por favor espere"
-                  data-loading-message="Registrando <?php echo $importCount; ?> socio(s). Tiempo estimado: <?php echo $estTimeLabel; ?>. No cierre ni recargue esta ventana.">
-                <button type="button" class="btn btn-success confirm-action" data-confirm-variant="success"
+                  data-loading-message="Registrando <?php echo $importCount; ?> socio(s). Verá el avance real abajo.">
+                <button type="button" class="btn btn-success confirm-action bulk-import-confirm-btn" data-confirm-variant="success"
                         data-confirm-label="Sí, importar"
                         data-confirm-message="¿Importar <?php echo $importCount; ?> registro(s) como PRE-VALIDAR?">
                     Confirmar importación (<?php echo $importCount; ?>)

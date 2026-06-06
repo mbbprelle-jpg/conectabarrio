@@ -32,8 +32,9 @@
         <h3 id="cbLoadingTitle" class="cb-loading-title">Por favor espere…</h3>
         <p id="cbLoadingMessage" class="cb-loading-message">Estamos procesando su solicitud.</p>
         <div class="cb-loading-progress" aria-hidden="true">
-            <div class="cb-loading-progress-bar"></div>
+            <div id="cbLoadingProgressBar" class="cb-loading-progress-bar"></div>
         </div>
+        <p id="cbLoadingPercent" class="cb-loading-percent" hidden>0%</p>
         <p id="cbLoadingStatus" class="cb-loading-status">Iniciando…</p>
         <p id="cbLoadingElapsed" class="cb-loading-elapsed" hidden></p>
         <p class="cb-loading-hint">No cierre ni recargue esta pestaña. La página se actualizará sola al terminar.</p>

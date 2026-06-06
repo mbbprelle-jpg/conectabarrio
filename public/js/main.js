@@ -122,6 +122,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var loadingMessage = document.getElementById('cbLoadingMessage');
     var loadingStatus = document.getElementById('cbLoadingStatus');
     var loadingElapsed = document.getElementById('cbLoadingElapsed');
+    var loadingProgressBar = document.getElementById('cbLoadingProgressBar');
+    var loadingPercent = document.getElementById('cbLoadingPercent');
     var loadingActive = false;
     var loadingStatusTimer = null;
     var loadingElapsedTimer = null;
@@ -154,7 +156,8 @@ document.addEventListener('DOMContentLoaded', function() {
             + '  <p class="cb-loading-eyebrow">ConectaBarrio</p>'
             + '  <h3 id="cbLoadingTitle" class="cb-loading-title">Por favor espere…</h3>'
             + '  <p id="cbLoadingMessage" class="cb-loading-message">Estamos procesando su solicitud.</p>'
-            + '  <div class="cb-loading-progress" aria-hidden="true"><div class="cb-loading-progress-bar"></div></div>'
+            + '  <div class="cb-loading-progress" aria-hidden="true"><div id="cbLoadingProgressBar" class="cb-loading-progress-bar"></div></div>'
+            + '  <p id="cbLoadingPercent" class="cb-loading-percent" hidden>0%</p>'
             + '  <p id="cbLoadingStatus" class="cb-loading-status">Iniciando…</p>'
             + '  <p id="cbLoadingElapsed" class="cb-loading-elapsed" hidden></p>'
             + '  <p class="cb-loading-hint">No cierre ni recargue esta pestaña. La página se actualizará sola al terminar.</p>'
@@ -165,8 +168,49 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingMessage = document.getElementById('cbLoadingMessage');
         loadingStatus = document.getElementById('cbLoadingStatus');
         loadingElapsed = document.getElementById('cbLoadingElapsed');
+        loadingProgressBar = document.getElementById('cbLoadingProgressBar');
+        loadingPercent = document.getElementById('cbLoadingPercent');
         return loadingOverlay;
     }
+
+    function resetLoadingProgressIndeterminate() {
+        loadingProgressBar = document.getElementById('cbLoadingProgressBar');
+        loadingPercent = document.getElementById('cbLoadingPercent');
+        if (loadingProgressBar) {
+            loadingProgressBar.classList.remove('cb-loading-progress-bar--determinate');
+            loadingProgressBar.style.width = '';
+            loadingProgressBar.style.animation = '';
+        }
+        if (loadingPercent) {
+            loadingPercent.hidden = true;
+            loadingPercent.textContent = '0%';
+        }
+    }
+
+    function setLoadingProgress(percent, statusText) {
+        ensureLoadingOverlay();
+        loadingProgressBar = document.getElementById('cbLoadingProgressBar');
+        loadingPercent = document.getElementById('cbLoadingPercent');
+        stopLoadingTimers();
+        var safePercent = Math.min(100, Math.max(0, Number(percent) || 0));
+        if (loadingProgressBar) {
+            loadingProgressBar.classList.add('cb-loading-progress-bar--determinate');
+            loadingProgressBar.style.animation = 'none';
+            loadingProgressBar.style.width = safePercent + '%';
+        }
+        if (loadingPercent) {
+            loadingPercent.hidden = false;
+            loadingPercent.textContent = Math.round(safePercent) + '%';
+        }
+        if (loadingStatus && statusText) {
+            loadingStatus.textContent = statusText;
+        }
+        if (loadingElapsed && loadingElapsed.hidden) {
+            startLoadingElapsed();
+        }
+    }
+
+    window.cbUpdateLoadingProgress = setLoadingProgress;
 
     function stopLoadingTimers() {
         if (loadingStatusTimer) {
@@ -230,6 +274,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         stopLoadingTimers();
         closeUiForLoading();
+        resetLoadingProgressIndeterminate();
         if (loadingOverlay.parentNode !== document.body) {
             document.body.appendChild(loadingOverlay);
         }
@@ -260,6 +305,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     window.cbShowLoading = showLoadingOverlay;
 
+    function nativeFormSubmit(form) {
+        HTMLFormElement.prototype.submit.call(form);
+    }
+
     function triggerFormLoadingSubmit(form) {
         if (!form || form.dataset.cbLoading === '1') {
             return;
@@ -275,13 +324,66 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
         });
         window.setTimeout(function() {
-            if (typeof form.requestSubmit === 'function') {
-                form.requestSubmit();
-            } else {
-                form.submit();
-            }
-        }, 320);
+            nativeFormSubmit(form);
+        }, 180);
     }
+
+    async function runBulkImportChunked(form) {
+        var chunkUrl = form.getAttribute('data-chunk-url');
+        if (!chunkUrl) {
+            triggerFormLoadingSubmit(form);
+            return;
+        }
+        if (form.dataset.cbLoading === '1') {
+            return;
+        }
+        form.dataset.cbLoading = '1';
+        showLoadingOverlay(
+            form.getAttribute('data-loading-title'),
+            form.getAttribute('data-loading-message'),
+            true
+        );
+        setLoadingProgress(0, 'Iniciando importación…');
+        form.querySelectorAll('button').forEach(function(btn) {
+            btn.disabled = true;
+        });
+
+        var first = true;
+        while (true) {
+            var response = await fetch(chunkUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: first ? 'reset=1' : ''
+            });
+            first = false;
+            var data;
+            try {
+                data = await response.json();
+            } catch (err) {
+                loadingActive = false;
+                alert('Error de comunicación al importar. Recargue la página e intente de nuevo.');
+                window.location.reload();
+                return;
+            }
+            if (!data.ok) {
+                loadingActive = false;
+                alert(data.error || 'Error al importar');
+                window.location.reload();
+                return;
+            }
+            setLoadingProgress(data.percent, data.status);
+            if (data.done) {
+                setLoadingProgress(100, 'Importación finalizada');
+                window.setTimeout(function() {
+                    window.location.href = data.redirect || form.getAttribute('action') || window.location.href;
+                }, 350);
+                return;
+            }
+        }
+    }
+
+    window.cbRunBulkImportChunked = runBulkImportChunked;
 
     window.cbTriggerFormLoadingSubmit = triggerFormLoadingSubmit;
 
@@ -290,6 +392,24 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             e.returnValue = '';
         }
+    });
+
+    document.querySelectorAll('form.cb-loading-form--light').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            if (form.dataset.cbLoading === '1') {
+                return;
+            }
+            e.preventDefault();
+            form.dataset.cbLoading = '1';
+            var btn = form.querySelector('[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.add('cb-btn-is-loading');
+                btn.dataset.originalLabel = btn.textContent;
+                btn.textContent = 'Validando…';
+            }
+            nativeFormSubmit(form);
+        });
     });
 
     document.querySelectorAll('form.cb-loading-form').forEach(function(form) {
@@ -318,7 +438,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 variant: variant,
                 confirmLabel: confirmLabel,
                 onConfirm: function() {
-                    if (form) {
+                    if (form && form.getAttribute('data-chunk-url')) {
+                        runBulkImportChunked(form);
+                    } else if (form) {
                         triggerFormLoadingSubmit(form);
                     } else if (href) {
                         window.location.href = href;

@@ -2056,6 +2056,27 @@ body.cb-loading-active .main-content {
     animation: cbLoadingIndeterminate 1.35s ease-in-out infinite;
 }
 
+.cb-loading-progress-bar--determinate {
+    width: 0;
+    animation: none;
+    transition: width 0.35s ease;
+}
+
+.cb-loading-percent {
+    margin: 0 0 0.45rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+.cb-btn-is-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.88;
+}
+
 @keyframes cbLoadingIndeterminate {
     0% { transform: translateX(-120%); }
     100% { transform: translateX(320%); }
