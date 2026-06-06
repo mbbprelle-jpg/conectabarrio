@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var loadingProgressBar = document.getElementById('cbLoadingProgressBar');
     var loadingPercent = document.getElementById('cbLoadingPercent');
     var loadingActive = false;
+    var loadingWarnOnUnload = false;
     var loadingStatusTimer = null;
     var loadingElapsedTimer = null;
     var loadingStartedAt = 0;
@@ -267,6 +268,11 @@ document.addEventListener('DOMContentLoaded', function() {
         startLoadingElapsed();
     }
 
+    function allowPageLeave() {
+        loadingWarnOnUnload = false;
+        loadingActive = false;
+    }
+
     function showLoadingOverlay(title, message, longRunning) {
         ensureLoadingOverlay();
         if (!loadingOverlay) {
@@ -279,6 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.appendChild(loadingOverlay);
         }
         loadingActive = true;
+        loadingWarnOnUnload = !!longRunning;
         loadingOverlay.classList.remove('is-open');
         if (loadingTitle) {
             loadingTitle.textContent = title || 'Por favor espere…';
@@ -324,6 +331,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
         });
         window.setTimeout(function() {
+            loadingWarnOnUnload = false;
             nativeFormSubmit(form);
         }, 180);
     }
@@ -361,13 +369,13 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 data = await response.json();
             } catch (err) {
-                loadingActive = false;
+                allowPageLeave();
                 alert('Error de comunicación al importar. Recargue la página e intente de nuevo.');
                 window.location.reload();
                 return;
             }
             if (!data.ok) {
-                loadingActive = false;
+                allowPageLeave();
                 alert(data.error || 'Error al importar');
                 window.location.reload();
                 return;
@@ -375,9 +383,8 @@ document.addEventListener('DOMContentLoaded', function() {
             setLoadingProgress(data.percent, data.status);
             if (data.done) {
                 setLoadingProgress(100, 'Importación finalizada');
-                window.setTimeout(function() {
-                    window.location.href = data.redirect || form.getAttribute('action') || window.location.href;
-                }, 350);
+                allowPageLeave();
+                window.location.href = data.redirect || form.getAttribute('action') || window.location.href;
                 return;
             }
         }
@@ -388,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.cbTriggerFormLoadingSubmit = triggerFormLoadingSubmit;
 
     window.addEventListener('beforeunload', function(e) {
-        if (loadingActive) {
+        if (loadingWarnOnUnload) {
             e.preventDefault();
             e.returnValue = '';
         }

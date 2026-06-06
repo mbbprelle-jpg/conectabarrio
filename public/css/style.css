@@ -2490,6 +2490,10 @@ body.cb-loading-active .main-content {
     border-radius: var(--radius-sm);
 }
 
+.bulk-import-results {
+    scroll-margin-top: 1rem;
+}
+
 .bulk-import-preview-table td {
     vertical-align: top;
 }

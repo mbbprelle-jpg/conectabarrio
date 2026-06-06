@@ -936,7 +936,7 @@ foreach ($data['calles'] as $calleItem) {
 </div>
 
 <div id="cargaMasivaModal" class="glass-modal-overlay">
-    <div class="glass-modal-container" style="max-width: 720px; max-height: 90vh; overflow-y: auto;">
+    <div id="cargaMasivaModalPanel" class="glass-modal-container" style="max-width: 720px; max-height: 90vh; overflow-y: auto;">
         <button type="button" id="closeCargaMasivaModal" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: var(--text-muted); cursor: pointer;">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
@@ -996,7 +996,7 @@ foreach ($data['calles'] as $calleItem) {
             $bulkIssueCount = $bulkErrorCount + $bulkWarnCount;
             $bulkDefaultFilter = $bulkErrorCount > 0 ? 'error' : ($bulkIssueCount > 0 ? 'issues' : 'all');
         ?>
-        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+        <div id="bulkImportResults" class="bulk-import-results" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
             <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem;">Resultado de validación</h4>
             <div class="bulk-import-filters" id="bulkImportFilters" data-default-filter="<?php echo htmlspecialchars($bulkDefaultFilter); ?>">
                 <span class="bulk-import-filters-label">Filtrar filas:</span>
@@ -1335,6 +1335,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const openModal = (el) => { if (el) { el.classList.add('is-open'); document.body.style.overflow = 'hidden'; } };
     const closeModal = (el) => { if (el) { el.classList.remove('is-open'); document.body.style.overflow = ''; } };
 
+    function scrollBulkImportToResults() {
+        const panel = document.getElementById('cargaMasivaModalPanel');
+        const results = document.getElementById('bulkImportResults');
+        if (!panel || !results) {
+            return;
+        }
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                const panelRect = panel.getBoundingClientRect();
+                const resultsRect = results.getBoundingClientRect();
+                const scrollTop = panel.scrollTop + (resultsRect.top - panelRect.top) - 12;
+                panel.scrollTo({
+                    top: Math.max(0, scrollTop),
+                    behavior: 'smooth'
+                });
+            });
+        });
+    }
+
     const callesGeorefMap = <?php echo json_encode($callesGeorefMap, JSON_UNESCAPED_UNICODE); ?>;
     const georefInstances = typeof initSocioGeorefMaps === 'function'
         ? initSocioGeorefMaps(callesGeorefMap)
@@ -1622,6 +1641,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <?php if (!empty($bulkPreview['result']['rows'])): ?>
     openModal(cargaMasivaModal);
+    scrollBulkImportToResults();
     <?php endif; ?>
 
     const prevalidarModal = document.getElementById('prevalidarSocioModal');
