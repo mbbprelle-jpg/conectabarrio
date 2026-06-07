@@ -251,8 +251,36 @@ class Transaccion extends Model {
         return $base + $this->getNetoEntreFechas($juntaId, $inicioOrg, $finAnioAnterior);
     }
 
+    private function getMesesVisiblesFlujo(int $anio, string $mesInicio): array {
+        $mesInicioYear = (int)substr($mesInicio, 0, 4);
+        $mesInicioMonth = (int)substr($mesInicio, 5, 2);
+        $anioActual = (int)date('Y');
+        $mesActual = (int)date('n');
+
+        if ($anio < $mesInicioYear || $anio > $anioActual) {
+            return [];
+        }
+
+        $desde = ($anio === $mesInicioYear) ? $mesInicioMonth : 1;
+        $hasta = ($anio === $anioActual) ? $mesActual : 12;
+
+        $meses = [];
+        for ($m = $desde; $m <= $hasta; $m++) {
+            $meses[] = $m;
+        }
+        return $meses;
+    }
+
+    private function sumMesesVisibles(array $valoresPorMes, array $mesesVisibles): int {
+        $total = 0;
+        foreach ($mesesVisibles as $m) {
+            $total += (int)($valoresPorMes[$m] ?? 0);
+        }
+        return $total;
+    }
+
     /**
-     * Matriz anual: filas por categoría (ingresos/egresos) × meses 1-12 + total fila.
+     * Matriz anual: filas por categoría (ingresos/egresos) × meses visibles + total periodo.
      */
     public function getFlujoCajaMatrizAnual(int $juntaId, int $anio, string $mesInicio, FinanzaConcepto $conceptoModel, ?int $saldoInicial = null): array {
         $mesInicioYear = (int)substr($mesInicio, 0, 4);
@@ -321,6 +349,19 @@ class Transaccion extends Model {
         $filasIngreso = $buildFilas($ordenIngreso, 'ingreso');
         $filasEgreso = $buildFilas($ordenEgreso, 'egreso');
 
+        $mesesVisibles = $this->getMesesVisiblesFlujo($anio, $mesInicio);
+        $mesDesde = !empty($mesesVisibles) ? $mesesVisibles[0] : 1;
+        $mesHasta = !empty($mesesVisibles) ? $mesesVisibles[count($mesesVisibles) - 1] : 0;
+
+        foreach ($filasIngreso as &$fila) {
+            $fila['total'] = $this->sumMesesVisibles($fila['meses'], $mesesVisibles);
+        }
+        unset($fila);
+        foreach ($filasEgreso as &$fila) {
+            $fila['total'] = $this->sumMesesVisibles($fila['meses'], $mesesVisibles);
+        }
+        unset($fila);
+
         $totalesIngresoMes = array_fill(1, 12, 0);
         $totalesEgresoMes = array_fill(1, 12, 0);
         foreach ($filasIngreso as $f) {
@@ -335,31 +376,20 @@ class Transaccion extends Model {
         }
 
         $netoMes = [];
-        $totalIngresosAnio = 0;
-        $totalEgresosAnio = 0;
         for ($m = 1; $m <= 12; $m++) {
             $netoMes[$m] = $totalesIngresoMes[$m] - $totalesEgresoMes[$m];
-            $totalIngresosAnio += $totalesIngresoMes[$m];
-            $totalEgresosAnio += $totalesEgresoMes[$m];
         }
 
-        $mesDesde = ($anio === $mesInicioYear) ? $mesInicioMonth : 1;
-        $mesHasta = ($anio === (int)date('Y')) ? (int)date('n') : 12;
+        $totalIngresosAnio = $this->sumMesesVisibles($totalesIngresoMes, $mesesVisibles);
+        $totalEgresosAnio = $this->sumMesesVisibles($totalesEgresoMes, $mesesVisibles);
 
-        $saldoAnteriorMes = [];
-        $saldoFinalMes = [];
+        $saldoAnteriorMes = array_fill(1, 12, null);
+        $saldoFinalMes = array_fill(1, 12, null);
         $saldoAperturaAnio = $this->getSaldoAperturaAnio($juntaId, $anio, $mesInicio, $saldoInicial);
         $cierreMesPrevio = $saldoAperturaAnio;
         $saldoContableFinAnio = $saldoAperturaAnio;
 
-        for ($m = 1; $m <= 12; $m++) {
-            $mesValido = !($anio < $mesInicioYear || ($anio === $mesInicioYear && $m < $mesInicioMonth));
-            if (!$mesValido) {
-                $saldoAnteriorMes[$m] = null;
-                $saldoFinalMes[$m] = null;
-                continue;
-            }
-
+        foreach ($mesesVisibles as $m) {
             if ($anio === $mesInicioYear && $m === $mesInicioMonth) {
                 $saldoAnteriorMes[$m] = $saldoInicial ?? 0;
             } else {
@@ -375,6 +405,7 @@ class Transaccion extends Model {
             'anio' => $anio,
             'mes_desde' => $mesDesde,
             'mes_hasta' => $mesHasta,
+            'meses_visibles' => $mesesVisibles,
             'saldo_inicial' => $saldoInicial,
             'saldo_anterior_mes' => $saldoAnteriorMes,
             'saldo_final_mes' => $saldoFinalMes,
