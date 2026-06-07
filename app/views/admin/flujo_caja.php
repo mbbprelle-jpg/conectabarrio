@@ -26,6 +26,18 @@ function cbFlujoMesValido(int $anio, int $mes, string $mesInicio): bool {
     }
     return true;
 }
+
+function cbFlujoFmtSaldo(?int $monto, bool $aplica): string {
+    if (!$aplica || $monto === null) {
+        return '<span class="cb-flujo-na">—</span>';
+    }
+    return '<span style="color: ' . ($monto >= 0 ? 'var(--info)' : 'var(--danger)') . '; font-weight: 600;">$'
+        . number_format($monto, 0, ',', '.') . '</span>';
+}
+
+function cbFlujoEsPrimerMesActividad(int $anio, int $mes, string $mesInicio): bool {
+    return $anio === (int)substr($mesInicio, 0, 4) && $mes === (int)substr($mesInicio, 5, 2);
+}
 ?>
 
 <?php if (!empty($data['success'])): ?>
@@ -54,6 +66,7 @@ if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
             <h3 style="font-family: var(--font-heading); font-size: 1.15rem; margin: 0 0 0.25rem;">Resumen <?php echo $anio; ?></h3>
             <p style="margin: 0; font-size: 0.82rem; color: var(--text-muted);">
                 Montos por concepto según la <strong>fecha del movimiento</strong>. Inicio actividades: <?php echo htmlspecialchars($data['mes_inicio']); ?>.
+                El resumen mensual cierra con <strong>Saldo anterior + Ingresos − Egresos</strong>.
             </p>
         </div>
         <?php if (count($data['anios']) > 1): ?>
@@ -74,9 +87,9 @@ if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
     </div>
 
     <div class="cb-flujo-kpis">
-        <?php if (!empty($matriz['saldo_inicial']) && (int)$matriz['saldo_inicial_total'] > 0): ?>
+        <?php if ($matriz['saldo_inicial'] !== null && $anio === (int)substr($data['mes_inicio'], 0, 4)): ?>
         <div class="cb-flujo-kpi cb-flujo-kpi--info">
-            <span class="cb-flujo-kpi-label">Saldo inicial<?php echo $anio === (int)substr($data['mes_inicio'], 0, 4) ? ' (arranque)' : ''; ?></span>
+            <span class="cb-flujo-kpi-label">Saldo inicial (1.er mes)</span>
             <strong style="color: var(--info);">$<?php echo number_format((int)$matriz['saldo_inicial'], 0, ',', '.'); ?></strong>
         </div>
         <?php endif; ?>
@@ -94,9 +107,9 @@ if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
                 $<?php echo number_format($matriz['neto_anio'], 0, ',', '.'); ?>
             </strong>
         </div>
-        <?php if (!empty($matriz['saldo_inicial']) || $matriz['saldo_contable_fin_anio'] !== $matriz['neto_anio']): ?>
+        <?php if ($matriz['saldo_inicial'] !== null || $matriz['saldo_contable_fin_anio'] !== $matriz['neto_anio']): ?>
         <div class="cb-flujo-kpi cb-flujo-kpi--primary">
-            <span class="cb-flujo-kpi-label">Saldo contable (fin de año)</span>
+            <span class="cb-flujo-kpi-label">Saldo final del año</span>
             <strong style="color: <?php echo $matriz['saldo_contable_fin_anio'] >= 0 ? 'var(--success)' : 'var(--danger)'; ?>;">
                 $<?php echo number_format($matriz['saldo_contable_fin_anio'], 0, ',', '.'); ?>
             </strong>
@@ -118,24 +131,6 @@ if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
                 </tr>
             </thead>
             <tbody>
-                <?php if (!empty($matriz['saldo_inicial']) && (int)$matriz['saldo_inicial_total'] > 0): ?>
-                <tr class="cb-flujo-section-row">
-                    <td colspan="14" class="cb-flujo-section-title cb-flujo-sticky-col">Arranque</td>
-                </tr>
-                <tr class="cb-flujo-data-row cb-flujo-saldo-inicial-row">
-                    <td class="cb-flujo-sticky-col cb-flujo-col-concepto">Saldo inicial de caja (declarado)</td>
-                    <?php for ($m = 1; $m <= 12; $m++):
-                        $aplica = cbFlujoMesValido($anio, $m, $data['mes_inicio']);
-                        $val = (int)$matriz['saldo_inicial_mes'][$m];
-                    ?>
-                    <td class="cb-flujo-col-mes is-ingreso"><?php echo cbFlujoFmt($val, $aplica && $val > 0); ?></td>
-                    <?php endfor; ?>
-                    <td class="cb-flujo-col-total">
-                        <strong>$<?php echo number_format((int)$matriz['saldo_inicial_total'], 0, ',', '.'); ?></strong>
-                    </td>
-                </tr>
-                <?php endif; ?>
-
                 <?php foreach ($matriz['secciones'] as $seccion): ?>
                 <tr class="cb-flujo-section-row">
                     <td colspan="14" class="cb-flujo-section-title cb-flujo-sticky-col">
@@ -164,6 +159,30 @@ if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
                 <?php endforeach; ?>
                 <?php endforeach; ?>
 
+                <tr class="cb-flujo-section-row">
+                    <td colspan="14" class="cb-flujo-section-title cb-flujo-sticky-col">Resumen mensual</td>
+                </tr>
+                <tr class="cb-flujo-total-row cb-flujo-total-row--anterior">
+                    <td class="cb-flujo-sticky-col">
+                        Saldo anterior
+                        <small style="display:block;font-weight:400;font-size:0.68rem;color:var(--text-muted);margin-top:0.15rem;">
+                            1.er mes = saldo inicial declarado
+                        </small>
+                    </td>
+                    <?php for ($m = 1; $m <= 12; $m++):
+                        $aplica = cbFlujoMesValido($anio, $m, $data['mes_inicio']);
+                        $val = $matriz['saldo_anterior_mes'][$m] ?? null;
+                        $esPrimero = cbFlujoEsPrimerMesActividad($anio, $m, $data['mes_inicio']);
+                    ?>
+                    <td class="cb-flujo-col-mes">
+                        <?php echo cbFlujoFmtSaldo($val !== null ? (int)$val : null, $aplica); ?>
+                        <?php if ($aplica && $esPrimero && $matriz['saldo_inicial'] !== null): ?>
+                        <small class="cb-flujo-saldo-hint" title="Saldo inicial de caja">inicial</small>
+                        <?php endif; ?>
+                    </td>
+                    <?php endfor; ?>
+                    <td class="cb-flujo-col-total"><span class="cb-flujo-na">—</span></td>
+                </tr>
                 <tr class="cb-flujo-total-row cb-flujo-total-row--ingreso">
                     <td class="cb-flujo-sticky-col">Total ingresos</td>
                     <?php for ($m = 1; $m <= 12; $m++):
@@ -184,44 +203,19 @@ if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
                     <?php endfor; ?>
                     <td class="cb-flujo-col-total"><strong>$<?php echo number_format($matriz['total_egresos_anio'], 0, ',', '.'); ?></strong></td>
                 </tr>
-                <tr class="cb-flujo-total-row cb-flujo-total-row--neto">
-                    <td class="cb-flujo-sticky-col">Neto mensual</td>
-                    <?php for ($m = 1; $m <= 12; $m++):
-                        $aplica = cbFlujoMesValido($anio, $m, $data['mes_inicio']);
-                        $val = (int)$matriz['neto_mes'][$m];
-                    ?>
-                    <td class="cb-flujo-col-mes">
-                        <?php if (!$aplica): ?>
-                            <?php echo cbFlujoFmt(null, false); ?>
-                        <?php elseif ($val === 0): ?>
-                            <span class="cb-flujo-zero">—</span>
-                        <?php else: ?>
-                            <span style="color: <?php echo $val >= 0 ? 'var(--success)' : 'var(--danger)'; ?>; font-weight: 600;">
-                                $<?php echo number_format(abs($val), 0, ',', '.'); ?>
-                            </span>
-                        <?php endif; ?>
-                    </td>
-                    <?php endfor; ?>
-                    <td class="cb-flujo-col-total">
-                        <strong style="color: <?php echo $matriz['neto_anio'] >= 0 ? 'var(--success)' : 'var(--danger)'; ?>;">
-                            $<?php echo number_format($matriz['neto_anio'], 0, ',', '.'); ?>
-                        </strong>
-                    </td>
-                </tr>
                 <tr class="cb-flujo-total-row cb-flujo-total-row--saldo">
-                    <td class="cb-flujo-sticky-col">Saldo contable acumulado</td>
+                    <td class="cb-flujo-sticky-col">
+                        <strong>Saldo final</strong>
+                        <small style="display:block;font-weight:400;font-size:0.68rem;color:var(--text-muted);margin-top:0.15rem;">
+                            Ant. + Ing. − Egr.
+                        </small>
+                    </td>
                     <?php for ($m = 1; $m <= 12; $m++):
                         $aplica = cbFlujoMesValido($anio, $m, $data['mes_inicio']);
-                        $val = $matriz['saldo_acumulado_mes'][$m] ?? null;
+                        $val = $matriz['saldo_final_mes'][$m] ?? null;
                     ?>
                     <td class="cb-flujo-col-mes">
-                        <?php if (!$aplica || $val === null): ?>
-                            <?php echo cbFlujoFmt(null, false); ?>
-                        <?php else: ?>
-                            <span style="color: <?php echo $val >= 0 ? 'var(--info)' : 'var(--danger)'; ?>; font-weight: 700;">
-                                $<?php echo number_format($val, 0, ',', '.'); ?>
-                            </span>
-                        <?php endif; ?>
+                        <?php echo cbFlujoFmtSaldo($val !== null ? (int)$val : null, $aplica); ?>
                     </td>
                     <?php endfor; ?>
                     <td class="cb-flujo-col-total">

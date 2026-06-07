@@ -346,27 +346,29 @@ class Transaccion extends Model {
         $mesDesde = ($anio === $mesInicioYear) ? $mesInicioMonth : 1;
         $mesHasta = ($anio === (int)date('Y')) ? (int)date('n') : 12;
 
-        $saldoInicialMes = array_fill(1, 12, 0);
-        if ($saldoInicial !== null && $saldoInicial > 0 && $anio === $mesInicioYear) {
-            $saldoInicialMes[$mesInicioMonth] = $saldoInicial;
-        }
-
-        $saldoAcumuladoMes = [];
-        $carry = $this->getSaldoAperturaAnio($juntaId, $anio, $mesInicio, $saldoInicial);
-        $saldoContableFinAnio = $carry;
+        $saldoAnteriorMes = [];
+        $saldoFinalMes = [];
+        $saldoAperturaAnio = $this->getSaldoAperturaAnio($juntaId, $anio, $mesInicio, $saldoInicial);
+        $cierreMesPrevio = $saldoAperturaAnio;
+        $saldoContableFinAnio = $saldoAperturaAnio;
 
         for ($m = 1; $m <= 12; $m++) {
             $mesValido = !($anio < $mesInicioYear || ($anio === $mesInicioYear && $m < $mesInicioMonth));
             if (!$mesValido) {
-                $saldoAcumuladoMes[$m] = null;
+                $saldoAnteriorMes[$m] = null;
+                $saldoFinalMes[$m] = null;
                 continue;
             }
-            if ($anio === $mesInicioYear && $m === $mesInicioMonth && $saldoInicial !== null) {
-                $carry += $saldoInicial;
+
+            if ($anio === $mesInicioYear && $m === $mesInicioMonth) {
+                $saldoAnteriorMes[$m] = $saldoInicial ?? 0;
+            } else {
+                $saldoAnteriorMes[$m] = $cierreMesPrevio;
             }
-            $carry += $netoMes[$m];
-            $saldoAcumuladoMes[$m] = $carry;
-            $saldoContableFinAnio = $carry;
+
+            $saldoFinalMes[$m] = $saldoAnteriorMes[$m] + $totalesIngresoMes[$m] - $totalesEgresoMes[$m];
+            $cierreMesPrevio = $saldoFinalMes[$m];
+            $saldoContableFinAnio = $saldoFinalMes[$m];
         }
 
         return [
@@ -374,9 +376,8 @@ class Transaccion extends Model {
             'mes_desde' => $mesDesde,
             'mes_hasta' => $mesHasta,
             'saldo_inicial' => $saldoInicial,
-            'saldo_inicial_mes' => $saldoInicialMes,
-            'saldo_inicial_total' => ($anio === $mesInicioYear && $saldoInicial !== null) ? $saldoInicial : 0,
-            'saldo_acumulado_mes' => $saldoAcumuladoMes,
+            'saldo_anterior_mes' => $saldoAnteriorMes,
+            'saldo_final_mes' => $saldoFinalMes,
             'saldo_contable_fin_anio' => $saldoContableFinAnio,
             'secciones' => [
                 ['tipo' => 'ingreso', 'titulo' => 'Ingresos', 'filas' => $filasIngreso],
