@@ -131,7 +131,10 @@ $bloque = $bloques[$tabActiva];
 
 <div class="cb-conceptos-nav-footer">
     <a href="<?php echo URLROOT; ?>/admin/finanzas" class="btn btn-secondary">← Movimientos</a>
+    <?php require_once APPROOT . '/core/AuthContext.php'; ?>
+    <?php if (AuthContext::canViewFlujoCaja()): ?>
     <a href="<?php echo URLROOT; ?>/admin/flujo_caja" class="btn btn-secondary">Ver Flujo de Caja</a>
+    <?php endif; ?>
 </div>
 
 <!-- Modal editar concepto -->

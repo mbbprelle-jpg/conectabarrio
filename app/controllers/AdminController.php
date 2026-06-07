@@ -50,6 +50,15 @@ class AdminController extends Controller {
         }
     }
 
+    private function requireViewFlujoCaja() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canViewFlujoCaja()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para ver el flujo de caja anual.';
+            $this->redirect('/admin/dashboard');
+            exit;
+        }
+    }
+
     private function validarFechaFinanzas(int $juntaId, string $fecha): ?string {
         return $this->cierreModel->validarFechaMovimiento($juntaId, $fecha);
     }
@@ -212,6 +221,8 @@ class AdminController extends Controller {
         $socios = $this->membresiaModel->overlayDomicilioOnUsers($this->userModel->getPadronByJunta($juntaId), $juntaId);
         $mapaHabilitado = $this->juntaModel->hasMapaSociosColumn()
             && !empty($junta->mapa_socios_habilitado);
+        $flujoHabilitado = $this->juntaModel->hasFlujoCajaColumn()
+            && !empty($junta->flujo_caja_habilitado);
 
         $data = [
             'title' => 'Gestión de Socios',
@@ -221,6 +232,7 @@ class AdminController extends Controller {
             'socios' => $socios,
             'junta' => $junta,
             'mapa_socios_habilitado' => $mapaHabilitado,
+            'flujo_caja_habilitado' => $flujoHabilitado,
             'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
             'socios_pendientes' => $this->userModel->getPendingByJunta($juntaId),
             'socios_prevalidar' => $this->userModel->getPrevalidarByJunta($juntaId),
@@ -1425,8 +1437,14 @@ class AdminController extends Controller {
     }
 
     public function flujo_caja() {
-        $this->requireRegisterPayments();
+        $this->requireViewFlujoCaja();
         $juntaId = (int)$_SESSION['user_junta_id'];
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::isFullAdmin() && !AuthContext::isFlujoCajaEnabled()) {
+            $_SESSION['error_msg'] = 'El flujo de caja no está habilitado para su organización. El administrador debe activarlo en Socios y Ajustes.';
+            $this->redirect('/admin/dashboard');
+            return;
+        }
         $mesInicio = $this->cierreModel->getMesInicioJunta($juntaId);
         $anios = $this->transaccionModel->getAniosDisponiblesFlujo($juntaId, $mesInicio);
 
@@ -1448,6 +1466,7 @@ class AdminController extends Controller {
             'anio_seleccionado' => $anioReq,
             'matriz' => $matriz,
             'mes_inicio' => $mesInicio,
+            'flujo_caja_habilitado' => AuthContext::isFlujoCajaEnabled(),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
         ];
@@ -2699,6 +2718,7 @@ class AdminController extends Controller {
                 'permiso_registro_pagos' => !empty($post['permiso_registro_pagos']),
                 'permiso_todos' => !empty($post['permiso_todos']),
                 'permiso_mapa_socios' => false,
+                'permiso_flujo_caja' => !empty($post['permiso_flujo_caja']),
             ]);
             if ((int)$usuarioId === (int)$_SESSION['user_id']) {
                 AuthContext::refreshMembershipSession();
@@ -2855,6 +2875,36 @@ class AdminController extends Controller {
             $_SESSION['error_msg'] = 'No se pudo actualizar la configuración del mapa.';
         }
         $redirect = !empty($this->sanitizePost()['redirect_mapa']) ? '/admin/mapa_socios' : '/admin/socios';
+        $this->redirect($redirect);
+    }
+
+    public function flujo_caja_config() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::isFullAdmin()) {
+            $_SESSION['error_msg'] = 'Solo el administrador puede configurar el flujo de caja.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $habilitar = !empty($this->sanitizePost()['flujo_caja_habilitado']);
+        if (!$this->juntaModel->hasFlujoCajaColumn()) {
+            $_SESSION['error_msg'] = 'Ejecute la migración sql/add_flujo_caja_permiso.sql en la base de datos.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->juntaModel->updateFlujoCajaHabilitado($juntaId, $habilitar)) {
+            $_SESSION['flujo_caja_habilitado'] = $habilitar ? 1 : 0;
+            $_SESSION['success_msg'] = $habilitar
+                ? 'Flujo de caja habilitado. Delegue el acceso de visualización a tesorero, director o secretario.'
+                : 'Flujo de caja deshabilitado para la organización.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo actualizar la configuración del flujo de caja.';
+        }
+        $redirect = !empty($this->sanitizePost()['redirect_flujo']) ? '/admin/flujo_caja' : '/admin/socios';
         $this->redirect($redirect);
     }
 }

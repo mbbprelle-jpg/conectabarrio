@@ -35,6 +35,19 @@ function cbFlujoMesValido(int $anio, int $mes, string $mesInicio): bool {
     <div class="alert alert-danger"><span><?php echo htmlspecialchars($data['error']); ?></span></div>
 <?php endif; ?>
 
+<?php
+require_once APPROOT . '/core/AuthContext.php';
+if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
+?>
+<div class="alert alert-warning" style="margin-bottom: 1rem;">
+    <span>
+        El módulo de <strong>Flujo de Caja</strong> aún no está habilitado para su organización.
+        Active la opción en <a href="<?php echo URLROOT; ?>/admin/socios" style="color: inherit; text-decoration: underline;">Socios y Ajustes</a>
+        y delegue el acceso a tesorero, director o secretario según corresponda.
+    </span>
+</div>
+<?php endif; ?>
+
 <div class="card card-primary cb-flujo-toolbar">
     <div class="cb-flujo-toolbar-inner">
         <div>

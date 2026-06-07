@@ -1,4 +1,5 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
+<?php require_once APPROOT . '/core/AuthContext.php'; ?>
 
 <?php
 function cbFinanzasSocioLabel($socio) {
@@ -136,7 +137,9 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
 
 <div class="cb-finanzas-nav" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
     <span class="badge badge-primary" style="padding: 0.45rem 0.85rem;">Movimientos</span>
+    <?php if (AuthContext::canViewFlujoCaja()): ?>
     <a href="<?php echo URLROOT; ?>/admin/flujo_caja" class="btn btn-secondary btn-sm">Flujo de Caja anual</a>
+    <?php endif; ?>
     <a href="<?php echo URLROOT; ?>/admin/conceptos_caja" class="btn btn-secondary btn-sm">Conceptos de Caja</a>
 </div>
 

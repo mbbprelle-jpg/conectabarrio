@@ -123,6 +123,31 @@ class JuntaVecinos extends Model {
         return self::$hasMapaSociosColumn;
     }
 
+    private static $hasFlujoCajaColumn = null;
+
+    public function hasFlujoCajaColumn(): bool {
+        if (self::$hasFlujoCajaColumn === null) {
+            try {
+                $this->db->query('SELECT flujo_caja_habilitado FROM juntas_vecinos LIMIT 1');
+                $this->db->execute();
+                self::$hasFlujoCajaColumn = true;
+            } catch (Exception $e) {
+                self::$hasFlujoCajaColumn = false;
+            }
+        }
+        return self::$hasFlujoCajaColumn;
+    }
+
+    public function updateFlujoCajaHabilitado(int $id, bool $enabled): bool {
+        if (!$this->hasFlujoCajaColumn()) {
+            return false;
+        }
+        $this->db->query('UPDATE juntas_vecinos SET flujo_caja_habilitado = :habilitado WHERE id = :id');
+        $this->db->bind(':habilitado', $enabled ? 1 : 0);
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
+
     public function updateMapaSociosHabilitado(int $id, bool $enabled): bool {
         if (!$this->hasMapaSociosColumn()) {
             return false;

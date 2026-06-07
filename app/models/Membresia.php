@@ -21,7 +21,25 @@ class Membresia extends Model {
         if ($this->hasMapaSociosJuntaColumn()) {
             $fields .= ', j.mapa_socios_habilitado';
         }
+        if ($this->hasFlujoCajaJuntaColumn()) {
+            $fields .= ', j.flujo_caja_habilitado';
+        }
         return $fields;
+    }
+
+    private static $hasFlujoCajaJuntaColumn = null;
+
+    public function hasFlujoCajaJuntaColumn(): bool {
+        if (self::$hasFlujoCajaJuntaColumn === null) {
+            try {
+                $this->db->query('SELECT flujo_caja_habilitado FROM juntas_vecinos LIMIT 1');
+                $this->db->execute();
+                self::$hasFlujoCajaJuntaColumn = true;
+            } catch (Exception $e) {
+                self::$hasFlujoCajaJuntaColumn = false;
+            }
+        }
+        return self::$hasFlujoCajaJuntaColumn;
     }
 
     private static $hasMapaSociosJuntaColumn = null;
@@ -52,6 +70,21 @@ class Membresia extends Model {
             }
         }
         return self::$hasPermisoMapaColumn;
+    }
+
+    private static $hasPermisoFlujoColumn = null;
+
+    public function hasPermisoFlujoColumn(): bool {
+        if (self::$hasPermisoFlujoColumn === null) {
+            try {
+                $this->db->query('SELECT permiso_flujo_caja FROM usuario_membresias LIMIT 1');
+                $this->db->execute();
+                self::$hasPermisoFlujoColumn = true;
+            } catch (Exception $e) {
+                self::$hasPermisoFlujoColumn = false;
+            }
+        }
+        return self::$hasPermisoFlujoColumn;
     }
 
     public function getActiveByUsuario($usuarioId) {
@@ -203,6 +236,9 @@ class Membresia extends Model {
         if ($this->hasPermisoMapaColumn()) {
             $sql .= ', permiso_mapa_socios = :permiso_mapa_socios';
         }
+        if ($this->hasPermisoFlujoColumn()) {
+            $sql .= ', permiso_flujo_caja = :permiso_flujo_caja';
+        }
         $sql .= ' WHERE id = :id';
         $this->db->query($sql);
         $this->db->bind(':cargo', $data['cargo'] ?: null);
@@ -211,6 +247,9 @@ class Membresia extends Model {
         $this->db->bind(':permiso_todos', !empty($data['permiso_todos']) ? 1 : 0);
         if ($this->hasPermisoMapaColumn()) {
             $this->db->bind(':permiso_mapa_socios', !empty($data['permiso_mapa_socios']) ? 1 : 0);
+        }
+        if ($this->hasPermisoFlujoColumn()) {
+            $this->db->bind(':permiso_flujo_caja', !empty($data['permiso_flujo_caja']) ? 1 : 0);
         }
         $this->db->bind(':id', $membresiaId);
         return $this->db->execute();
@@ -259,6 +298,7 @@ class Membresia extends Model {
         $this->db->query("SELECT u.id, u.nombre, u.apellido_paterno, u.email, u.rut, u.estado, u.rol AS usuario_rol,
             m.id AS membresia_id, m.rol, m.cargo, m.permiso_gestion_socios, m.permiso_registro_pagos, m.permiso_todos"
             . ($this->hasPermisoMapaColumn() ? ', m.permiso_mapa_socios' : '')
+            . ($this->hasPermisoFlujoColumn() ? ', m.permiso_flujo_caja' : '')
             . " FROM usuario_membresias m
             INNER JOIN usuarios u ON u.id = m.usuario_id
             WHERE m.junta_id = :junta_id AND m.estado = 1 AND u.rol != 'maestro'

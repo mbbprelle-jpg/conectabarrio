@@ -14,7 +14,9 @@ class AuthContext {
         $_SESSION['permiso_registro_pagos'] = (int)($membership->permiso_registro_pagos ?? 0);
         $_SESSION['permiso_todos'] = (int)($membership->permiso_todos ?? 0);
         $_SESSION['permiso_mapa_socios'] = (int)($membership->permiso_mapa_socios ?? 0);
+        $_SESSION['permiso_flujo_caja'] = (int)($membership->permiso_flujo_caja ?? 0);
         $_SESSION['mapa_socios_habilitado'] = (int)($membership->mapa_socios_habilitado ?? 0);
+        $_SESSION['flujo_caja_habilitado'] = (int)($membership->flujo_caja_habilitado ?? 0);
         $_SESSION['must_change'] = $user->must_change ?? false;
         self::syncAccountCompletionFlag($user);
         $_SESSION['user_junta_nombre'] = $membership->junta_nombre ?? 'Organización';
@@ -39,7 +41,9 @@ class AuthContext {
         $_SESSION['permiso_registro_pagos'] = 0;
         $_SESSION['permiso_todos'] = 0;
         $_SESSION['permiso_mapa_socios'] = 0;
+        $_SESSION['permiso_flujo_caja'] = 0;
         $_SESSION['mapa_socios_habilitado'] = 0;
+        $_SESSION['flujo_caja_habilitado'] = 0;
         $_SESSION['must_change'] = $user->must_change ?? false;
         $_SESSION['user_junta_nombre'] = 'Global';
     }
@@ -59,6 +63,26 @@ class AuthContext {
         if (self::isFullAdmin()) return true;
         if (!empty($_SESSION['permiso_todos'])) return true;
         return !empty($_SESSION['permiso_registro_pagos']);
+    }
+
+    public static function isFlujoCajaEnabled() {
+        return !empty($_SESSION['flujo_caja_habilitado']);
+    }
+
+    public static function canViewFlujoCaja() {
+        if (self::isFullAdmin()) {
+            return true;
+        }
+        if (($_SESSION['user_rol'] ?? '') === 'maestro') {
+            return false;
+        }
+        if (!self::isFlujoCajaEnabled()) {
+            return false;
+        }
+        if (!empty($_SESSION['permiso_todos'])) {
+            return true;
+        }
+        return !empty($_SESSION['permiso_flujo_caja']);
     }
 
     public static function isMapaSociosEnabled() {
@@ -95,6 +119,14 @@ class AuthContext {
                 $_SESSION['mapa_socios_habilitado'] = (int)($junta->mapa_socios_habilitado ?? 0);
             }
         }
+        if (!empty($_SESSION['user_junta_id']) && $juntaModel->hasFlujoCajaColumn()) {
+            if (!isset($junta)) {
+                $junta = $juntaModel->getJuntaById((int)$_SESSION['user_junta_id']);
+            }
+            if ($junta) {
+                $_SESSION['flujo_caja_habilitado'] = (int)($junta->flujo_caja_habilitado ?? 0);
+            }
+        }
 
         if (self::isFullAdmin()) {
             return;
@@ -121,8 +153,14 @@ class AuthContext {
         if ($memModel->hasPermisoMapaColumn()) {
             $_SESSION['permiso_mapa_socios'] = (int)($membership->permiso_mapa_socios ?? 0);
         }
+        if ($memModel->hasPermisoFlujoColumn()) {
+            $_SESSION['permiso_flujo_caja'] = (int)($membership->permiso_flujo_caja ?? 0);
+        }
         if ($memModel->hasMapaSociosJuntaColumn()) {
             $_SESSION['mapa_socios_habilitado'] = (int)($membership->mapa_socios_habilitado ?? 0);
+        }
+        if ($memModel->hasFlujoCajaJuntaColumn()) {
+            $_SESSION['flujo_caja_habilitado'] = (int)($membership->flujo_caja_habilitado ?? 0);
         }
     }
 
@@ -136,10 +174,13 @@ class AuthContext {
         }
         if (self::canRegisterPayments()) {
             $methods = array_merge($methods, [
-                'finanzas', 'flujo_caja', 'registrar_pago_cuota', 'registrar_transaccion', 'get_socio_cuotas',
+                'finanzas', 'registrar_pago_cuota', 'registrar_transaccion', 'get_socio_cuotas',
                 'guardar_saldo_inicial', 'conceptos_caja', 'concepto_caja_crear',
                 'concepto_caja_actualizar', 'concepto_caja_eliminar',
             ]);
+        }
+        if (self::canViewFlujoCaja()) {
+            $methods[] = 'flujo_caja';
         }
         return array_unique($methods);
     }

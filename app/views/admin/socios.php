@@ -178,6 +178,30 @@ foreach ($data['calles'] as $calleItem) {
     </div>
     <?php endif; ?>
 
+    <?php if ($isFullAdmin): ?>
+    <div class="card mapa-socios-config-card" style="margin-bottom: 1.5rem;">
+        <div class="mapa-socios-config-body">
+            <div>
+                <h3 class="mapa-socios-config-title">Flujo de caja anual</h3>
+                <p class="mapa-socios-config-text">
+                    Vista mensualizada de ingresos y egresos por concepto. Habilítela y delegue quién puede <strong>visualizarla</strong>
+                    (tesorero, director, secretario u otro socio).
+                </p>
+            </div>
+            <form action="<?php echo URLROOT; ?>/admin/flujo_caja_config" method="POST" class="mapa-socios-config-form">
+                <label class="mapa-socios-toggle">
+                    <input type="checkbox" name="flujo_caja_habilitado" value="1" <?php echo !empty($data['flujo_caja_habilitado']) ? 'checked' : ''; ?>>
+                    <span>Habilitado para la organización</span>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                <?php if (!empty($data['flujo_caja_habilitado'])): ?>
+                    <a href="<?php echo URLROOT; ?>/admin/flujo_caja" class="btn btn-secondary btn-sm">Abrir flujo</a>
+                <?php endif; ?>
+            </form>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="card card-primary" style="display: flex; flex-direction: column; gap: 1.5rem;">
 
         <?php if ($canManageSocios && !empty($sociosPendientes)): ?>
@@ -468,15 +492,19 @@ foreach ($data['calles'] as $calleItem) {
                                     $cargo = $mem->cargo ?? '';
                                     $permSocios = !empty($mem->permiso_gestion_socios) || !empty($mem->permiso_todos);
                                     $permPagos = !empty($mem->permiso_registro_pagos) || !empty($mem->permiso_todos);
+                                    $permFlujo = !empty($mem->permiso_flujo_caja) || !empty($mem->permiso_todos);
                                     ?>
                                     <?php if ($cargo): ?>
                                         <span class="badge badge-info" style="margin-bottom: 0.25rem; display: inline-block;"><?php echo htmlspecialchars($cargo); ?></span><br>
                                     <?php endif; ?>
                                     <small style="color: var(--text-muted); font-size: 0.72rem;">
-                                        <?php if ($permSocios): ?>Socios<?php endif; ?>
-                                        <?php if ($permSocios && $permPagos): ?> · <?php endif; ?>
-                                        <?php if ($permPagos): ?>Pagos<?php endif; ?>
-                                        <?php if (!$cargo && !$permSocios && !$permPagos): ?>Sin delegación<?php endif; ?>
+                                        <?php
+                                        $permParts = [];
+                                        if ($permSocios) $permParts[] = 'Socios';
+                                        if ($permPagos) $permParts[] = 'Pagos';
+                                        if ($permFlujo) $permParts[] = 'Flujo';
+                                        echo $permParts ? implode(' · ', $permParts) : 'Sin delegación';
+                                        ?>
                                     </small>
                                     <div style="margin-top: 0.35rem;">
                                         <button type="button" class="btn btn-secondary btn-sm btn-delegar-socio"
@@ -485,6 +513,7 @@ foreach ($data['calles'] as $calleItem) {
                                                 data-cargo="<?php echo htmlspecialchars($cargo); ?>"
                                                 data-perm-socios="<?php echo $permSocios ? '1' : '0'; ?>"
                                                 data-perm-pagos="<?php echo $permPagos ? '1' : '0'; ?>"
+                                                data-perm-flujo="<?php echo $permFlujo ? '1' : '0'; ?>"
                                                 data-perm-todos="<?php echo !empty($mem->permiso_todos) ? '1' : '0'; ?>"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">
                                             Delegar
@@ -1364,13 +1393,18 @@ foreach ($data['calles'] as $calleItem) {
                     Registrar pagos y movimientos de caja
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                    <input type="checkbox" name="permiso_flujo_caja" id="delegacion_perm_flujo" value="1">
+                    Ver flujo de caja anual (solo lectura)
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
                     <input type="checkbox" name="permiso_todos" id="delegacion_perm_todos" value="1">
                     Todos los permisos (director)
                 </label>
             </div>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
-                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa la gestión de socios; al asignar <strong>Tesorero</strong>, el registro de pagos.
-                El <strong>mapa comunitario</strong> lo ve cualquier miembro cuando el administrador lo habilita para la organización.
+                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa gestión de socios y vista de flujo;
+                al asignar <strong>Tesorero</strong>, registro de pagos y flujo. El <strong>Director</strong> recibe todos los permisos.
+                El flujo de caja debe estar habilitado para la organización.
             </p>
             <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                 <button type="button" class="btn btn-secondary" id="cancelDelegacionModal">Cancelar</button>
@@ -1928,6 +1962,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_cargo').value = this.dataset.cargo || '';
             document.getElementById('delegacion_perm_socios').checked = this.dataset.permSocios === '1';
             document.getElementById('delegacion_perm_pagos').checked = this.dataset.permPagos === '1';
+            document.getElementById('delegacion_perm_flujo').checked = this.dataset.permFlujo === '1';
             document.getElementById('delegacion_perm_todos').checked = this.dataset.permTodos === '1';
             openModal(delegacionModal);
         });
@@ -1936,8 +1971,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('cancelDelegacionModal')?.addEventListener('click', () => closeModal(delegacionModal));
     delegacionModal?.addEventListener('click', e => { if (e.target === delegacionModal) closeModal(delegacionModal); });
     document.getElementById('delegacion_cargo')?.addEventListener('change', function() {
-        if (this.value === 'SECRETARIO') document.getElementById('delegacion_perm_socios').checked = true;
-        if (this.value === 'TESORERO') document.getElementById('delegacion_perm_pagos').checked = true;
+        if (this.value === 'SECRETARIO') {
+            document.getElementById('delegacion_perm_socios').checked = true;
+            document.getElementById('delegacion_perm_flujo').checked = true;
+        }
+        if (this.value === 'TESORERO') {
+            document.getElementById('delegacion_perm_pagos').checked = true;
+            document.getElementById('delegacion_perm_flujo').checked = true;
+        }
         if (this.value === 'DIRECTOR') {
             document.getElementById('delegacion_perm_todos').checked = true;
         }
@@ -1946,6 +1987,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (this.checked) {
             document.getElementById('delegacion_perm_socios').checked = true;
             document.getElementById('delegacion_perm_pagos').checked = true;
+            document.getElementById('delegacion_perm_flujo').checked = true;
         }
     });
     <?php endif; ?>
