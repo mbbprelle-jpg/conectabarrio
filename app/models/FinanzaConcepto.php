@@ -112,10 +112,37 @@ class FinanzaConcepto extends Model {
     }
 
     public function deleteConcepto(int $id, int $juntaId): bool {
+        $concepto = $this->getById($id, $juntaId);
+        if (!$concepto) {
+            return false;
+        }
+        if ($this->countUsoConcepto($juntaId, $concepto->tipo, $concepto->nombre) > 0) {
+            return false;
+        }
         $this->db->query('DELETE FROM finanzas_conceptos WHERE id = :id AND junta_id = :junta_id');
         $this->db->bind(':id', $id);
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->execute();
+    }
+
+    public function countUsoConcepto(int $juntaId, string $tipo, string $nombre): int {
+        $this->db->query('SELECT COUNT(*) AS total FROM transacciones
+            WHERE junta_id = :junta_id AND tipo = :tipo AND categoria = :categoria');
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':tipo', $tipo);
+        $this->db->bind(':nombre', $nombre);
+        $row = $this->db->single();
+        return $row ? (int)$row->total : 0;
+    }
+
+    /** @return object[] */
+    public function getByJuntaWithUso(int $juntaId, string $tipo): array {
+        $items = $this->getByJunta($juntaId, $tipo, false);
+        foreach ($items as $item) {
+            $item->uso_count = $this->countUsoConcepto($juntaId, $item->tipo, $item->nombre);
+            $item->puede_eliminar = ($item->uso_count === 0);
+        }
+        return $items;
     }
 
     public function isConceptoValido(int $juntaId, string $tipo, string $categoria): bool {

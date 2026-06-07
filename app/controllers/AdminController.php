@@ -1366,8 +1366,8 @@ class AdminController extends Controller {
         }
 
         $data = array_merge([
-            'title' => 'Flujo de Caja',
-            'header_title' => 'Registro de Caja (Ingresos y Egresos)',
+            'title' => 'Movimientos',
+            'header_title' => 'Registro de Movimientos',
             'header_subtitle' => 'Registre recaudación de cuotas, otros ingresos y gastos generales de la junta',
             'active_menu' => 'finanzas',
             'socios' => $this->userModel->getSociosOperativosByJunta($juntaId),
@@ -1419,18 +1419,63 @@ class AdminController extends Controller {
         $this->redirect('/admin/finanzas');
     }
 
+    private function redirectConceptosCaja(?string $tipo = null): void {
+        $tab = in_array($tipo, ['ingreso', 'egreso'], true) ? $tipo : 'ingreso';
+        $this->redirect('/admin/conceptos_caja?tab=' . $tab);
+    }
+
+    public function flujo_caja() {
+        $this->requireRegisterPayments();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $mesInicio = $this->cierreModel->getMesInicioJunta($juntaId);
+        $anios = $this->transaccionModel->getAniosDisponiblesFlujo($juntaId, $mesInicio);
+
+        $anioReq = isset($_GET['anio']) ? (int)$_GET['anio'] : (int)date('Y');
+        if (!in_array($anioReq, $anios, true)) {
+            $anioReq = in_array((int)date('Y'), $anios, true)
+                ? (int)date('Y')
+                : (int)$anios[count($anios) - 1];
+        }
+
+        $matriz = $this->transaccionModel->getFlujoCajaMatrizAnual($juntaId, $anioReq, $mesInicio, $this->conceptoModel);
+
+        $data = [
+            'title' => 'Flujo de Caja',
+            'header_title' => 'Flujo de Caja Anual',
+            'header_subtitle' => 'Vista mensualizada de ingresos y egresos por concepto',
+            'active_menu' => 'flujo_caja',
+            'anios' => $anios,
+            'anio_seleccionado' => $anioReq,
+            'matriz' => $matriz,
+            'mes_inicio' => $mesInicio,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ];
+
+        unset($_SESSION['success_msg']);
+        unset($_SESSION['error_msg']);
+
+        $this->view('admin/flujo_caja', $data);
+    }
+
     public function conceptos_caja() {
         $this->requireRegisterPayments();
         $juntaId = (int)$_SESSION['user_junta_id'];
         $this->conceptoModel->ensureDefaults($juntaId);
+
+        $tab = $_GET['tab'] ?? 'ingreso';
+        if (!in_array($tab, ['ingreso', 'egreso'], true)) {
+            $tab = 'ingreso';
+        }
 
         $data = [
             'title' => 'Conceptos de Caja',
             'header_title' => 'Conceptos de Ingreso y Egreso',
             'header_subtitle' => 'Personalice cómo agrupa los movimientos de caja su organización',
             'active_menu' => 'conceptos_caja',
-            'conceptos_ingreso' => $this->conceptoModel->getByJunta($juntaId, 'ingreso'),
-            'conceptos_egreso' => $this->conceptoModel->getByJunta($juntaId, 'egreso'),
+            'tab_activa' => $tab,
+            'conceptos_ingreso' => $this->conceptoModel->getByJuntaWithUso($juntaId, 'ingreso'),
+            'conceptos_egreso' => $this->conceptoModel->getByJuntaWithUso($juntaId, 'egreso'),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
         ];
@@ -1464,7 +1509,7 @@ class AdminController extends Controller {
         } else {
             $_SESSION['error_msg'] = 'No se pudo crear el concepto. Puede que ya exista con ese nombre.';
         }
-        $this->redirect('/admin/conceptos_caja');
+        $this->redirectConceptosCaja($tipo);
     }
 
     public function concepto_caja_actualizar() {
@@ -1482,7 +1527,14 @@ class AdminController extends Controller {
 
         if ($id <= 0 || $nombre === '') {
             $_SESSION['error_msg'] = 'Datos incompletos para actualizar el concepto.';
-            $this->redirect('/admin/conceptos_caja');
+            $this->redirectConceptosCaja();
+            return;
+        }
+
+        $concepto = $this->conceptoModel->getById($id, $juntaId);
+        if (!$concepto) {
+            $_SESSION['error_msg'] = 'Concepto no encontrado.';
+            $this->redirectConceptosCaja();
             return;
         }
 
@@ -1491,7 +1543,7 @@ class AdminController extends Controller {
         } else {
             $_SESSION['error_msg'] = 'No se pudo actualizar el concepto.';
         }
-        $this->redirect('/admin/conceptos_caja');
+        $this->redirectConceptosCaja($concepto->tipo ?? null);
     }
 
     public function concepto_caja_eliminar() {
@@ -1507,7 +1559,21 @@ class AdminController extends Controller {
 
         if ($id <= 0) {
             $_SESSION['error_msg'] = 'Concepto no válido.';
-            $this->redirect('/admin/conceptos_caja');
+            $this->redirectConceptosCaja();
+            return;
+        }
+
+        $concepto = $this->conceptoModel->getById($id, $juntaId);
+        if (!$concepto) {
+            $_SESSION['error_msg'] = 'Concepto no encontrado.';
+            $this->redirectConceptosCaja();
+            return;
+        }
+
+        $uso = $this->conceptoModel->countUsoConcepto($juntaId, $concepto->tipo, $concepto->nombre);
+        if ($uso > 0) {
+            $_SESSION['error_msg'] = 'No se puede eliminar «' . $concepto->nombre . '»: tiene ' . $uso . ' movimiento(s) registrado(s). Desactívelo en su lugar.';
+            $this->redirectConceptosCaja($concepto->tipo);
             return;
         }
 
@@ -1516,7 +1582,7 @@ class AdminController extends Controller {
         } else {
             $_SESSION['error_msg'] = 'No se pudo eliminar el concepto.';
         }
-        $this->redirect('/admin/conceptos_caja');
+        $this->redirectConceptosCaja($concepto->tipo);
     }
 
     // Registrar pago de cuota de socio (POST, soporta múltiples meses)

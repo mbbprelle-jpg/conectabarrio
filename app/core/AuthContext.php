@@ -136,7 +136,7 @@ class AuthContext {
         }
         if (self::canRegisterPayments()) {
             $methods = array_merge($methods, [
-                'finanzas', 'registrar_pago_cuota', 'registrar_transaccion', 'get_socio_cuotas',
+                'finanzas', 'flujo_caja', 'registrar_pago_cuota', 'registrar_transaccion', 'get_socio_cuotas',
                 'guardar_saldo_inicial', 'conceptos_caja', 'concepto_caja_crear',
                 'concepto_caja_actualizar', 'concepto_caja_eliminar',
             ]);

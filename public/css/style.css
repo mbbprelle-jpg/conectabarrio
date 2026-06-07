@@ -2795,3 +2795,324 @@ body.cb-loading-active .main-content {
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
+/* Conceptos de Caja — pestañas y tabla */
+.cb-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.cb-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.88rem;
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.cb-tab:hover {
+    border-color: var(--border-hover);
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.cb-tab.is-active {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--text-main);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+}
+
+.cb-tab-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.cb-tab-count {
+    font-size: 0.72rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-muted);
+}
+
+.cb-conceptos-add-form {
+    display: flex;
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.cb-conceptos-add-form .form-control {
+    flex: 1;
+    min-width: 200px;
+}
+
+.cb-conceptos-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 2rem 1rem;
+    font-size: 0.9rem;
+}
+
+.cb-conceptos-table-wrap {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+.cb-conceptos-table tbody tr.is-inactive {
+    opacity: 0.72;
+}
+
+.cb-concepto-nombre {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.cb-status-pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+}
+
+.cb-status-pill--active {
+    color: var(--success);
+    background: var(--success-bg);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.cb-status-pill--inactive {
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+}
+
+.cb-conceptos-actions {
+    display: inline-flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.cb-conceptos-nav-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.cb-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(2, 6, 23, 0.72);
+    backdrop-filter: blur(6px);
+}
+
+.cb-modal-overlay.is-open {
+    display: flex;
+}
+
+.cb-modal-box {
+    width: 100%;
+    max-width: 440px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 1.35rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+}
+
+.cb-modal-title {
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    margin: 0 0 1rem;
+}
+
+.cb-modal-hint {
+    font-size: 0.78rem;
+    color: var(--warning);
+    margin: 0.75rem 0 0;
+    line-height: 1.4;
+}
+
+.cb-modal-actions {
+    display: flex;
+    gap: 0.65rem;
+    justify-content: flex-end;
+    margin-top: 1.25rem;
+}
+
+/* Flujo de Caja — matriz anual */
+.cb-flujo-toolbar {
+    margin-bottom: 1.25rem;
+}
+
+.cb-flujo-toolbar-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.cb-flujo-year-select {
+    min-width: 120px;
+}
+
+.cb-flujo-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+}
+
+.cb-flujo-kpi {
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.cb-flujo-kpi-label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+}
+
+.cb-flujo-kpi strong {
+    font-size: 1.15rem;
+    font-family: var(--font-heading);
+}
+
+.cb-flujo-kpi--success { border-color: rgba(16, 185, 129, 0.2); }
+.cb-flujo-kpi--danger { border-color: rgba(239, 68, 68, 0.2); }
+.cb-flujo-kpi--primary { border-color: rgba(99, 102, 241, 0.2); }
+
+.cb-flujo-matrix-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.cb-flujo-matrix-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+.cb-flujo-matrix {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.cb-flujo-matrix th,
+.cb-flujo-matrix td {
+    padding: 0.55rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.cb-flujo-matrix th {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.68rem;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.cb-flujo-sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    text-align: left !important;
+    background: var(--bg-card);
+    min-width: 160px;
+    max-width: 220px;
+    box-shadow: 2px 0 6px rgba(0, 0, 0, 0.15);
+}
+
+.cb-flujo-matrix thead .cb-flujo-sticky-col {
+    z-index: 3;
+    background: rgba(15, 23, 42, 0.98);
+}
+
+.cb-flujo-col-mes {
+    min-width: 72px;
+}
+
+.cb-flujo-col-total {
+    min-width: 90px;
+    font-weight: 700;
+    background: rgba(99, 102, 241, 0.04);
+}
+
+.cb-flujo-section-row td {
+    padding: 0.45rem 0.5rem;
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.cb-flujo-data-row.is-empty {
+    opacity: 0.55;
+}
+
+.cb-flujo-col-mes.is-egreso {
+    color: var(--danger);
+}
+
+.cb-flujo-na,
+.cb-flujo-zero {
+    color: var(--text-muted);
+    opacity: 0.45;
+}
+
+.cb-flujo-total-row td {
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.cb-flujo-total-row--ingreso .cb-flujo-sticky-col { color: var(--success); }
+.cb-flujo-total-row--egreso .cb-flujo-sticky-col { color: var(--danger); }
+.cb-flujo-total-row--neto .cb-flujo-sticky-col { color: var(--primary); }
+
+@media (max-width: 768px) {
+    .cb-conceptos-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .cb-conceptos-add-form {
+        flex-direction: column;
+    }
+}
+

@@ -134,6 +134,12 @@ $fechaDefault = ($fechaMax >= $fechaMin) ? $fechaMax : $fechaMin;
 $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
 ?>
 
+<div class="cb-finanzas-nav" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem;">
+    <span class="badge badge-primary" style="padding: 0.45rem 0.85rem;">Movimientos</span>
+    <a href="<?php echo URLROOT; ?>/admin/flujo_caja" class="btn btn-secondary btn-sm">Flujo de Caja anual</a>
+    <a href="<?php echo URLROOT; ?>/admin/conceptos_caja" class="btn btn-secondary btn-sm">Conceptos de Caja</a>
+</div>
+
 <?php if (!empty($data['puede_editar_saldo_inicial'])): ?>
 <div class="card card-primary cb-saldo-inicial-setup" style="margin-bottom: 1.5rem; border-color: rgba(99,102,241,0.25); background: radial-gradient(100% 100% at 0% 0%, rgba(99,102,241,0.08) 0%, transparent 100%), var(--bg-card);">
     <h3 class="card-title">
@@ -310,7 +316,7 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
         
         <h3 class="card-title">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            Historial de Transacciones (Flujo de Caja)
+            Historial de Transacciones
         </h3>
 
         <!-- Caja Resumen Rápido -->

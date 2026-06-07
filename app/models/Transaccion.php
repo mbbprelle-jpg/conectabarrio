@@ -129,6 +129,140 @@ class Transaccion extends Model {
         return $balance;
     }
 
+    public function getAniosDisponiblesFlujo(int $juntaId, string $mesInicio): array {
+        $startYear = (int)substr($mesInicio, 0, 4);
+        $currentYear = (int)date('Y');
+
+        $this->db->query('SELECT DISTINCT YEAR(fecha) AS anio FROM transacciones
+            WHERE junta_id = :junta_id ORDER BY anio ASC');
+        $this->db->bind(':junta_id', $juntaId);
+        $rows = $this->db->resultSet();
+
+        $years = [$startYear];
+        foreach ($rows as $row) {
+            if (!empty($row->anio)) {
+                $years[] = (int)$row->anio;
+            }
+        }
+        $years[] = $currentYear;
+
+        $years = array_values(array_unique($years));
+        sort($years);
+        return $years;
+    }
+
+    /**
+     * Matriz anual: filas por categoría (ingresos/egresos) × meses 1-12 + total fila.
+     */
+    public function getFlujoCajaMatrizAnual(int $juntaId, int $anio, string $mesInicio, FinanzaConcepto $conceptoModel): array {
+        $mesInicioYear = (int)substr($mesInicio, 0, 4);
+        $mesInicioMonth = (int)substr($mesInicio, 5, 2);
+
+        $this->db->query("SELECT tipo, categoria, MONTH(fecha) AS mes_num, SUM(monto) AS total
+            FROM transacciones
+            WHERE junta_id = :junta_id AND fecha >= :desde AND fecha <= :hasta
+            GROUP BY tipo, categoria, MONTH(fecha)
+            ORDER BY tipo DESC, categoria ASC, mes_num ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':desde', $anio . '-01-01');
+        $this->db->bind(':hasta', $anio . '-12-31');
+        $raw = $this->db->resultSet();
+
+        $dataMap = [];
+        foreach ($raw as $row) {
+            $key = $row->tipo . '|' . $row->categoria;
+            if (!isset($dataMap[$key])) {
+                $dataMap[$key] = [
+                    'tipo' => $row->tipo,
+                    'categoria' => $row->categoria,
+                    'meses' => array_fill(1, 12, 0),
+                    'total' => 0,
+                ];
+            }
+            $m = (int)$row->mes_num;
+            $val = (int)$row->total;
+            $dataMap[$key]['meses'][$m] = $val;
+            $dataMap[$key]['total'] += $val;
+        }
+
+        $conceptoModel->ensureDefaults($juntaId);
+        $ordenIngreso = ['Cuota Socio'];
+        foreach ($conceptoModel->getByJunta($juntaId, 'ingreso', false) as $c) {
+            $ordenIngreso[] = $c->nombre;
+        }
+        $ordenEgreso = [];
+        foreach ($conceptoModel->getByJunta($juntaId, 'egreso', false) as $c) {
+            $ordenEgreso[] = $c->nombre;
+        }
+
+        foreach ($dataMap as $item) {
+            if ($item['tipo'] === 'ingreso' && !in_array($item['categoria'], $ordenIngreso, true)) {
+                $ordenIngreso[] = $item['categoria'];
+            }
+            if ($item['tipo'] === 'egreso' && !in_array($item['categoria'], $ordenEgreso, true)) {
+                $ordenEgreso[] = $item['categoria'];
+            }
+        }
+
+        $buildFilas = function (array $orden, string $tipo) use ($dataMap) {
+            $filas = [];
+            foreach ($orden as $nombre) {
+                $key = $tipo . '|' . $nombre;
+                $filas[] = $dataMap[$key] ?? [
+                    'tipo' => $tipo,
+                    'categoria' => $nombre,
+                    'meses' => array_fill(1, 12, 0),
+                    'total' => 0,
+                ];
+            }
+            return $filas;
+        };
+
+        $filasIngreso = $buildFilas($ordenIngreso, 'ingreso');
+        $filasEgreso = $buildFilas($ordenEgreso, 'egreso');
+
+        $totalesIngresoMes = array_fill(1, 12, 0);
+        $totalesEgresoMes = array_fill(1, 12, 0);
+        foreach ($filasIngreso as $f) {
+            for ($m = 1; $m <= 12; $m++) {
+                $totalesIngresoMes[$m] += $f['meses'][$m];
+            }
+        }
+        foreach ($filasEgreso as $f) {
+            for ($m = 1; $m <= 12; $m++) {
+                $totalesEgresoMes[$m] += $f['meses'][$m];
+            }
+        }
+
+        $netoMes = [];
+        $totalIngresosAnio = 0;
+        $totalEgresosAnio = 0;
+        for ($m = 1; $m <= 12; $m++) {
+            $netoMes[$m] = $totalesIngresoMes[$m] - $totalesEgresoMes[$m];
+            $totalIngresosAnio += $totalesIngresoMes[$m];
+            $totalEgresosAnio += $totalesEgresoMes[$m];
+        }
+
+        $mesDesde = ($anio === $mesInicioYear) ? $mesInicioMonth : 1;
+        $mesHasta = ($anio === (int)date('Y')) ? (int)date('n') : 12;
+
+        return [
+            'anio' => $anio,
+            'mes_desde' => $mesDesde,
+            'mes_hasta' => $mesHasta,
+            'secciones' => [
+                ['tipo' => 'ingreso', 'titulo' => 'Ingresos', 'filas' => $filasIngreso],
+                ['tipo' => 'egreso', 'titulo' => 'Egresos', 'filas' => $filasEgreso],
+            ],
+            'totales_ingreso_mes' => $totalesIngresoMes,
+            'totales_egreso_mes' => $totalesEgresoMes,
+            'neto_mes' => $netoMes,
+            'total_ingresos_anio' => $totalIngresosAnio,
+            'total_egresos_anio' => $totalEgresosAnio,
+            'neto_anio' => $totalIngresosAnio - $totalEgresosAnio,
+        ];
+    }
+
     // Obtener resumen mensual agrupado para Flujo de Caja (últimos 6 meses)
     public function getFlujoCajaHistorico($juntaId) {
         $this->db->query("SELECT 
