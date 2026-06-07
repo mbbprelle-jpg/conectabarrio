@@ -13,6 +13,7 @@ class AdminController extends Controller {
     private $conceptoModel;
     private $documentoModel;
     private $documentoCategoriaModel;
+    private $reunionConvocadoModel;
     private $db;
 
     public function __construct() {
@@ -29,6 +30,7 @@ class AdminController extends Controller {
         $this->conceptoModel = $this->model('FinanzaConcepto');
         $this->documentoModel = $this->model('Documento');
         $this->documentoCategoriaModel = $this->model('DocumentoCategoria');
+        $this->reunionConvocadoModel = $this->model('ReunionConvocado');
         $this->db = new Database();
     }
 
@@ -1957,127 +1959,315 @@ class AdminController extends Controller {
     // =========================================================================
     // 4. REUNIONES Y ASISTENCIA
     // =========================================================================
+
+    private function requireReunionesPlan(): bool {
+        return ($_SESSION['user_junta_plan'] ?? 'basico') !== 'basico';
+    }
+
+    private function requireManageReuniones(): void {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!$this->requireReunionesPlan()) {
+            $_SESSION['error_msg'] = 'Las reuniones requieren Plan Mediano o superior.';
+            $this->redirect('/admin/dashboard');
+            exit;
+        }
+        if (!AuthContext::canManageReuniones()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para convocar reuniones o tomar asistencia.';
+            $this->redirectUserHome();
+            exit;
+        }
+    }
+
+    /** @return int[] */
+    private function resolveConvocadosFromPost(array $post, int $juntaId): array {
+        $ids = [];
+        if (!empty($post['convocar_todos'])) {
+            foreach ($this->membresiaModel->getMiembrosActivosParaConvocatoria($juntaId) as $m) {
+                $ids[] = (int)$m->id;
+            }
+        }
+        if (!empty($post['convocar_directorio'])) {
+            $ids = array_merge($ids, $this->membresiaModel->getDirectivoUsuarioIds($juntaId));
+        }
+        if (!empty($post['convocados']) && is_array($post['convocados'])) {
+            foreach ($post['convocados'] as $uid) {
+                $ids[] = (int)$uid;
+            }
+        }
+        return array_values(array_unique(array_filter($ids, static fn($id) => $id > 0)));
+    }
+
+    private function enviarEmailsConvocatoria(object $reunion, array $usuarioIds, int $juntaId): array {
+        require_once APPROOT . '/core/Mailer.php';
+        require_once APPROOT . '/core/ConvocatoriaMail.php';
+
+        if (!Mailer::isConfigured()) {
+            return ['enviados' => 0, 'errores' => 0, 'sin_config' => true];
+        }
+
+        $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Organización';
+        $temasHtml = ConvocatoriaMail::temasToHtml($this->reunionModel->getTemasText($reunion));
+        $fechaFmt = date('d/m/Y \a \l\a\s H:i \h\r\s', strtotime($reunion->fecha_reunion));
+        $urlApp = URLROOT . '/socio/reuniones';
+        $subject = 'Convocatoria: ' . $reunion->titulo . ' — ' . $juntaNombre;
+
+        $enviados = 0;
+        $errores = 0;
+        foreach ($usuarioIds as $uid) {
+            $user = $this->userModel->getUserById($uid);
+            if (!$user || empty($user->email) || !filter_var($user->email, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $html = ConvocatoriaMail::buildHtml(
+                $user->nombre ?? 'Socio',
+                $juntaNombre,
+                $reunion->titulo,
+                $fechaFmt,
+                $temasHtml,
+                $urlApp
+            );
+            $result = Mailer::send($user->email, $subject, $html, defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : null);
+            if ($result['ok']) {
+                $enviados++;
+                $this->reunionConvocadoModel->markEmailSent((int)$reunion->id, $uid);
+            } else {
+                $errores++;
+            }
+        }
+        return ['enviados' => $enviados, 'errores' => $errores, 'sin_config' => false];
+    }
+
     public function asistencia($reunionId = null) {
-        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
-            $data = [
+        if (!$this->requireReunionesPlan()) {
+            $this->view('admin/upgrade_required', [
                 'title' => 'Mejora Requerida',
                 'header_title' => 'Módulo de Asistencia Bloqueado',
                 'header_subtitle' => 'Se requiere subir de plan para acceder a esta característica',
                 'active_menu' => 'asistencia',
-                'required_plan' => 'Mediano'
-            ];
-            $this->view('admin/upgrade_required', $data);
+                'required_plan' => 'Mediano',
+            ]);
+            return;
+        }
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canManageReuniones()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para gestionar reuniones.';
+            $this->redirectUserHome();
             return;
         }
 
-        $juntaId = $_SESSION['user_junta_id'];
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $editId = isset($_GET['editar']) ? (int)$_GET['editar'] : 0;
 
         $data = [
             'title' => 'Reuniones y Asistencia',
             'header_title' => 'Control de Reuniones y Asistencia',
-            'header_subtitle' => 'Programe asambleas y tome lista digitalizada de asistencia de sus vecinos',
+            'header_subtitle' => 'Convoque asambleas, envíe invitaciones y registre minutas',
             'active_menu' => 'asistencia',
             'reuniones' => $this->reunionModel->getReunionesByJunta($juntaId),
             'reunion_detalle' => null,
+            'reunion_editar' => null,
             'asistentes' => [],
+            'convocados' => [],
+            'convocados_edit' => [],
+            'miembros' => $this->membresiaModel->getMiembrosActivosParaConvocatoria($juntaId),
             'success' => $_SESSION['success_msg'] ?? '',
-            'error' => $_SESSION['error_msg'] ?? ''
+            'error' => $_SESSION['error_msg'] ?? '',
         ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
 
-        unset($_SESSION['success_msg']);
-        unset($_SESSION['error_msg']);
+        if ($editId > 0) {
+            $edit = $this->reunionModel->getReunionByIdAndJunta($editId, $juntaId);
+            if ($edit && $edit->estado === 'programada') {
+                $data['reunion_editar'] = $edit;
+                $data['convocados_edit'] = $this->reunionConvocadoModel->getUsuarioIdsByReunion($editId);
+            }
+        }
 
-        // Cargar lista de asistencia de una reunión si se especifica el ID
         if ($reunionId) {
-            $reunion = $this->reunionModel->getReunionById($reunionId);
-            if ($reunion && $reunion->junta_id == $juntaId) {
+            $reunion = $this->reunionModel->getReunionByIdAndJunta((int)$reunionId, $juntaId);
+            if ($reunion) {
                 $data['reunion_detalle'] = $reunion;
-                $data['asistentes'] = $this->asistenciaModel->getAsistenciaByReunion($reunionId, $juntaId);
+                $data['asistentes'] = $this->asistenciaModel->getAsistenciaByReunion((int)$reunionId, $juntaId);
+                $data['convocados'] = $this->reunionConvocadoModel->getUsuariosByReunion((int)$reunionId, $juntaId);
             }
         }
 
         $this->view('admin/asistencia', $data);
     }
 
-    // Crear una nueva Reunión (POST)
     public function reunion_crear() {
-        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
-            $_SESSION['error_msg'] = 'El módulo de Reuniones y Asistencia no está habilitado en su Plan Básico.';
-            $this->redirect('/admin/dashboard');
+        $this->requireManageReuniones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/asistencia');
             return;
         }
 
-        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $post = $this->sanitizePost();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $titulo = trim($post['titulo'] ?? '');
+        $fecha = trim($post['fecha_reunion'] ?? '');
+        $temas = trim($post['temas_tratar'] ?? '');
 
-            $dataReunion = [
-                'junta_id' => $_SESSION['user_junta_id'],
-                'titulo' => $post['titulo'] ?? '',
-                'descripcion' => $post['descripcion'] ?? '',
-                'fecha_reunion' => $post['fecha_reunion'] ?? '',
-                'estado' => 'programada'
-            ];
-
-            if (empty($dataReunion['titulo']) || empty($dataReunion['fecha_reunion'])) {
-                $_SESSION['error_msg'] = 'Debe indicar el título y la fecha de la reunión.';
-                $this->redirect('/admin/asistencia');
-            }
-
-            if ($this->reunionModel->createReunion($dataReunion)) {
-                $_SESSION['success_msg'] = 'Asamblea/Reunión programada exitosamente.';
-            } else {
-                $_SESSION['error_msg'] = 'Error al programar la reunión.';
-            }
+        if ($titulo === '' || $fecha === '') {
+            $_SESSION['error_msg'] = 'Complete título y fecha de la convocatoria.';
+            $this->redirect('/admin/asistencia');
+            return;
         }
+
+        $convocados = $this->resolveConvocadosFromPost($post, $juntaId);
+        if (empty($convocados)) {
+            $_SESSION['error_msg'] = 'Seleccione al menos un destinatario.';
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+
+        $reunionId = $this->reunionModel->createReunion([
+            'junta_id' => $juntaId,
+            'titulo' => $titulo,
+            'temas_tratar' => $temas !== '' ? $temas : null,
+            'fecha_reunion' => $fecha,
+            'estado' => 'programada',
+            'convocada_por' => (int)$_SESSION['user_id'],
+            'email_convocatoria' => !empty($post['enviar_email']),
+        ]);
+
+        if (!$reunionId) {
+            $_SESSION['error_msg'] = 'No se pudo crear la convocatoria.';
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+
+        $this->reunionConvocadoModel->replaceForReunion($reunionId, $convocados);
+        $reunion = $this->reunionModel->getReunionById($reunionId);
+        $msg = 'Convocatoria registrada para ' . count($convocados) . ' persona(s).';
+
+        if (!empty($post['enviar_email']) && $reunion) {
+            $mailResult = $this->enviarEmailsConvocatoria($reunion, $convocados, $juntaId);
+            if (!empty($mailResult['sin_config'])) {
+                $msg .= ' Correo no configurado; la invitación quedó en el perfil de cada socio.';
+            } else {
+                $msg .= ' Correos enviados: ' . $mailResult['enviados'] . '.';
+            }
+        } else {
+            $msg .= ' Visible en el perfil de los convocados.';
+        }
+        $_SESSION['success_msg'] = $msg;
         $this->redirect('/admin/asistencia');
     }
 
-    // Registrar asistencia masiva para una reunión (POST)
-    public function asistencia_guardar($reunionId) {
-        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
-            $_SESSION['error_msg'] = 'El módulo de Reuniones y Asistencia no está habilitado en su Plan Básico.';
-            $this->redirect('/admin/dashboard');
+    public function reunion_actualizar() {
+        $this->requireManageReuniones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $id = (int)($post['reunion_id'] ?? 0);
+
+        if (!$this->reunionModel->updateConvocatoria($id, $juntaId, [
+            'titulo' => trim($post['titulo'] ?? ''),
+            'fecha_reunion' => trim($post['fecha_reunion'] ?? ''),
+            'temas_tratar' => trim($post['temas_tratar'] ?? ''),
+        ])) {
+            $_SESSION['error_msg'] = 'No se pudo actualizar la convocatoria.';
+            $this->redirect('/admin/asistencia');
             return;
         }
 
-        if ($_SERVER['METHOD_POST'] ?? $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $juntaId = $_SESSION['user_junta_id'];
-            
-            // Validar que la reunión existe y pertenece a la Junta
-            $reunion = $this->reunionModel->getReunionById($reunionId);
-            if (!$reunion || $reunion->junta_id != $juntaId) {
-                $_SESSION['error_msg'] = 'Acción inválida.';
-                $this->redirect('/admin/asistencia');
-            }
-
-            // Lista de socios presentes desde el formulario checkboxes (viene array socio_ids)
-            $sociosAsistentes = $_POST['asistencia'] ?? []; // Array de IDs de socios presentes
-            
-            // Obtener todos los socios activos de la Junta
-            $sociosTodos = $this->userModel->getSociosByJunta($juntaId);
-
-            // Iniciar Transacción para guardar de forma segura
-            $db = new Database();
-            try {
-                $db->beginTransaction();
-
-                foreach ($sociosTodos as $socio) {
-                    // Determinar si asistió (1) o no (0)
-                    $asistio = in_array($socio->id, $sociosAsistentes) ? 1 : 0;
-                    $this->asistenciaModel->saveAsistencia($reunionId, $socio->id, $asistio);
-                }
-
-                // Cambiar el estado de la reunión a 'realizada'
-                $this->reunionModel->updateEstado($reunionId, 'realizada');
-
-                $db->commit();
-                $_SESSION['success_msg'] = 'Asistencias de la asamblea guardadas y digitalizadas correctamente.';
-            } catch (Exception $e) {
-                $db->rollBack();
-                $_SESSION['error_msg'] = 'Error al guardar asistencias: ' . $e->getMessage();
-            }
+        $convocados = $this->resolveConvocadosFromPost($post, $juntaId);
+        if (!empty($convocados)) {
+            $this->reunionConvocadoModel->replaceForReunion($id, $convocados);
         }
+        if (!empty($post['reenviar_email'])) {
+            $reunion = $this->reunionModel->getReunionById($id);
+            $this->enviarEmailsConvocatoria($reunion, $this->reunionConvocadoModel->getUsuarioIdsByReunion($id), $juntaId);
+        }
+
+        $_SESSION['success_msg'] = 'Convocatoria actualizada.';
+        $this->redirect('/admin/asistencia/' . $id);
+    }
+
+    public function reunion_resultados() {
+        $this->requireManageReuniones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $id = (int)($post['reunion_id'] ?? 0);
+        $horaInicio = trim($post['hora_inicio_real'] ?? '');
+        $horaVal = $horaInicio !== '' ? str_replace('T', ' ', $horaInicio) . ':00' : null;
+        $finalizar = !empty($post['finalizar_reunion']);
+
+        if (!$this->reunionModel->updateResultados($id, $juntaId, trim($post['resultados'] ?? ''), $horaVal, $finalizar)) {
+            $_SESSION['error_msg'] = 'No se pudieron guardar los resultados.';
+            $this->redirect('/admin/asistencia/' . $id);
+            return;
+        }
+        $_SESSION['success_msg'] = $finalizar ? 'Reunión finalizada. Puede imprimir la minuta.' : 'Resultados guardados.';
+        $this->redirect('/admin/asistencia/' . $id);
+    }
+
+    public function asistencia_guardar($reunionId) {
+        $this->requireManageReuniones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $reunionId = (int)$reunionId;
+        if (!$this->reunionModel->getReunionByIdAndJunta($reunionId, $juntaId)) {
+            $_SESSION['error_msg'] = 'Reunión no válida.';
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+
+        $sociosAsistentes = $_POST['asistencia'] ?? [];
+        foreach ($this->userModel->getSociosByJunta($juntaId) as $socio) {
+            $asistio = in_array((string)$socio->id, array_map('strval', $sociosAsistentes), true) ? 1 : 0;
+            $this->asistenciaModel->saveAsistencia($reunionId, $socio->id, $asistio);
+        }
+        $_SESSION['success_msg'] = 'Lista de asistencia guardada.';
         $this->redirect('/admin/asistencia/' . $reunionId);
+    }
+
+    public function reunion_minuta($id) {
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $reunionId = (int)$id;
+        $reunion = $this->reunionModel->getReunionByIdAndJunta($reunionId, $juntaId);
+        if (!$reunion) {
+            $_SESSION['error_msg'] = 'Reunión no encontrada.';
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+
+        $rol = $_SESSION['user_rol'] ?? '';
+        if ($rol === 'socio') {
+            if (!$this->reunionConvocadoModel->isConvocado($reunionId, (int)$_SESSION['user_id'])) {
+                $_SESSION['error_msg'] = 'No tiene acceso a esta minuta.';
+                $this->redirect('/socio/reuniones');
+                return;
+            }
+        } elseif (!AuthContext::canManageReuniones()) {
+            $_SESSION['error_msg'] = 'Sin permisos.';
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+
+        $asistentes = $this->asistenciaModel->getAsistenciaByReunion($reunionId, $juntaId);
+        $this->view('admin/reunion_minuta', [
+            'title' => 'Minuta — ' . $reunion->titulo,
+            'reunion' => $reunion,
+            'temas' => $this->reunionModel->getTemasText($reunion),
+            'presentes' => array_filter($asistentes, static fn($a) => !empty($a->asistio)),
+            'total_socios' => count($asistentes),
+            'junta_nombre' => $_SESSION['user_junta_nombre'] ?? '',
+            'back_url' => $rol === 'socio' ? URLROOT . '/socio/reuniones' : URLROOT . '/admin/asistencia/' . $reunionId,
+        ]);
     }
 
     // =========================================================================
@@ -2796,6 +2986,7 @@ class AdminController extends Controller {
                 'permiso_mapa_socios' => false,
                 'permiso_flujo_caja' => !empty($post['permiso_flujo_caja']),
                 'permiso_documentos' => !empty($post['permiso_documentos']),
+                'permiso_reuniones' => !empty($post['permiso_reuniones']),
             ]);
             if ((int)$usuarioId === (int)$_SESSION['user_id']) {
                 AuthContext::refreshMembershipSession();

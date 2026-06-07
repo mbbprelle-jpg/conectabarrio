@@ -105,6 +105,21 @@ class Membresia extends Model {
         return self::$hasPermisoDocumentosColumn;
     }
 
+    private static $hasPermisoReunionesColumn = null;
+
+    public function hasPermisoReunionesColumn(): bool {
+        if (self::$hasPermisoReunionesColumn === null) {
+            try {
+                $this->db->query('SELECT permiso_reuniones FROM usuario_membresias LIMIT 1');
+                $this->db->execute();
+                self::$hasPermisoReunionesColumn = true;
+            } catch (Exception $e) {
+                self::$hasPermisoReunionesColumn = false;
+            }
+        }
+        return self::$hasPermisoReunionesColumn;
+    }
+
     private static $hasDocumentosJuntaColumn = null;
 
     public function hasDocumentosJuntaColumn(): bool {
@@ -275,6 +290,9 @@ class Membresia extends Model {
         if ($this->hasPermisoDocumentosColumn()) {
             $sql .= ', permiso_documentos = :permiso_documentos';
         }
+        if ($this->hasPermisoReunionesColumn()) {
+            $sql .= ', permiso_reuniones = :permiso_reuniones';
+        }
         $sql .= ' WHERE id = :id';
         $this->db->query($sql);
         $this->db->bind(':cargo', $data['cargo'] ?: null);
@@ -289,6 +307,9 @@ class Membresia extends Model {
         }
         if ($this->hasPermisoDocumentosColumn()) {
             $this->db->bind(':permiso_documentos', !empty($data['permiso_documentos']) ? 1 : 0);
+        }
+        if ($this->hasPermisoReunionesColumn()) {
+            $this->db->bind(':permiso_reuniones', !empty($data['permiso_reuniones']) ? 1 : 0);
         }
         $this->db->bind(':id', $membresiaId);
         return $this->db->execute();
@@ -333,12 +354,35 @@ class Membresia extends Model {
         ];
     }
 
+    /** Usuarios activos de la junta (socios + admin) para convocatorias */
+    public function getMiembrosActivosParaConvocatoria(int $juntaId): array {
+        $this->db->query("SELECT u.id, u.nombre, u.email, u.rut, m.rol, m.cargo
+            FROM usuario_membresias m
+            INNER JOIN usuarios u ON u.id = m.usuario_id
+            WHERE m.junta_id = :junta_id AND m.estado = 1 AND u.rol != 'maestro'
+            ORDER BY FIELD(m.rol, 'admin', 'socio'), u.nombre ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
+    /** Directiva: admin + cargos SECRETARIO, TESORERO, DIRECTOR */
+    public function getDirectivoUsuarioIds(int $juntaId): array {
+        $this->db->query("SELECT u.id FROM usuario_membresias m
+            INNER JOIN usuarios u ON u.id = m.usuario_id
+            WHERE m.junta_id = :junta_id AND m.estado = 1
+            AND (m.rol = 'admin' OR m.cargo IN ('SECRETARIO', 'TESORERO', 'DIRECTOR'))");
+        $this->db->bind(':junta_id', $juntaId);
+        $rows = $this->db->resultSet();
+        return array_map(static fn($r) => (int)$r->id, $rows);
+    }
+
     public function getEquipoByJunta($juntaId) {
         $this->db->query("SELECT u.id, u.nombre, u.apellido_paterno, u.email, u.rut, u.estado, u.rol AS usuario_rol,
             m.id AS membresia_id, m.rol, m.cargo, m.permiso_gestion_socios, m.permiso_registro_pagos, m.permiso_todos"
             . ($this->hasPermisoMapaColumn() ? ', m.permiso_mapa_socios' : '')
             . ($this->hasPermisoFlujoColumn() ? ', m.permiso_flujo_caja' : '')
             . ($this->hasPermisoDocumentosColumn() ? ', m.permiso_documentos' : '')
+            . ($this->hasPermisoReunionesColumn() ? ', m.permiso_reuniones' : '')
             . " FROM usuario_membresias m
             INNER JOIN usuarios u ON u.id = m.usuario_id
             WHERE m.junta_id = :junta_id AND m.estado = 1 AND u.rol != 'maestro'

@@ -169,6 +169,7 @@ class AuthController extends Controller {
         $_SESSION['permiso_mapa_socios'] = 0;
         $_SESSION['permiso_flujo_caja'] = 0;
         $_SESSION['permiso_documentos'] = 0;
+        $_SESSION['permiso_reuniones'] = 0;
         $_SESSION['mapa_socios_habilitado'] = 0;
         $_SESSION['flujo_caja_habilitado'] = 0;
         $_SESSION['documentos_habilitado'] = 0;

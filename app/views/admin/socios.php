@@ -519,6 +519,7 @@ foreach ($data['calles'] as $calleItem) {
                                     $permPagos = !empty($mem->permiso_registro_pagos) || !empty($mem->permiso_todos);
                                     $permFlujo = !empty($mem->permiso_flujo_caja) || !empty($mem->permiso_todos);
                                     $permDocs = !empty($mem->permiso_documentos) || !empty($mem->permiso_todos);
+                                    $permReunion = !empty($mem->permiso_reuniones) || !empty($mem->permiso_todos);
                                     ?>
                                     <?php if ($cargo): ?>
                                         <span class="badge badge-info" style="margin-bottom: 0.25rem; display: inline-block;"><?php echo htmlspecialchars($cargo); ?></span><br>
@@ -530,6 +531,7 @@ foreach ($data['calles'] as $calleItem) {
                                         if ($permPagos) $permParts[] = 'Pagos';
                                         if ($permFlujo) $permParts[] = 'Flujo';
                                         if ($permDocs) $permParts[] = 'Docs';
+                                        if ($permReunion) $permParts[] = 'Reuniones';
                                         echo $permParts ? implode(' · ', $permParts) : 'Sin delegación';
                                         ?>
                                     </small>
@@ -542,6 +544,7 @@ foreach ($data['calles'] as $calleItem) {
                                                 data-perm-pagos="<?php echo $permPagos ? '1' : '0'; ?>"
                                                 data-perm-flujo="<?php echo $permFlujo ? '1' : '0'; ?>"
                                                 data-perm-docs="<?php echo $permDocs ? '1' : '0'; ?>"
+                                                data-perm-reunion="<?php echo $permReunion ? '1' : '0'; ?>"
                                                 data-perm-todos="<?php echo !empty($mem->permiso_todos) ? '1' : '0'; ?>"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">
                                             Delegar
@@ -1429,6 +1432,10 @@ foreach ($data['calles'] as $calleItem) {
                     Subir y gestionar documentos compartidos
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                    <input type="checkbox" name="permiso_reuniones" id="delegacion_perm_reunion" value="1">
+                    Convocar reuniones, asistencia y minutas
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
                     <input type="checkbox" name="permiso_todos" id="delegacion_perm_todos" value="1">
                     Todos los permisos (director)
                 </label>
@@ -1996,6 +2003,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_pagos').checked = this.dataset.permPagos === '1';
             document.getElementById('delegacion_perm_flujo').checked = this.dataset.permFlujo === '1';
             document.getElementById('delegacion_perm_docs').checked = this.dataset.permDocs === '1';
+            document.getElementById('delegacion_perm_reunion').checked = this.dataset.permReunion === '1';
             document.getElementById('delegacion_perm_todos').checked = this.dataset.permTodos === '1';
             openModal(delegacionModal);
         });
@@ -2008,11 +2016,13 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_socios').checked = true;
             document.getElementById('delegacion_perm_flujo').checked = true;
             document.getElementById('delegacion_perm_docs').checked = true;
+            document.getElementById('delegacion_perm_reunion').checked = true;
         }
         if (this.value === 'TESORERO') {
             document.getElementById('delegacion_perm_pagos').checked = true;
             document.getElementById('delegacion_perm_flujo').checked = true;
             document.getElementById('delegacion_perm_docs').checked = true;
+            document.getElementById('delegacion_perm_reunion').checked = true;
         }
         if (this.value === 'DIRECTOR') {
             document.getElementById('delegacion_perm_todos').checked = true;
@@ -2024,6 +2034,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_pagos').checked = true;
             document.getElementById('delegacion_perm_flujo').checked = true;
             document.getElementById('delegacion_perm_docs').checked = true;
+            document.getElementById('delegacion_perm_reunion').checked = true;
         }
     });
     <?php endif; ?>

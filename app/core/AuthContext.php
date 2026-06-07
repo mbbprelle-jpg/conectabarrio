@@ -16,6 +16,7 @@ class AuthContext {
         $_SESSION['permiso_mapa_socios'] = (int)($membership->permiso_mapa_socios ?? 0);
         $_SESSION['permiso_flujo_caja'] = (int)($membership->permiso_flujo_caja ?? 0);
         $_SESSION['permiso_documentos'] = (int)($membership->permiso_documentos ?? 0);
+        $_SESSION['permiso_reuniones'] = (int)($membership->permiso_reuniones ?? 0);
         $_SESSION['mapa_socios_habilitado'] = (int)($membership->mapa_socios_habilitado ?? 0);
         $_SESSION['flujo_caja_habilitado'] = (int)($membership->flujo_caja_habilitado ?? 0);
         $_SESSION['documentos_habilitado'] = (int)($membership->documentos_habilitado ?? 0);
@@ -45,6 +46,7 @@ class AuthContext {
         $_SESSION['permiso_mapa_socios'] = 0;
         $_SESSION['permiso_flujo_caja'] = 0;
         $_SESSION['permiso_documentos'] = 0;
+        $_SESSION['permiso_reuniones'] = 0;
         $_SESSION['mapa_socios_habilitado'] = 0;
         $_SESSION['flujo_caja_habilitado'] = 0;
         $_SESSION['documentos_habilitado'] = 0;
@@ -155,6 +157,16 @@ class AuthContext {
         return self::isDirectivo();
     }
 
+    public static function canManageReuniones(): bool {
+        if (self::isFullAdmin()) {
+            return true;
+        }
+        if (!empty($_SESSION['permiso_todos'])) {
+            return true;
+        }
+        return !empty($_SESSION['permiso_reuniones']);
+    }
+
     /**
      * Recarga permisos y flag del mapa desde BD (evita tener que cerrar sesión tras delegar).
      */
@@ -223,6 +235,9 @@ class AuthContext {
         if ($memModel->hasPermisoDocumentosColumn()) {
             $_SESSION['permiso_documentos'] = (int)($membership->permiso_documentos ?? 0);
         }
+        if ($memModel->hasPermisoReunionesColumn()) {
+            $_SESSION['permiso_reuniones'] = (int)($membership->permiso_reuniones ?? 0);
+        }
         if ($memModel->hasMapaSociosJuntaColumn()) {
             $_SESSION['mapa_socios_habilitado'] = (int)($membership->mapa_socios_habilitado ?? 0);
         }
@@ -261,6 +276,12 @@ class AuthContext {
             $methods = array_merge($methods, [
                 'documento_subir', 'documento_eliminar',
                 'documento_categoria_crear', 'documento_categoria_actualizar', 'documento_categoria_eliminar',
+            ]);
+        }
+        if (self::canManageReuniones()) {
+            $methods = array_merge($methods, [
+                'asistencia', 'reunion_crear', 'reunion_actualizar', 'reunion_resultados',
+                'asistencia_guardar', 'reunion_minuta',
             ]);
         }
         return array_unique($methods);

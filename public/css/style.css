@@ -3338,3 +3338,22 @@ body.cb-loading-active .main-content {
     }
 }
 
+/* Reuniones y convocatorias */
+.cb-reunion-empty { color: var(--text-muted); text-align: center; padding: 1.5rem; margin: 0; }
+.cb-reunion-table tr.is-selected { background: rgba(99, 102, 241, 0.08); }
+.cb-reunion-date { font-size: 0.8rem; font-family: monospace; white-space: nowrap; }
+.cb-reunion-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.cb-reunion-roll-wrap { max-height: 360px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 1rem; }
+.cb-reunion-temas-box { font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); }
+.cb-reunion-convocar-card { height: fit-content; }
+.cb-reunion-check { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; margin-bottom: 0.35rem; cursor: pointer; }
+.cb-reunion-socio-list { max-height: 180px; overflow-y: auto; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
+.cb-reunion-next-banner { margin-bottom: 1.25rem; }
+.cb-cal-nav { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+.cb-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cb-cal-head { text-align: center; font-size: 0.68rem; font-weight: 700; color: var(--text-muted); padding: 0.25rem; }
+.cb-cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 0.78rem; border-radius: 6px; background: rgba(255,255,255,0.02); border: 1px solid transparent; }
+.cb-cal-cell.is-empty { background: transparent; }
+.cb-cal-cell.is-today { border-color: var(--primary); font-weight: 700; }
+.cb-cal-cell.has-event { background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.45); font-weight: 700; color: #e9d5ff; }
+

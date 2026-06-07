@@ -13,6 +13,8 @@ class SocioController extends Controller {
         $this->cuotaModel = $this->model('CuotaConfig');
         $this->membresiaModel = $this->model('Membresia');
         $this->cambioModel = $this->model('SocioCambioSolicitud');
+        $this->reunionConvocadoModel = $this->model('ReunionConvocado');
+        $this->reunionModel = $this->model('Reunion');
         $this->db = new Database();
     }
 
@@ -63,6 +65,43 @@ class SocioController extends Controller {
         ];
 
         $this->view('socio/dashboard', $data);
+    }
+
+    public function reuniones() {
+        $socioId = (int)$_SESSION['user_id'];
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $calMes = max(1, min(12, (int)($_GET['mes'] ?? date('n'))));
+        $calAnio = (int)($_GET['anio'] ?? date('Y'));
+
+        $reuniones = [];
+        $proxima = null;
+        try {
+            $reuniones = $this->reunionConvocadoModel->getReunionesForUsuario($juntaId, $socioId);
+            $proxima = $this->reunionConvocadoModel->getProximaForUsuario($juntaId, $socioId);
+        } catch (Exception $e) {
+            // Tabla reunion_convocados aún no migrada
+        }
+
+        $diasConEvento = [];
+        foreach ($reuniones as $r) {
+            $ts = strtotime($r->fecha_reunion);
+            if ((int)date('n', $ts) === $calMes && (int)date('Y', $ts) === $calAnio) {
+                $diasConEvento[] = (int)date('j', $ts);
+            }
+        }
+        $diasConEvento = array_values(array_unique($diasConEvento));
+
+        $this->view('socio/reuniones', [
+            'title' => 'Mis Reuniones',
+            'header_title' => 'Convocatorias y reuniones',
+            'header_subtitle' => 'Calendario e historial de asambleas a las que fue convocado',
+            'active_menu' => 'reuniones',
+            'reuniones' => $reuniones,
+            'proxima' => $proxima,
+            'cal_mes' => $calMes,
+            'cal_anio' => $calAnio,
+            'dias_con_evento' => $diasConEvento,
+        ]);
     }
 
     public function solicitar_cambio() {

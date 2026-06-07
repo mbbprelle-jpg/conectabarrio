@@ -112,6 +112,9 @@ class Router {
             }
             if ($controllerClass === 'AdminController' && $userRole !== 'admin') {
                 if ($userRole === 'socio') {
+                    if ($method === 'reunion_minuta') {
+                        return;
+                    }
                     require_once APPROOT . '/core/AuthContext.php';
                     $allowed = AuthContext::adminMethodsForSocioDelegado();
                     if (!in_array($method, $allowed, true)) {
