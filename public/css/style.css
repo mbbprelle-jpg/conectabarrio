@@ -548,6 +548,14 @@ a {
     line-height: 1.2;
 }
 
+.metric-hint {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 0.35rem;
+    line-height: 1.35;
+    max-width: 220px;
+}
+
 /* =========================================================================
    FORMULARIOS Y ENTRADAS DE TEXTO
    ========================================================================= */

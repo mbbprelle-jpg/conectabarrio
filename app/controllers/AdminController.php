@@ -250,10 +250,18 @@ class AdminController extends Controller {
     // 1. DASHBOARD FINANCIERO & FLUJO DE CAJA VISUAL
     // =========================================================================
     public function dashboard() {
-        $juntaId = $_SESSION['user_junta_id'];
+        $juntaId = (int)$_SESSION['user_junta_id'];
         
         // Obtener balances
         $balance = $this->transaccionModel->getBalanceConsolidado($juntaId);
+        $saldoInicial = $this->juntaModel->getSaldoInicial($juntaId);
+        if ($saldoInicial !== null) {
+            $balance['saldo_inicial'] = $saldoInicial;
+            $balance['contable'] = $saldoInicial + (int)$balance['neto'];
+        } else {
+            $balance['saldo_inicial'] = null;
+            $balance['contable'] = (int)$balance['neto'];
+        }
         
         // Obtener historial del flujo de caja (para Chart.js)
         $flujoHistorico = $this->transaccionModel->getFlujoCajaHistorico($juntaId);
@@ -1577,6 +1585,22 @@ class AdminController extends Controller {
     public function conceptos_caja() {
         $this->requireRegisterPayments();
         $juntaId = (int)$_SESSION['user_junta_id'];
+
+        if (!$this->conceptoModel->hasConceptosTable()) {
+            $data = [
+                'title' => 'Conceptos de Caja',
+                'header_title' => 'Conceptos de Ingreso y Egreso',
+                'header_subtitle' => 'Migración de base de datos pendiente',
+                'active_menu' => 'conceptos_caja',
+                'migration_pending' => true,
+                'success' => '',
+                'error' => $_SESSION['error_msg'] ?? '',
+            ];
+            unset($_SESSION['error_msg']);
+            $this->view('admin/conceptos_caja', $data);
+            return;
+        }
+
         $this->conceptoModel->ensureDefaults($juntaId);
 
         $tab = $_GET['tab'] ?? 'ingreso';
@@ -1600,6 +1624,13 @@ class AdminController extends Controller {
         unset($_SESSION['error_msg']);
 
         $this->view('admin/conceptos_caja', $data);
+    }
+
+    /** Alias: /admin/concepto_caja → conceptos_caja (evita error 500 por URL sin «s»). */
+    public function concepto_caja() {
+        $tab = $_GET['tab'] ?? 'ingreso';
+        $qs = in_array($tab, ['ingreso', 'egreso'], true) ? '?tab=' . rawurlencode($tab) : '';
+        $this->redirect('/admin/conceptos_caja' . $qs);
     }
 
     public function concepto_caja_crear() {

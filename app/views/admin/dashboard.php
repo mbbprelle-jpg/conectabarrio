@@ -12,6 +12,7 @@
         <div class="metric-info">
             <span class="metric-label">Ingresos Totales</span>
             <span class="metric-value">$<?php echo number_format($data['balance']['ingresos'], 0, ',', '.'); ?></span>
+            <span class="metric-hint">Solo movimientos registrados (no incluye saldo inicial)</span>
         </div>
     </div>
 
@@ -27,15 +28,22 @@
         </div>
     </div>
 
-    <div class="card metric-card <?php echo $data['balance']['neto'] >= 0 ? 'card-primary' : 'card-danger'; ?>">
+    <div class="card metric-card <?php echo ($data['balance']['contable'] ?? $data['balance']['neto']) >= 0 ? 'card-primary' : 'card-danger'; ?>">
         <div class="metric-icon">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         </div>
         <div class="metric-info">
+            <?php if ($data['balance']['saldo_inicial'] !== null): ?>
+            <span class="metric-label">Saldo contable (Caja)</span>
+            <span class="metric-value">$<?php echo number_format($data['balance']['contable'], 0, ',', '.'); ?></span>
+            <span class="metric-hint">Saldo inicial $<?php echo number_format($data['balance']['saldo_inicial'], 0, ',', '.'); ?> + neto movimientos</span>
+            <?php else: ?>
             <span class="metric-label">Saldo Neto (Caja)</span>
             <span class="metric-value">$<?php echo number_format($data['balance']['neto'], 0, ',', '.'); ?></span>
+            <span class="metric-hint">Ingresos − egresos (sin saldo inicial declarado)</span>
+            <?php endif; ?>
         </div>
     </div>
 

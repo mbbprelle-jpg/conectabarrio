@@ -1,5 +1,20 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 
+<?php if (!empty($data['migration_pending'])): ?>
+<div class="alert alert-warning" style="margin-bottom: 1.25rem;">
+    <span>
+        Falta aplicar la migración SQL <strong>sql/add_finanzas_saldo_conceptos.sql</strong> en la base de datos de producción.
+        Sin esa tabla (<code>finanzas_conceptos</code>) no puede usar Conceptos de Caja ni el saldo inicial de arranque.
+        Contacte a quien administra el servidor o ejecútela en MySQL y vuelva a desplegar la aplicación.
+    </span>
+</div>
+<div class="cb-conceptos-nav-footer">
+    <a href="<?php echo URLROOT; ?>/admin/finanzas" class="btn btn-secondary">← Movimientos</a>
+</div>
+<?php require_once APPROOT . '/views/layouts/footer.php'; ?>
+<?php return; ?>
+<?php endif; ?>
+
 <?php
 $tabActiva = $data['tab_activa'] ?? 'ingreso';
 $bloques = [

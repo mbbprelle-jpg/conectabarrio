@@ -1,6 +1,21 @@
 <?php
 class FinanzaConcepto extends Model {
 
+    private static ?bool $hasConceptosTable = null;
+
+    public function hasConceptosTable(): bool {
+        if (self::$hasConceptosTable === null) {
+            try {
+                $this->db->query('SELECT id FROM finanzas_conceptos LIMIT 1');
+                $this->db->execute();
+                self::$hasConceptosTable = true;
+            } catch (Exception $e) {
+                self::$hasConceptosTable = false;
+            }
+        }
+        return self::$hasConceptosTable;
+    }
+
     private const DEFAULTS_INGRESO = [
         'Donación',
         'Subsidio Municipal',
@@ -19,6 +34,9 @@ class FinanzaConcepto extends Model {
     ];
 
     public function ensureDefaults(int $juntaId): void {
+        if (!$this->hasConceptosTable()) {
+            return;
+        }
         if ($this->countByJunta($juntaId) > 0) {
             return;
         }
