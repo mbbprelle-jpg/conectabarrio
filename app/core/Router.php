@@ -32,7 +32,11 @@ class Router {
             if (method_exists($this->currentController, $url[1])) {
                 $this->currentMethod = $url[1];
                 unset($url[1]);
+            } else {
+                $this->notFound($url[1]);
             }
+        } elseif ($this->currentController instanceof AdminController && method_exists($this->currentController, 'dashboard')) {
+            $this->currentMethod = 'dashboard';
         }
 
         // 3. Obtener parámetros restantes
@@ -40,6 +44,10 @@ class Router {
 
         // 4. Filtro de Seguridad de Acceso (RBAC)
         $this->checkAccessControl();
+
+        if (!method_exists($this->currentController, $this->currentMethod)) {
+            $this->notFound($this->currentMethod);
+        }
 
         // Llamar al callback con los parámetros
         call_user_func_array([$this->currentController, $this->currentMethod], $this->params);
@@ -152,5 +160,18 @@ class Router {
     private function unauthorized() {
         http_response_code(403);
         die('Acceso Denegado: No tienes permisos para acceder a esta sección.');
+    }
+
+    private function notFound($method = null) {
+        http_response_code(404);
+        $hint = $method ? ' La ruta solicitada no existe: ' . htmlspecialchars((string)$method) . '.' : '';
+        echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>ConectaBarrio</title></head>';
+        echo '<body style="font-family:sans-serif;padding:2rem;text-align:center;max-width:520px;margin:0 auto;">';
+        echo '<h1>Página no encontrada</h1>';
+        echo '<p>No existe esa sección en el sistema.' . $hint . '</p>';
+        echo '<p style="font-size:0.9rem;color:#555;">Si buscaba <strong>Conceptos de Caja</strong>, use <a href="' . URLROOT . '/admin/conceptos_caja">/admin/conceptos_caja</a> (con «s»).</p>';
+        echo '<p><a href="' . URLROOT . '/admin/dashboard">Ir al panel</a></p>';
+        echo '</body></html>';
+        exit;
     }
 }

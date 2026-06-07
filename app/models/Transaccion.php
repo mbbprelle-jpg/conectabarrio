@@ -314,14 +314,8 @@ class Transaccion extends Model {
         }
 
         $conceptoModel->ensureDefaults($juntaId);
-        $ordenIngreso = ['Cuota Socio'];
-        foreach ($conceptoModel->getByJunta($juntaId, 'ingreso', false) as $c) {
-            $ordenIngreso[] = $c->nombre;
-        }
-        $ordenEgreso = [];
-        foreach ($conceptoModel->getByJunta($juntaId, 'egreso', false) as $c) {
-            $ordenEgreso[] = $c->nombre;
-        }
+        $ordenIngreso = $conceptoModel->getOrdenNombres($juntaId, 'ingreso');
+        $ordenEgreso = $conceptoModel->getOrdenNombres($juntaId, 'egreso');
 
         foreach ($dataMap as $item) {
             if ($item['tipo'] === 'ingreso' && !in_array($item['categoria'], $ordenIngreso, true)) {

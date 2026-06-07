@@ -1,20 +1,7 @@
 <?php
 class FinanzaConcepto extends Model {
 
-    private static ?bool $hasConceptosTable = null;
-
-    public function hasConceptosTable(): bool {
-        if (self::$hasConceptosTable === null) {
-            try {
-                $this->db->query('SELECT id FROM finanzas_conceptos LIMIT 1');
-                $this->db->execute();
-                self::$hasConceptosTable = true;
-            } catch (Exception $e) {
-                self::$hasConceptosTable = false;
-            }
-        }
-        return self::$hasConceptosTable;
-    }
+    private static $hasConceptosTable = null;
 
     private const DEFAULTS_INGRESO = [
         'Donación',
@@ -32,6 +19,67 @@ class FinanzaConcepto extends Model {
         'Gastos de Oficina',
         'Otros',
     ];
+
+    public function hasConceptosTable(): bool {
+        if (self::$hasConceptosTable === null) {
+            try {
+                $this->db->query('SELECT 1 FROM finanzas_conceptos LIMIT 1');
+                $this->db->execute();
+                self::$hasConceptosTable = true;
+            } catch (Throwable $e) {
+                self::$hasConceptosTable = false;
+            }
+        }
+        return self::$hasConceptosTable;
+    }
+
+    /** @return string[] */
+    public function getOrdenNombres(int $juntaId, string $tipo): array {
+        if ($tipo === 'ingreso') {
+            $orden = ['Cuota Socio'];
+        } else {
+            $orden = [];
+        }
+
+        if ($this->hasConceptosTable()) {
+            $this->ensureDefaults($juntaId);
+            foreach ($this->getByJuntaFromDb($juntaId, $tipo, false) as $c) {
+                if (!in_array($c->nombre, $orden, true)) {
+                    $orden[] = $c->nombre;
+                }
+            }
+        } else {
+            $defaults = $tipo === 'ingreso' ? self::DEFAULTS_INGRESO : self::DEFAULTS_EGRESO;
+            foreach ($defaults as $nombre) {
+                if (!in_array($nombre, $orden, true)) {
+                    $orden[] = $nombre;
+                }
+            }
+        }
+
+        return $orden;
+    }
+
+    /** @return object[] */
+    public function getFallbackConceptos(string $tipo, bool $soloActivos = true): array {
+        $nombres = $tipo === 'ingreso'
+            ? array_merge(['Cuota Socio'], self::DEFAULTS_INGRESO)
+            : self::DEFAULTS_EGRESO;
+
+        $items = [];
+        $orden = 0;
+        foreach ($nombres as $nombre) {
+            $items[] = (object)[
+                'id' => 0,
+                'junta_id' => 0,
+                'tipo' => $tipo,
+                'nombre' => $nombre,
+                'activo' => 1,
+                'orden' => $orden++,
+            ];
+        }
+        return $items;
+    }
 
     public function ensureDefaults(int $juntaId): void {
         if (!$this->hasConceptosTable()) {
@@ -61,13 +109,16 @@ class FinanzaConcepto extends Model {
     }
 
     public function countByJunta(int $juntaId): int {
+        if (!$this->hasConceptosTable()) {
+            return 0;
+        }
         $this->db->query('SELECT COUNT(*) AS total FROM finanzas_conceptos WHERE junta_id = :junta_id');
         $this->db->bind(':junta_id', $juntaId);
         $row = $this->db->single();
         return $row ? (int)$row->total : 0;
     }
 
-    public function getByJunta(int $juntaId, ?string $tipo = null, bool $soloActivos = false): array {
+    private function getByJuntaFromDb(int $juntaId, ?string $tipo = null, bool $soloActivos = false): array {
         $sql = 'SELECT * FROM finanzas_conceptos WHERE junta_id = :junta_id';
         if ($tipo !== null) {
             $sql .= ' AND tipo = :tipo';
@@ -84,7 +135,23 @@ class FinanzaConcepto extends Model {
         return $this->db->resultSet();
     }
 
+    public function getByJunta(int $juntaId, ?string $tipo = null, bool $soloActivos = false): array {
+        if (!$this->hasConceptosTable()) {
+            if ($tipo === null) {
+                return array_merge(
+                    $this->getFallbackConceptos('ingreso', $soloActivos),
+                    $this->getFallbackConceptos('egreso', $soloActivos)
+                );
+            }
+            return $this->getFallbackConceptos($tipo, $soloActivos);
+        }
+        return $this->getByJuntaFromDb($juntaId, $tipo, $soloActivos);
+    }
+
     public function getById(int $id, int $juntaId) {
+        if (!$this->hasConceptosTable()) {
+            return null;
+        }
         $this->db->query('SELECT * FROM finanzas_conceptos WHERE id = :id AND junta_id = :junta_id LIMIT 1');
         $this->db->bind(':id', $id);
         $this->db->bind(':junta_id', $juntaId);
@@ -92,6 +159,9 @@ class FinanzaConcepto extends Model {
     }
 
     public function createConcepto(int $juntaId, string $tipo, string $nombre): bool {
+        if (!$this->hasConceptosTable()) {
+            return false;
+        }
         $nombre = trim($nombre);
         if ($nombre === '' || !in_array($tipo, ['ingreso', 'egreso'], true)) {
             return false;
@@ -110,6 +180,9 @@ class FinanzaConcepto extends Model {
     }
 
     public function updateConcepto(int $id, int $juntaId, string $nombre, bool $activo): bool {
+        if (!$this->hasConceptosTable()) {
+            return false;
+        }
         $concepto = $this->getById($id, $juntaId);
         if (!$concepto) {
             return false;
@@ -130,6 +203,9 @@ class FinanzaConcepto extends Model {
     }
 
     public function deleteConcepto(int $id, int $juntaId): bool {
+        if (!$this->hasConceptosTable()) {
+            return false;
+        }
         $concepto = $this->getById($id, $juntaId);
         if (!$concepto) {
             return false;
@@ -158,12 +234,18 @@ class FinanzaConcepto extends Model {
         $items = $this->getByJunta($juntaId, $tipo, false);
         foreach ($items as $item) {
             $item->uso_count = $this->countUsoConcepto($juntaId, $item->tipo, $item->nombre);
-            $item->puede_eliminar = ($item->uso_count === 0);
+            $item->puede_eliminar = ($item->uso_count === 0) && $this->hasConceptosTable() && (int)($item->id ?? 0) > 0;
         }
         return $items;
     }
 
     public function isConceptoValido(int $juntaId, string $tipo, string $categoria): bool {
+        if ($categoria === 'Cuota Socio' && $tipo === 'ingreso') {
+            return true;
+        }
+        if (!$this->hasConceptosTable()) {
+            return in_array($categoria, $this->getOrdenNombres($juntaId, $tipo), true);
+        }
         $this->db->query('SELECT id FROM finanzas_conceptos
             WHERE junta_id = :junta_id AND tipo = :tipo AND nombre = :nombre AND activo = 1 LIMIT 1');
         $this->db->bind(':junta_id', $juntaId);

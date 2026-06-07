@@ -177,6 +177,16 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
     <a href="<?php echo URLROOT; ?>/admin/conceptos_caja" class="btn btn-secondary btn-sm">Conceptos de Caja</a>
 </div>
 
+<?php if (!empty($data['conceptos_migration_pending'])): ?>
+<div class="alert alert-warning" style="margin-bottom: 1.25rem;">
+    <span>
+        Falta aplicar la migración SQL en la base de datos de producción
+        (<code>sql/add_finanzas_saldo_conceptos.sql</code> o solo <code>sql/add_finanzas_conceptos_only.sql</code>).
+        Sin la tabla <code>finanzas_conceptos</code> algunas funciones de Finanzas pueden fallar hasta ejecutarla en MySQL y volver a desplegar.
+    </span>
+</div>
+<?php endif; ?>
+
 <?php if (!empty($data['puede_editar_saldo_inicial'])): ?>
 <div class="card card-primary cb-saldo-inicial-setup" style="margin-bottom: 1.5rem; border-color: rgba(99,102,241,0.25); background: radial-gradient(100% 100% at 0% 0%, rgba(99,102,241,0.08) 0%, transparent 100%), var(--bg-card);">
     <h3 class="card-title">

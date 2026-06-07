@@ -1480,6 +1480,7 @@ class AdminController extends Controller {
             'header_title' => 'Registro de Movimientos',
             'header_subtitle' => 'Registre recaudación de cuotas, otros ingresos y gastos generales de la junta',
             'active_menu' => 'finanzas',
+            'conceptos_migration_pending' => !$this->conceptoModel->hasConceptosTable(),
             'socios' => $this->userModel->getSociosOperativosByJunta($juntaId),
             'transacciones' => $this->transaccionModel->getTransaccionesByJunta($juntaId),
             'balance' => $balance,
