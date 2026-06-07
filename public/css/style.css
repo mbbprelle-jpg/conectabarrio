@@ -3235,3 +3235,106 @@ body.cb-loading-active .main-content {
     }
 }
 
+/* =========================================================================
+   MÓDULO DOCUMENTOS
+   ========================================================================= */
+.cb-docs-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.cb-docs-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 220px;
+}
+
+.cb-docs-table-card {
+    margin-bottom: 1.5rem;
+}
+
+.cb-docs-empty {
+    color: var(--text-muted);
+    text-align: center;
+    padding: 2rem 1rem;
+    margin: 0;
+}
+
+.cb-docs-filename {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+}
+
+.cb-docs-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.cb-docs-inline-form {
+    display: inline;
+}
+
+.cb-docs-categorias-card {
+    margin-bottom: 2rem;
+}
+
+.cb-docs-cat-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.cb-docs-cat-add .form-control {
+    flex: 1;
+    min-width: 160px;
+}
+
+.cb-docs-cat-edit-form {
+    display: contents;
+}
+
+.cb-docs-cat-table tr.is-inactive {
+    opacity: 0.55;
+}
+
+.cb-docs-active-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    margin-right: 0.35rem;
+    color: var(--text-muted);
+}
+
+.cb-docs-upload-modal {
+    max-width: 480px;
+}
+
+.cb-docs-upload-hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+@media (max-width: 768px) {
+    .cb-docs-cat-add {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .cb-docs-actions {
+        justify-content: flex-start;
+    }
+}
+

@@ -3,11 +3,14 @@ FROM php:8.3-apache
 # 1. Habilitar el módulo rewrite de Apache para soportar las URLs amigables
 RUN a2enmod rewrite
 
-# 2. Instalar utilidades necesarias para Composer y extensiones de BD
+# 2. Instalar utilidades, extensiones de BD e imagen (GD + WebP para optimizar documentos)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git unzip \
+    && apt-get install -y --no-install-recommends \
+        git unzip \
+        libjpeg62-turbo-dev libpng-dev libwebp-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-webp \
+    && docker-php-ext-install pdo pdo_mysql mysqli gd \
     && rm -rf /var/lib/apt/lists/*
-RUN docker-php-ext-install pdo pdo_mysql mysqli
 
 # 3. Composer (PHPMailer y futuras dependencias)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -27,7 +30,8 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 # 6. Copiar el resto de la aplicación
 COPY . /var/www/html/
 
-# 7. Permisos de Apache
-RUN chown -R www-data:www-data /var/www/html
+# 7. Permisos de Apache + carpeta de documentos (fuera de public/)
+RUN mkdir -p /var/www/html/storage/documentos \
+    && chown -R www-data:www-data /var/www/html
 
 EXPOSE 80

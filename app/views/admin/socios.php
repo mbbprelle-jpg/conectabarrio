@@ -202,6 +202,31 @@ foreach ($data['calles'] as $calleItem) {
     </div>
     <?php endif; ?>
 
+    <?php if ($isFullAdmin): ?>
+    <div class="card mapa-socios-config-card" style="margin-bottom: 1.5rem;">
+        <div class="mapa-socios-config-body">
+            <div>
+                <h3 class="mapa-socios-config-title">Documentos compartidos</h3>
+                <p class="mapa-socios-config-text">
+                    Repositorio de archivos (PDF e imágenes) por categoría. Defina visibilidad por categoría:
+                    <strong>organización</strong> (todos los socios) o <strong>directiva</strong> (secretario, tesorero, director).
+                    Delegue quién puede <strong>subir</strong> documentos.
+                </p>
+            </div>
+            <form action="<?php echo URLROOT; ?>/admin/documentos_config" method="POST" class="mapa-socios-config-form">
+                <label class="mapa-socios-toggle">
+                    <input type="checkbox" name="documentos_habilitado" value="1" <?php echo !empty($data['documentos_habilitado']) ? 'checked' : ''; ?>>
+                    <span>Habilitado para la organización</span>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                <?php if (!empty($data['documentos_habilitado'])): ?>
+                    <a href="<?php echo URLROOT; ?>/admin/documentos" class="btn btn-secondary btn-sm">Abrir documentos</a>
+                <?php endif; ?>
+            </form>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="card card-primary" style="display: flex; flex-direction: column; gap: 1.5rem;">
 
         <?php if ($canManageSocios && !empty($sociosPendientes)): ?>
@@ -493,6 +518,7 @@ foreach ($data['calles'] as $calleItem) {
                                     $permSocios = !empty($mem->permiso_gestion_socios) || !empty($mem->permiso_todos);
                                     $permPagos = !empty($mem->permiso_registro_pagos) || !empty($mem->permiso_todos);
                                     $permFlujo = !empty($mem->permiso_flujo_caja) || !empty($mem->permiso_todos);
+                                    $permDocs = !empty($mem->permiso_documentos) || !empty($mem->permiso_todos);
                                     ?>
                                     <?php if ($cargo): ?>
                                         <span class="badge badge-info" style="margin-bottom: 0.25rem; display: inline-block;"><?php echo htmlspecialchars($cargo); ?></span><br>
@@ -503,6 +529,7 @@ foreach ($data['calles'] as $calleItem) {
                                         if ($permSocios) $permParts[] = 'Socios';
                                         if ($permPagos) $permParts[] = 'Pagos';
                                         if ($permFlujo) $permParts[] = 'Flujo';
+                                        if ($permDocs) $permParts[] = 'Docs';
                                         echo $permParts ? implode(' · ', $permParts) : 'Sin delegación';
                                         ?>
                                     </small>
@@ -514,6 +541,7 @@ foreach ($data['calles'] as $calleItem) {
                                                 data-perm-socios="<?php echo $permSocios ? '1' : '0'; ?>"
                                                 data-perm-pagos="<?php echo $permPagos ? '1' : '0'; ?>"
                                                 data-perm-flujo="<?php echo $permFlujo ? '1' : '0'; ?>"
+                                                data-perm-docs="<?php echo $permDocs ? '1' : '0'; ?>"
                                                 data-perm-todos="<?php echo !empty($mem->permiso_todos) ? '1' : '0'; ?>"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">
                                             Delegar
@@ -1397,6 +1425,10 @@ foreach ($data['calles'] as $calleItem) {
                     Ver flujo de caja anual (solo lectura)
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                    <input type="checkbox" name="permiso_documentos" id="delegacion_perm_docs" value="1">
+                    Subir y gestionar documentos compartidos
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
                     <input type="checkbox" name="permiso_todos" id="delegacion_perm_todos" value="1">
                     Todos los permisos (director)
                 </label>
@@ -1963,6 +1995,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_socios').checked = this.dataset.permSocios === '1';
             document.getElementById('delegacion_perm_pagos').checked = this.dataset.permPagos === '1';
             document.getElementById('delegacion_perm_flujo').checked = this.dataset.permFlujo === '1';
+            document.getElementById('delegacion_perm_docs').checked = this.dataset.permDocs === '1';
             document.getElementById('delegacion_perm_todos').checked = this.dataset.permTodos === '1';
             openModal(delegacionModal);
         });
@@ -1974,10 +2007,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (this.value === 'SECRETARIO') {
             document.getElementById('delegacion_perm_socios').checked = true;
             document.getElementById('delegacion_perm_flujo').checked = true;
+            document.getElementById('delegacion_perm_docs').checked = true;
         }
         if (this.value === 'TESORERO') {
             document.getElementById('delegacion_perm_pagos').checked = true;
             document.getElementById('delegacion_perm_flujo').checked = true;
+            document.getElementById('delegacion_perm_docs').checked = true;
         }
         if (this.value === 'DIRECTOR') {
             document.getElementById('delegacion_perm_todos').checked = true;
@@ -1988,6 +2023,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_socios').checked = true;
             document.getElementById('delegacion_perm_pagos').checked = true;
             document.getElementById('delegacion_perm_flujo').checked = true;
+            document.getElementById('delegacion_perm_docs').checked = true;
         }
     });
     <?php endif; ?>

@@ -148,6 +148,31 @@ class JuntaVecinos extends Model {
         return $this->db->execute();
     }
 
+    private static $hasDocumentosColumn = null;
+
+    public function hasDocumentosColumn(): bool {
+        if (self::$hasDocumentosColumn === null) {
+            try {
+                $this->db->query('SELECT documentos_habilitado FROM juntas_vecinos LIMIT 1');
+                $this->db->execute();
+                self::$hasDocumentosColumn = true;
+            } catch (Exception $e) {
+                self::$hasDocumentosColumn = false;
+            }
+        }
+        return self::$hasDocumentosColumn;
+    }
+
+    public function updateDocumentosHabilitado(int $id, bool $enabled): bool {
+        if (!$this->hasDocumentosColumn()) {
+            return false;
+        }
+        $this->db->query('UPDATE juntas_vecinos SET documentos_habilitado = :habilitado WHERE id = :id');
+        $this->db->bind(':habilitado', $enabled ? 1 : 0);
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
+
     public function updateMapaSociosHabilitado(int $id, bool $enabled): bool {
         if (!$this->hasMapaSociosColumn()) {
             return false;

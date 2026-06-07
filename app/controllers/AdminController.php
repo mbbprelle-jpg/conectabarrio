@@ -11,6 +11,8 @@ class AdminController extends Controller {
     private $invitationModel;
     private $cambioModel;
     private $conceptoModel;
+    private $documentoModel;
+    private $documentoCategoriaModel;
     private $db;
 
     public function __construct() {
@@ -25,6 +27,8 @@ class AdminController extends Controller {
         $this->invitationModel = $this->model('Invitation');
         $this->cambioModel = $this->model('SocioCambioSolicitud');
         $this->conceptoModel = $this->model('FinanzaConcepto');
+        $this->documentoModel = $this->model('Documento');
+        $this->documentoCategoriaModel = $this->model('DocumentoCategoria');
         $this->db = new Database();
     }
 
@@ -57,6 +61,75 @@ class AdminController extends Controller {
             $this->redirect('/admin/dashboard');
             exit;
         }
+    }
+
+    private function requireViewDocumentos() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canViewDocumentos()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para ver documentos.';
+            $this->redirectUserHome();
+            exit;
+        }
+        if (!AuthContext::isFullAdmin() && !AuthContext::isDocumentosEnabled()) {
+            $_SESSION['error_msg'] = 'El módulo de documentos no está habilitado para su organización.';
+            $this->redirectUserHome();
+            exit;
+        }
+    }
+
+    private function requireUploadDocumentos() {
+        require_once APPROOT . '/core/AuthContext.php';
+        $this->requireViewDocumentos();
+        if (!AuthContext::canUploadDocumentos()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para subir o gestionar documentos.';
+            $this->redirect('/admin/documentos');
+            exit;
+        }
+    }
+
+    private function redirectUserHome(): void {
+        if (($_SESSION['user_rol'] ?? '') === 'socio') {
+            $this->redirect('/socio/dashboard');
+        } else {
+            $this->redirect('/admin/dashboard');
+        }
+    }
+
+    private function getDocumentoOrFail(int $id, int $juntaId) {
+        $doc = $this->documentoModel->getById($id, $juntaId);
+        if (!$doc) {
+            return null;
+        }
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canViewDocumentoVisibilidad($doc->categoria_visibilidad ?? 'publico')) {
+            return null;
+        }
+        return $doc;
+    }
+
+    private function streamDocumentoFile(object $doc, bool $download): void {
+        require_once APPROOT . '/core/DocumentStorage.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        if (!DocumentStorage::pathBelongsToJunta($doc->archivo_path, $juntaId)) {
+            http_response_code(403);
+            die('Acceso denegado.');
+        }
+        $path = DocumentStorage::absolutePath($doc->archivo_path);
+        if (!is_file($path)) {
+            http_response_code(404);
+            die('Archivo no encontrado.');
+        }
+        $filename = $doc->archivo_nombre_original ?: basename($path);
+        header('Content-Type: ' . ($doc->mime_type ?: 'application/octet-stream'));
+        header('Content-Length: ' . filesize($path));
+        header('X-Content-Type-Options: nosniff');
+        if ($download) {
+            header('Content-Disposition: attachment; filename="' . rawurlencode($filename) . '"; filename*=UTF-8\'\'' . rawurlencode($filename));
+        } else {
+            header('Content-Disposition: inline; filename="' . rawurlencode($filename) . '"');
+        }
+        readfile($path);
+        exit;
     }
 
     private function validarFechaFinanzas(int $juntaId, string $fecha): ?string {
@@ -223,6 +296,8 @@ class AdminController extends Controller {
             && !empty($junta->mapa_socios_habilitado);
         $flujoHabilitado = $this->juntaModel->hasFlujoCajaColumn()
             && !empty($junta->flujo_caja_habilitado);
+        $documentosHabilitado = $this->juntaModel->hasDocumentosColumn()
+            && !empty($junta->documentos_habilitado);
 
         $data = [
             'title' => 'Gestión de Socios',
@@ -233,6 +308,7 @@ class AdminController extends Controller {
             'junta' => $junta,
             'mapa_socios_habilitado' => $mapaHabilitado,
             'flujo_caja_habilitado' => $flujoHabilitado,
+            'documentos_habilitado' => $documentosHabilitado,
             'socios_inactivos' => $this->userModel->getSociosInactivosByJunta($juntaId),
             'socios_pendientes' => $this->userModel->getPendingByJunta($juntaId),
             'socios_prevalidar' => $this->userModel->getPrevalidarByJunta($juntaId),
@@ -2719,6 +2795,7 @@ class AdminController extends Controller {
                 'permiso_todos' => !empty($post['permiso_todos']),
                 'permiso_mapa_socios' => false,
                 'permiso_flujo_caja' => !empty($post['permiso_flujo_caja']),
+                'permiso_documentos' => !empty($post['permiso_documentos']),
             ]);
             if ((int)$usuarioId === (int)$_SESSION['user_id']) {
                 AuthContext::refreshMembershipSession();
@@ -2905,6 +2982,244 @@ class AdminController extends Controller {
             $_SESSION['error_msg'] = 'No se pudo actualizar la configuración del flujo de caja.';
         }
         $redirect = !empty($this->sanitizePost()['redirect_flujo']) ? '/admin/flujo_caja' : '/admin/socios';
+        $this->redirect($redirect);
+    }
+
+    public function documentos() {
+        $this->requireViewDocumentos();
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $this->documentoCategoriaModel->ensureDefaults($juntaId);
+
+        $catFilter = isset($_GET['categoria']) ? (int)$_GET['categoria'] : 0;
+        $categorias = $this->documentoCategoriaModel->getByJunta($juntaId, true);
+        $documentosRaw = $this->documentoModel->getByJunta($juntaId, $catFilter > 0 ? $catFilter : null);
+        $documentos = [];
+        foreach ($documentosRaw as $doc) {
+            if (AuthContext::canViewDocumentoVisibilidad($doc->categoria_visibilidad ?? 'publico')) {
+                $documentos[] = $doc;
+            }
+        }
+
+        $categoriasSubida = AuthContext::canUploadDocumentos() ? $categorias : [];
+
+        $data = [
+            'title' => 'Documentos',
+            'header_title' => 'Documentos de la organización',
+            'header_subtitle' => 'Archivos compartidos con socios o reservados a la directiva',
+            'active_menu' => 'documentos',
+            'categorias' => $categorias,
+            'categorias_gestion' => $categorias,
+            'categorias_subida' => $categoriasSubida,
+            'documentos' => $documentos,
+            'categoria_filtro' => $catFilter,
+            'puede_subir' => AuthContext::canUploadDocumentos(),
+            'documentos_habilitado' => AuthContext::isDocumentosEnabled(),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/documentos', $data);
+    }
+
+    public function documento_subir() {
+        $this->requireUploadDocumentos();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        require_once APPROOT . '/core/DocumentStorage.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $titulo = trim($post['titulo'] ?? '');
+        $categoriaId = (int)($post['categoria_id'] ?? 0);
+        if ($titulo === '' || mb_strlen($titulo) > 200) {
+            $_SESSION['error_msg'] = 'Ingrese un título válido (máx. 200 caracteres).';
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $categoria = $this->documentoCategoriaModel->getById($categoriaId, $juntaId);
+        if (!$categoria || empty($categoria->activo)) {
+            $_SESSION['error_msg'] = 'Seleccione una categoría válida.';
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        if (empty($_FILES['archivo'])) {
+            $_SESSION['error_msg'] = 'Debe seleccionar un archivo (PDF o imagen, máx. 10 MB).';
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $stored = DocumentStorage::storeUploadedFile($juntaId, $_FILES['archivo']);
+        if (!$stored) {
+            $_SESSION['error_msg'] = 'No se pudo guardar el archivo. Use PDF, JPG, PNG, WEBP o GIF (máx. 10 MB).';
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $id = $this->documentoModel->create([
+            'junta_id' => $juntaId,
+            'categoria_id' => $categoriaId,
+            'titulo' => $titulo,
+            'archivo_nombre_original' => $stored['archivo_nombre_original'],
+            'archivo_path' => $stored['path'],
+            'mime_type' => $stored['mime_type'],
+            'tamano_bytes' => $stored['tamano_bytes'],
+            'subido_por' => (int)$_SESSION['user_id'],
+        ]);
+        if (!$id) {
+            DocumentStorage::deleteRelativePath($stored['path']);
+            $_SESSION['error_msg'] = 'Error al registrar el documento en la base de datos.';
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $_SESSION['success_msg'] = 'Documento subido correctamente.';
+        $this->redirect('/admin/documentos?categoria=' . $categoriaId);
+    }
+
+    public function documento_ver($id) {
+        $this->requireViewDocumentos();
+        require_once APPROOT . '/core/DocumentStorage.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $doc = $this->getDocumentoOrFail((int)$id, $juntaId);
+        if (!$doc) {
+            $_SESSION['error_msg'] = 'Documento no encontrado o sin permiso para verlo.';
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $data = [
+            'title' => $doc->titulo,
+            'documento' => $doc,
+            'previewable' => DocumentStorage::isPreviewable($doc->mime_type),
+            'archivo_url' => URLROOT . '/admin/documento_archivo/' . (int)$doc->id,
+            'back_url' => URLROOT . '/admin/documentos',
+        ];
+        $this->view('admin/documento_ver', $data);
+    }
+
+    public function documento_archivo($id) {
+        $this->requireViewDocumentos();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $doc = $this->getDocumentoOrFail((int)$id, $juntaId);
+        if (!$doc) {
+            http_response_code(403);
+            die('Acceso denegado.');
+        }
+        $this->streamDocumentoFile($doc, false);
+    }
+
+    public function documento_descargar($id) {
+        $this->requireViewDocumentos();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $doc = $this->getDocumentoOrFail((int)$id, $juntaId);
+        if (!$doc) {
+            http_response_code(403);
+            die('Acceso denegado.');
+        }
+        $this->streamDocumentoFile($doc, true);
+    }
+
+    public function documento_eliminar() {
+        $this->requireUploadDocumentos();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        require_once APPROOT . '/core/DocumentStorage.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($this->sanitizePost()['documento_id'] ?? 0);
+        $path = $this->documentoModel->delete($id, $juntaId);
+        if ($path === null) {
+            $_SESSION['error_msg'] = 'No se pudo eliminar el documento.';
+        } else {
+            DocumentStorage::deleteRelativePath($path);
+            $_SESSION['success_msg'] = 'Documento eliminado.';
+        }
+        $this->redirect('/admin/documentos');
+    }
+
+    public function documento_categoria_crear() {
+        $this->requireUploadDocumentos();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $nombre = trim($post['nombre'] ?? '');
+        $vis = ($post['visibilidad'] ?? '') === 'directorio' ? 'directorio' : 'publico';
+        if ($this->documentoCategoriaModel->create($juntaId, $nombre, $vis)) {
+            $_SESSION['success_msg'] = 'Categoría creada.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo crear la categoría (nombre duplicado o inválido).';
+        }
+        $this->redirect('/admin/documentos#categorias');
+    }
+
+    public function documento_categoria_actualizar() {
+        $this->requireUploadDocumentos();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $id = (int)($post['categoria_id'] ?? 0);
+        $nombre = trim($post['nombre'] ?? '');
+        $vis = ($post['visibilidad'] ?? '') === 'directorio' ? 'directorio' : 'publico';
+        $activo = !empty($post['activo']);
+        if ($this->documentoCategoriaModel->update($id, $juntaId, $nombre, $vis, $activo)) {
+            $_SESSION['success_msg'] = 'Categoría actualizada.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo actualizar la categoría.';
+        }
+        $this->redirect('/admin/documentos#categorias');
+    }
+
+    public function documento_categoria_eliminar() {
+        $this->requireUploadDocumentos();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/documentos');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($this->sanitizePost()['categoria_id'] ?? 0);
+        $result = $this->documentoCategoriaModel->deleteOrDeactivate($id, $juntaId);
+        if ($result === 'deleted') {
+            $_SESSION['success_msg'] = 'Categoría eliminada.';
+        } elseif ($result === 'deactivated') {
+            $_SESSION['success_msg'] = 'La categoría tiene documentos; se desactivó en lugar de eliminar.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo eliminar la categoría.';
+        }
+        $this->redirect('/admin/documentos#categorias');
+    }
+
+    public function documentos_config() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::isFullAdmin()) {
+            $_SESSION['error_msg'] = 'Solo el administrador puede configurar el módulo de documentos.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/socios');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $habilitar = !empty($this->sanitizePost()['documentos_habilitado']);
+        if (!$this->juntaModel->hasDocumentosColumn()) {
+            $_SESSION['error_msg'] = 'Ejecute la migración sql/add_documentos_module.sql en la base de datos.';
+            $this->redirect('/admin/socios');
+            return;
+        }
+        if ($this->juntaModel->updateDocumentosHabilitado($juntaId, $habilitar)) {
+            $_SESSION['documentos_habilitado'] = $habilitar ? 1 : 0;
+            $_SESSION['success_msg'] = $habilitar
+                ? 'Módulo de documentos habilitado. Delegue quién puede subir archivos.'
+                : 'Módulo de documentos deshabilitado para la organización.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo actualizar la configuración de documentos.';
+        }
+        $redirect = !empty($this->sanitizePost()['redirect_documentos']) ? '/admin/documentos' : '/admin/socios';
         $this->redirect($redirect);
     }
 }

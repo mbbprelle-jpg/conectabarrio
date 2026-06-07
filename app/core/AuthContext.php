@@ -15,8 +15,10 @@ class AuthContext {
         $_SESSION['permiso_todos'] = (int)($membership->permiso_todos ?? 0);
         $_SESSION['permiso_mapa_socios'] = (int)($membership->permiso_mapa_socios ?? 0);
         $_SESSION['permiso_flujo_caja'] = (int)($membership->permiso_flujo_caja ?? 0);
+        $_SESSION['permiso_documentos'] = (int)($membership->permiso_documentos ?? 0);
         $_SESSION['mapa_socios_habilitado'] = (int)($membership->mapa_socios_habilitado ?? 0);
         $_SESSION['flujo_caja_habilitado'] = (int)($membership->flujo_caja_habilitado ?? 0);
+        $_SESSION['documentos_habilitado'] = (int)($membership->documentos_habilitado ?? 0);
         $_SESSION['must_change'] = $user->must_change ?? false;
         self::syncAccountCompletionFlag($user);
         $_SESSION['user_junta_nombre'] = $membership->junta_nombre ?? 'Organización';
@@ -42,8 +44,10 @@ class AuthContext {
         $_SESSION['permiso_todos'] = 0;
         $_SESSION['permiso_mapa_socios'] = 0;
         $_SESSION['permiso_flujo_caja'] = 0;
+        $_SESSION['permiso_documentos'] = 0;
         $_SESSION['mapa_socios_habilitado'] = 0;
         $_SESSION['flujo_caja_habilitado'] = 0;
+        $_SESSION['documentos_habilitado'] = 0;
         $_SESSION['must_change'] = $user->must_change ?? false;
         $_SESSION['user_junta_nombre'] = 'Global';
     }
@@ -100,6 +104,57 @@ class AuthContext {
         return !empty($_SESSION['user_junta_id']);
     }
 
+    public static function isDocumentosEnabled(): bool {
+        return !empty($_SESSION['documentos_habilitado']);
+    }
+
+    public static function isDirectivo(): bool {
+        if (self::isFullAdmin()) {
+            return true;
+        }
+        if (!empty($_SESSION['permiso_todos'])) {
+            return true;
+        }
+        $cargo = strtoupper((string)($_SESSION['user_cargo'] ?? ''));
+        return in_array($cargo, ['SECRETARIO', 'TESORERO', 'DIRECTOR'], true);
+    }
+
+    public static function canViewDocumentos(): bool {
+        if (self::isFullAdmin()) {
+            return true;
+        }
+        if (($_SESSION['user_rol'] ?? '') === 'maestro') {
+            return false;
+        }
+        if (empty($_SESSION['user_junta_id'])) {
+            return false;
+        }
+        return self::isDocumentosEnabled();
+    }
+
+    public static function canUploadDocumentos(): bool {
+        if (self::isFullAdmin()) {
+            return true;
+        }
+        if (!self::isDocumentosEnabled()) {
+            return false;
+        }
+        if (!empty($_SESSION['permiso_todos'])) {
+            return true;
+        }
+        return !empty($_SESSION['permiso_documentos']);
+    }
+
+    public static function canViewDocumentoVisibilidad(string $visibilidad): bool {
+        if (!self::canViewDocumentos()) {
+            return false;
+        }
+        if ($visibilidad === 'publico') {
+            return true;
+        }
+        return self::isDirectivo();
+    }
+
     /**
      * Recarga permisos y flag del mapa desde BD (evita tener que cerrar sesión tras delegar).
      */
@@ -125,6 +180,15 @@ class AuthContext {
             }
             if ($junta) {
                 $_SESSION['flujo_caja_habilitado'] = (int)($junta->flujo_caja_habilitado ?? 0);
+            }
+        }
+
+        if (!empty($_SESSION['user_junta_id']) && $juntaModel->hasDocumentosColumn()) {
+            if (!isset($junta)) {
+                $junta = $juntaModel->getJuntaById((int)$_SESSION['user_junta_id']);
+            }
+            if ($junta) {
+                $_SESSION['documentos_habilitado'] = (int)($junta->documentos_habilitado ?? 0);
             }
         }
 
@@ -156,11 +220,17 @@ class AuthContext {
         if ($memModel->hasPermisoFlujoColumn()) {
             $_SESSION['permiso_flujo_caja'] = (int)($membership->permiso_flujo_caja ?? 0);
         }
+        if ($memModel->hasPermisoDocumentosColumn()) {
+            $_SESSION['permiso_documentos'] = (int)($membership->permiso_documentos ?? 0);
+        }
         if ($memModel->hasMapaSociosJuntaColumn()) {
             $_SESSION['mapa_socios_habilitado'] = (int)($membership->mapa_socios_habilitado ?? 0);
         }
         if ($memModel->hasFlujoCajaJuntaColumn()) {
             $_SESSION['flujo_caja_habilitado'] = (int)($membership->flujo_caja_habilitado ?? 0);
+        }
+        if ($memModel->hasDocumentosJuntaColumn()) {
+            $_SESSION['documentos_habilitado'] = (int)($membership->documentos_habilitado ?? 0);
         }
     }
 
@@ -181,6 +251,17 @@ class AuthContext {
         }
         if (self::canViewFlujoCaja()) {
             $methods[] = 'flujo_caja';
+        }
+        if (self::canViewDocumentos()) {
+            $methods = array_merge($methods, [
+                'documentos', 'documento_ver', 'documento_archivo', 'documento_descargar',
+            ]);
+        }
+        if (self::canUploadDocumentos()) {
+            $methods = array_merge($methods, [
+                'documento_subir', 'documento_eliminar',
+                'documento_categoria_crear', 'documento_categoria_actualizar', 'documento_categoria_eliminar',
+            ]);
         }
         return array_unique($methods);
     }

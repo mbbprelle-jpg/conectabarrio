@@ -8,6 +8,10 @@ composer.phar
 # Carpeta temporal y scripts de prueba
 scratch/
 
+# Archivos subidos por organizaciones (respaldar aparte de git)
+storage/documentos/*
+!storage/documentos/.gitkeep
+
 # Configuración de editores de código
 .vscode/
 .idea/
