@@ -21,16 +21,18 @@ class FinanzaConcepto extends Model {
     ];
 
     public function hasConceptosTable(): bool {
-        if (self::$hasConceptosTable === null) {
-            try {
-                $this->db->query('SELECT 1 FROM finanzas_conceptos LIMIT 1');
-                $this->db->execute();
-                self::$hasConceptosTable = true;
-            } catch (Throwable $e) {
-                self::$hasConceptosTable = false;
-            }
+        if (self::$hasConceptosTable === true) {
+            return true;
         }
-        return self::$hasConceptosTable;
+        try {
+            $this->db->query('SELECT 1 FROM finanzas_conceptos LIMIT 1');
+            $this->db->execute();
+            self::$hasConceptosTable = true;
+            return true;
+        } catch (Throwable $e) {
+            // No cachear false: si la tabla se crea después, debe detectarse sin reiniciar PHP.
+            return false;
+        }
     }
 
     /** @return string[] */

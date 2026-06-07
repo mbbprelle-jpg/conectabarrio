@@ -186,16 +186,17 @@ class JuntaVecinos extends Model {
     private static $hasSaldoInicialColumn = null;
 
     public function hasSaldoInicialColumn(): bool {
-        if (self::$hasSaldoInicialColumn === null) {
-            try {
-                $this->db->query('SELECT saldo_inicial FROM juntas_vecinos LIMIT 1');
-                $this->db->execute();
-                self::$hasSaldoInicialColumn = true;
-            } catch (Exception $e) {
-                self::$hasSaldoInicialColumn = false;
-            }
+        if (self::$hasSaldoInicialColumn === true) {
+            return true;
         }
-        return self::$hasSaldoInicialColumn;
+        try {
+            $this->db->query('SELECT saldo_inicial FROM juntas_vecinos LIMIT 1');
+            $this->db->execute();
+            self::$hasSaldoInicialColumn = true;
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
     }
 
     public function getSaldoInicial(int $id): ?int {
