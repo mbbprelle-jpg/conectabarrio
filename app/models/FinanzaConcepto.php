@@ -226,7 +226,7 @@ class FinanzaConcepto extends Model {
             WHERE junta_id = :junta_id AND tipo = :tipo AND categoria = :categoria');
         $this->db->bind(':junta_id', $juntaId);
         $this->db->bind(':tipo', $tipo);
-        $this->db->bind(':nombre', $nombre);
+        $this->db->bind(':categoria', $nombre);
         $row = $this->db->single();
         return $row ? (int)$row->total : 0;
     }
