@@ -224,10 +224,37 @@ class Transaccion extends Model {
         return $years;
     }
 
+    public function getNetoEntreFechas(int $juntaId, string $desde, string $hasta): int {
+        $this->db->query("SELECT
+            COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END), 0)
+            - COALESCE(SUM(CASE WHEN tipo = 'egreso' THEN monto ELSE 0 END), 0) AS neto
+            FROM transacciones
+            WHERE junta_id = :junta_id AND fecha >= :desde AND fecha <= :hasta");
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':desde', $desde);
+        $this->db->bind(':hasta', $hasta);
+        $row = $this->db->single();
+        return $row ? (int)$row->neto : 0;
+    }
+
+    private function getSaldoAperturaAnio(int $juntaId, int $anio, string $mesInicio, ?int $saldoInicial): int {
+        $mesInicioYear = (int)substr($mesInicio, 0, 4);
+
+        if ($anio <= $mesInicioYear) {
+            return 0;
+        }
+
+        $base = $saldoInicial ?? 0;
+        $inicioOrg = $mesInicio . '-01';
+        $finAnioAnterior = ($anio - 1) . '-12-31';
+
+        return $base + $this->getNetoEntreFechas($juntaId, $inicioOrg, $finAnioAnterior);
+    }
+
     /**
      * Matriz anual: filas por categoría (ingresos/egresos) × meses 1-12 + total fila.
      */
-    public function getFlujoCajaMatrizAnual(int $juntaId, int $anio, string $mesInicio, FinanzaConcepto $conceptoModel): array {
+    public function getFlujoCajaMatrizAnual(int $juntaId, int $anio, string $mesInicio, FinanzaConcepto $conceptoModel, ?int $saldoInicial = null): array {
         $mesInicioYear = (int)substr($mesInicio, 0, 4);
         $mesInicioMonth = (int)substr($mesInicio, 5, 2);
 
@@ -319,10 +346,38 @@ class Transaccion extends Model {
         $mesDesde = ($anio === $mesInicioYear) ? $mesInicioMonth : 1;
         $mesHasta = ($anio === (int)date('Y')) ? (int)date('n') : 12;
 
+        $saldoInicialMes = array_fill(1, 12, 0);
+        if ($saldoInicial !== null && $saldoInicial > 0 && $anio === $mesInicioYear) {
+            $saldoInicialMes[$mesInicioMonth] = $saldoInicial;
+        }
+
+        $saldoAcumuladoMes = [];
+        $carry = $this->getSaldoAperturaAnio($juntaId, $anio, $mesInicio, $saldoInicial);
+        $saldoContableFinAnio = $carry;
+
+        for ($m = 1; $m <= 12; $m++) {
+            $mesValido = !($anio < $mesInicioYear || ($anio === $mesInicioYear && $m < $mesInicioMonth));
+            if (!$mesValido) {
+                $saldoAcumuladoMes[$m] = null;
+                continue;
+            }
+            if ($anio === $mesInicioYear && $m === $mesInicioMonth && $saldoInicial !== null) {
+                $carry += $saldoInicial;
+            }
+            $carry += $netoMes[$m];
+            $saldoAcumuladoMes[$m] = $carry;
+            $saldoContableFinAnio = $carry;
+        }
+
         return [
             'anio' => $anio,
             'mes_desde' => $mesDesde,
             'mes_hasta' => $mesHasta,
+            'saldo_inicial' => $saldoInicial,
+            'saldo_inicial_mes' => $saldoInicialMes,
+            'saldo_inicial_total' => ($anio === $mesInicioYear && $saldoInicial !== null) ? $saldoInicial : 0,
+            'saldo_acumulado_mes' => $saldoAcumuladoMes,
+            'saldo_contable_fin_anio' => $saldoContableFinAnio,
             'secciones' => [
                 ['tipo' => 'ingreso', 'titulo' => 'Ingresos', 'filas' => $filasIngreso],
                 ['tipo' => 'egreso', 'titulo' => 'Egresos', 'filas' => $filasEgreso],

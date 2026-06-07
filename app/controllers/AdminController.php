@@ -1545,7 +1545,13 @@ class AdminController extends Controller {
                 : (int)$anios[count($anios) - 1];
         }
 
-        $matriz = $this->transaccionModel->getFlujoCajaMatrizAnual($juntaId, $anioReq, $mesInicio, $this->conceptoModel);
+        $matriz = $this->transaccionModel->getFlujoCajaMatrizAnual(
+            $juntaId,
+            $anioReq,
+            $mesInicio,
+            $this->conceptoModel,
+            $this->juntaModel->getSaldoInicial($juntaId)
+        );
 
         $data = [
             'title' => 'Flujo de Caja',
@@ -1556,6 +1562,7 @@ class AdminController extends Controller {
             'anio_seleccionado' => $anioReq,
             'matriz' => $matriz,
             'mes_inicio' => $mesInicio,
+            'saldo_inicial' => $matriz['saldo_inicial'],
             'flujo_caja_habilitado' => AuthContext::isFlujoCajaEnabled(),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',

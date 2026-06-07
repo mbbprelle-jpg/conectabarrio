@@ -3127,6 +3127,9 @@ body.cb-loading-active .main-content {
 .cb-flujo-kpi--success { border-color: rgba(16, 185, 129, 0.2); }
 .cb-flujo-kpi--danger { border-color: rgba(239, 68, 68, 0.2); }
 .cb-flujo-kpi--primary { border-color: rgba(99, 102, 241, 0.2); }
+.cb-flujo-kpi--info { border-color: rgba(6, 182, 212, 0.25); background: rgba(6, 182, 212, 0.04); }
+.cb-flujo-saldo-inicial-row td { font-style: italic; }
+.cb-flujo-total-row--saldo td { background: rgba(6, 182, 212, 0.06); border-top: 2px solid rgba(6, 182, 212, 0.25); }
 
 .cb-flujo-matrix-card {
     padding: 0;
