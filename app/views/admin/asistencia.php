@@ -14,14 +14,83 @@ $miembros = $data['miembros'] ?? [];
 $convocadosEdit = $data['convocados_edit'] ?? [];
 $edit = $data['reunion_editar'] ?? null;
 $det = $data['reunion_detalle'] ?? null;
+$reuniones = $data['reuniones'] ?? [];
+$totalReuniones = count($reuniones);
+
+$tabActiva = 'listado';
+if (!empty($edit) || (isset($_GET['tab']) && $_GET['tab'] === 'convocar')) {
+    $tabActiva = 'convocar';
+}
+
+$urlBase = URLROOT . '/admin/asistencia';
+$urlListado = $det ? $urlBase . '/' . (int)$det->id . '?tab=listado' : $urlBase . '?tab=listado';
+$urlConvocar = $edit
+    ? $urlBase . '?editar=' . (int)$edit->id . '&tab=convocar'
+    : $urlBase . '?tab=convocar';
 ?>
 
-<div class="grid-2col">
+<div class="cb-tabs cb-reunion-tabs" role="tablist">
+    <a href="<?php echo htmlspecialchars($urlConvocar); ?>"
+       class="cb-tab <?php echo $tabActiva === 'convocar' ? 'is-active' : ''; ?>"
+       role="tab"
+       aria-selected="<?php echo $tabActiva === 'convocar' ? 'true' : 'false'; ?>">
+        Convocar Asamblea / Reunión
+    </a>
+    <a href="<?php echo htmlspecialchars($urlListado); ?>"
+       class="cb-tab <?php echo $tabActiva === 'listado' ? 'is-active' : ''; ?>"
+       role="tab"
+       aria-selected="<?php echo $tabActiva === 'listado' ? 'true' : 'false'; ?>">
+        Asambleas y reuniones convocadas
+        <?php if ($totalReuniones > 0): ?>
+        <span class="cb-tab-count"><?php echo $totalReuniones; ?></span>
+        <?php endif; ?>
+    </a>
+</div>
+
+<div class="cb-reunion-panel" id="panel-convocar" <?php echo $tabActiva !== 'convocar' ? 'hidden' : ''; ?>>
+    <div class="card card-warning cb-reunion-convocar-card">
+        <?php if ($edit): ?>
+        <h3 class="card-title">Editar convocatoria</h3>
+        <form action="<?php echo URLROOT; ?>/admin/reunion_actualizar" method="POST">
+            <input type="hidden" name="reunion_id" value="<?php echo (int)$edit->id; ?>">
+            <?php include APPROOT . '/views/admin/partials/reunion_convocatoria_fields.php'; ?>
+            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;margin:0.75rem 0;">
+                <input type="checkbox" name="reenviar_email" value="1"> Reenviar correo a convocados
+            </label>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <button type="submit" class="btn btn-primary" style="flex:1;">Guardar cambios</button>
+                <a href="<?php echo htmlspecialchars($urlBase . '?tab=listado'); ?>" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </form>
+        <?php else: ?>
+        <h3 class="card-title">Convocar Asamblea / Reunión</h3>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin:-0.5rem 0 1rem;">
+            Complete los datos y envíe la convocatoria por correo a los destinatarios seleccionados.
+        </p>
+        <form action="<?php echo URLROOT; ?>/admin/reunion_crear" method="POST">
+            <?php
+            $edit = null;
+            $convocadosEdit = [];
+            include APPROOT . '/views/admin/partials/reunion_convocatoria_fields.php';
+            ?>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.5rem;">Enviar convocatoria</button>
+        </form>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="cb-reunion-panel" id="panel-listado" <?php echo $tabActiva !== 'listado' ? 'hidden' : ''; ?>>
     <div style="display:flex;flex-direction:column;gap:1.5rem;">
         <div class="card card-primary">
-            <h3 class="card-title">Asambleas y reuniones convocadas</h3>
-            <?php if (empty($data['reuniones'])): ?>
-                <p class="cb-reunion-empty">Aún no hay convocatorias. Use el panel derecho para convocar.</p>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+                <h3 class="card-title" style="margin:0;">Asambleas y reuniones convocadas</h3>
+                <a href="<?php echo htmlspecialchars($urlBase . '?tab=convocar'); ?>" class="btn btn-primary btn-sm">+ Nueva convocatoria</a>
+            </div>
+            <?php if (empty($reuniones)): ?>
+                <p class="cb-reunion-empty">
+                    Aún no hay convocatorias.
+                    <a href="<?php echo htmlspecialchars($urlBase . '?tab=convocar'); ?>">Convocar la primera reunión</a>
+                </p>
             <?php else: ?>
             <div class="table-responsive">
                 <table class="table cb-reunion-table">
@@ -36,7 +105,7 @@ $det = $data['reunion_detalle'] ?? null;
                         </tr>
                     </thead>
                     <tbody>
-                    <?php foreach ($data['reuniones'] as $r):
+                    <?php foreach ($reuniones as $r):
                         $isFuture = strtotime($r->fecha_reunion) >= time();
                     ?>
                         <tr class="<?php echo ($det && (int)$det->id === (int)$r->id) ? 'is-selected' : ''; ?>">
@@ -53,9 +122,9 @@ $det = $data['reunion_detalle'] ?? null;
                                 <?php else: ?>—<?php endif; ?>
                             </td>
                             <td class="cb-reunion-actions">
-                                <a href="<?php echo URLROOT; ?>/admin/asistencia/<?php echo (int)$r->id; ?>" class="btn btn-secondary btn-sm">Gestionar</a>
+                                <a href="<?php echo URLROOT; ?>/admin/asistencia/<?php echo (int)$r->id; ?>?tab=listado" class="btn btn-secondary btn-sm">Gestionar</a>
                                 <?php if ($r->estado === 'programada'): ?>
-                                <a href="<?php echo URLROOT; ?>/admin/asistencia?editar=<?php echo (int)$r->id; ?>" class="btn btn-secondary btn-sm">Editar</a>
+                                <a href="<?php echo URLROOT; ?>/admin/asistencia?editar=<?php echo (int)$r->id; ?>&tab=convocar" class="btn btn-secondary btn-sm">Editar</a>
                                 <?php endif; ?>
                                 <?php if ($r->estado === 'realizada' || !empty($r->resultados)): ?>
                                 <a href="<?php echo URLROOT; ?>/admin/reunion_minuta/<?php echo (int)$r->id; ?>" target="_blank" class="btn btn-primary btn-sm">Minuta</a>
@@ -94,7 +163,7 @@ $det = $data['reunion_detalle'] ?? null;
                     </table>
                 </div>
                 <div style="display:flex;gap:0.75rem;justify-content:flex-end;flex-wrap:wrap;">
-                    <a href="<?php echo URLROOT; ?>/admin/asistencia" class="btn btn-secondary btn-sm">Volver</a>
+                    <a href="<?php echo htmlspecialchars($urlBase . '?tab=listado'); ?>" class="btn btn-secondary btn-sm">Volver al listado</a>
                     <button type="submit" class="btn btn-success btn-sm">Guardar asistencia</button>
                 </div>
             </form>
@@ -133,36 +202,9 @@ $det = $data['reunion_detalle'] ?? null;
         </div>
         <?php endif; ?>
     </div>
-
-    <div class="card card-warning cb-reunion-convocar-card">
-        <?php if ($edit): ?>
-        <h3 class="card-title">Editar convocatoria</h3>
-        <form action="<?php echo URLROOT; ?>/admin/reunion_actualizar" method="POST">
-            <input type="hidden" name="reunion_id" value="<?php echo (int)$edit->id; ?>">
-            <?php include APPROOT . '/views/admin/partials/reunion_convocatoria_fields.php'; ?>
-            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;margin:0.75rem 0;">
-                <input type="checkbox" name="reenviar_email" value="1"> Reenviar correo a convocados
-            </label>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                <button type="submit" class="btn btn-primary" style="flex:1;">Guardar cambios</button>
-                <a href="<?php echo URLROOT; ?>/admin/asistencia" class="btn btn-secondary">Cancelar</a>
-            </div>
-        </form>
-        <?php else: ?>
-        <h3 class="card-title">Convocar Asamblea / Reunión</h3>
-        <form action="<?php echo URLROOT; ?>/admin/reunion_crear" method="POST">
-            <?php
-            $edit = null;
-            $convocadosEdit = [];
-            include APPROOT . '/views/admin/partials/reunion_convocatoria_fields.php';
-            ?>
-            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:0.5rem;">Enviar convocatoria</button>
-        </form>
-        <?php endif; ?>
-    </div>
 </div>
 
-<?php if ($det): ?>
+<?php if ($det && $tabActiva === 'listado'): ?>
 <script>document.addEventListener('DOMContentLoaded',()=>document.getElementById('listaAsistenciaSeccion')?.scrollIntoView({behavior:'smooth'}));</script>
 <?php endif; ?>
 

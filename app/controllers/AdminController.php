@@ -2110,14 +2110,14 @@ class AdminController extends Controller {
 
         if ($titulo === '' || $fecha === '') {
             $_SESSION['error_msg'] = 'Complete título y fecha de la convocatoria.';
-            $this->redirect('/admin/asistencia');
+            $this->redirect('/admin/asistencia?tab=convocar');
             return;
         }
 
         $convocados = $this->resolveConvocadosFromPost($post, $juntaId);
         if (empty($convocados)) {
             $_SESSION['error_msg'] = 'Seleccione al menos un destinatario.';
-            $this->redirect('/admin/asistencia');
+            $this->redirect('/admin/asistencia?tab=convocar');
             return;
         }
 
@@ -2133,7 +2133,7 @@ class AdminController extends Controller {
 
         if (!$reunionId) {
             $_SESSION['error_msg'] = 'No se pudo crear la convocatoria.';
-            $this->redirect('/admin/asistencia');
+            $this->redirect('/admin/asistencia?tab=convocar');
             return;
         }
 
@@ -2152,7 +2152,7 @@ class AdminController extends Controller {
             $msg .= ' Visible en el perfil de los convocados.';
         }
         $_SESSION['success_msg'] = $msg;
-        $this->redirect('/admin/asistencia');
+        $this->redirect('/admin/asistencia?tab=listado');
     }
 
     public function reunion_actualizar() {
@@ -2171,7 +2171,7 @@ class AdminController extends Controller {
             'temas_tratar' => trim($post['temas_tratar'] ?? ''),
         ])) {
             $_SESSION['error_msg'] = 'No se pudo actualizar la convocatoria.';
-            $this->redirect('/admin/asistencia');
+            $this->redirect('/admin/asistencia?editar=' . $id . '&tab=convocar');
             return;
         }
 
@@ -2185,7 +2185,7 @@ class AdminController extends Controller {
         }
 
         $_SESSION['success_msg'] = 'Convocatoria actualizada.';
-        $this->redirect('/admin/asistencia/' . $id);
+        $this->redirect('/admin/asistencia/' . $id . '?tab=listado');
     }
 
     public function reunion_resultados() {
@@ -2203,11 +2203,11 @@ class AdminController extends Controller {
 
         if (!$this->reunionModel->updateResultados($id, $juntaId, trim($post['resultados'] ?? ''), $horaVal, $finalizar)) {
             $_SESSION['error_msg'] = 'No se pudieron guardar los resultados.';
-            $this->redirect('/admin/asistencia/' . $id);
+            $this->redirect('/admin/asistencia/' . $id . '?tab=listado');
             return;
         }
         $_SESSION['success_msg'] = $finalizar ? 'Reunión finalizada. Puede imprimir la minuta.' : 'Resultados guardados.';
-        $this->redirect('/admin/asistencia/' . $id);
+        $this->redirect('/admin/asistencia/' . $id . '?tab=listado');
     }
 
     public function asistencia_guardar($reunionId) {
@@ -2231,7 +2231,7 @@ class AdminController extends Controller {
             $this->asistenciaModel->saveAsistencia($reunionId, $socio->id, $asistio);
         }
         $_SESSION['success_msg'] = 'Lista de asistencia guardada.';
-        $this->redirect('/admin/asistencia/' . $reunionId);
+        $this->redirect('/admin/asistencia/' . $reunionId . '?tab=listado');
     }
 
     public function reunion_minuta($id) {
