@@ -154,23 +154,32 @@ class User extends Model {
         return $this->db->single();
     }
 
-    /** @return array<string, object> mapa rut => usuario */
+    /** @return array<string, object> mapa rut normalizado => usuario */
     public function findUsersByRuts(array $ruts): array {
-        $ruts = array_values(array_unique(array_filter(array_map('strval', $ruts))));
-        if (empty($ruts)) {
+        require_once APPROOT . '/core/RutChile.php';
+        $normalized = [];
+        foreach ($ruts as $rut) {
+            $key = RutChile::normalize($rut);
+            if ($key !== false) {
+                $normalized[] = $key;
+            }
+        }
+        $normalized = array_values(array_unique($normalized));
+        if (empty($normalized)) {
             return [];
         }
         $parts = [];
-        foreach ($ruts as $i => $rut) {
+        foreach ($normalized as $i => $rut) {
             $parts[] = ':rut' . $i;
         }
         $this->db->query('SELECT * FROM usuarios WHERE rut IN (' . implode(', ', $parts) . ')');
-        foreach ($ruts as $i => $rut) {
+        foreach ($normalized as $i => $rut) {
             $this->db->bind(':rut' . $i, $rut);
         }
         $map = [];
         foreach ($this->db->resultSet() as $row) {
-            $map[$row->rut] = $row;
+            $key = RutChile::normalize($row->rut) ?: $row->rut;
+            $map[$key] = $row;
         }
         return $map;
     }

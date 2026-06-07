@@ -302,8 +302,26 @@ foreach ($data['calles'] as $calleItem) {
                 Socios registrados por la directiva o carga masiva sin correo. Puede asociarles pagos en Finanzas.
                 El vecino ingresa con su <strong>RUT</strong> y clave = <strong>primeros 6 dígitos del RUT</strong>, completa su correo y activa la cuenta.
             </p>
+            <div class="cb-table-toolbar cb-table-toolbar--prevalidar">
+                <input type="search"
+                       id="prevalidarSearch"
+                       class="form-control cb-table-search-input"
+                       placeholder="Buscar por nombre, RUT, ID socio, correo o domicilio…"
+                       autocomplete="off">
+                <div class="cb-table-toolbar-actions">
+                    <label class="cb-table-page-size-label" for="prevalidarPageSize">
+                        Mostrar
+                        <select id="prevalidarPageSize" class="form-control cb-table-page-size">
+                            <option value="10" selected>10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
             <div class="table-responsive">
-                <table class="table">
+                <table class="table" id="prevalidarTable">
                     <thead>
                         <tr>
                             <th>Socio</th>
@@ -312,9 +330,20 @@ foreach ($data['calles'] as $calleItem) {
                             <th>Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <?php foreach ($sociosPrevalidar as $prev): ?>
-                        <tr>
+                    <tbody id="prevalidarTableBody">
+                        <?php foreach ($sociosPrevalidar as $prev):
+                            $prevSearch = mb_strtolower(trim(
+                                ($prev->nombre ?? '') . ' '
+                                . ($prev->apellido_paterno ?? '') . ' '
+                                . ($prev->apellido_materno ?? '') . ' '
+                                . ($prev->rut ?? '') . ' '
+                                . ($prev->id_socio ?? '') . ' '
+                                . InviteRutCheck::displayEmail($prev->email ?? '') . ' '
+                                . ($prev->calle_nombre ?? '') . ' '
+                                . ($prev->numero_casa ?? '')
+                            ), 'UTF-8');
+                        ?>
+                        <tr data-prevalidar-row data-search="<?php echo htmlspecialchars($prevSearch, ENT_QUOTES, 'UTF-8'); ?>">
                             <td style="font-weight: 600;">
                                 <?php echo htmlspecialchars($prev->nombre . ' ' . $prev->apellido_paterno); ?>
                                 <?php if (!empty($prev->id_socio)): ?>
@@ -361,6 +390,14 @@ foreach ($data['calles'] as $calleItem) {
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                <p class="cb-table-search-empty" id="prevalidarSearchEmpty" hidden>No hay registros que coincidan con la búsqueda.</p>
+            </div>
+            <div class="cb-table-pagination" id="prevalidarPagination">
+                <p class="cb-table-page-meta" id="prevalidarPageMeta"></p>
+                <div class="cb-table-page-nav">
+                    <button type="button" class="btn btn-secondary btn-sm" id="prevalidarPrevPage">Anterior</button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="prevalidarNextPage">Siguiente</button>
+                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -991,10 +1028,11 @@ foreach ($data['calles'] as $calleItem) {
             $bulkValidCount = (int)($bulkPreview['result']['valid_count'] ?? 0);
             $bulkErrorCount = (int)($bulkPreview['result']['error_count'] ?? 0);
             $bulkWarnCount = (int)($bulkPreview['result']['warning_count'] ?? 0);
+            $bulkPrevalidarCount = (int)($bulkPreview['result']['prevalidar_dup_count'] ?? 0);
             $bulkTotalRows = count($bulkPreview['result']['rows']);
             $bulkOkCount = max(0, $bulkValidCount - $bulkWarnCount);
-            $bulkIssueCount = $bulkErrorCount + $bulkWarnCount;
-            $bulkDefaultFilter = $bulkErrorCount > 0 ? 'error' : ($bulkIssueCount > 0 ? 'issues' : 'all');
+            $bulkIssueCount = $bulkErrorCount + $bulkWarnCount + $bulkPrevalidarCount;
+            $bulkDefaultFilter = $bulkErrorCount > 0 ? 'error' : ($bulkPrevalidarCount > 0 ? 'prevalidar' : ($bulkIssueCount > 0 ? 'issues' : 'all'));
         ?>
         <div id="bulkImportResults" class="bulk-import-results" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
             <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem;">Resultado de validación</h4>
@@ -1016,6 +1054,11 @@ foreach ($data['calles'] as $calleItem) {
                 <?php if ($bulkWarnCount > 0): ?>
                 <button type="button" class="bulk-import-filter-chip bulk-import-filter-chip--warn" data-bulk-filter="warn">
                     Observaciones <span class="bulk-import-filter-count"><?php echo $bulkWarnCount; ?></span>
+                </button>
+                <?php endif; ?>
+                <?php if ($bulkPrevalidarCount > 0): ?>
+                <button type="button" class="bulk-import-filter-chip bulk-import-filter-chip--prevalidar" data-bulk-filter="prevalidar">
+                    Ya PRE-VALIDAR <span class="bulk-import-filter-count"><?php echo $bulkPrevalidarCount; ?></span>
                 </button>
                 <?php endif; ?>
                 <?php if ($bulkOkCount > 0): ?>
@@ -1040,9 +1083,17 @@ foreach ($data['calles'] as $calleItem) {
                     <?php foreach ($bulkPreview['result']['rows'] as $brow):
                         $d = $brow['data'] ?? [];
                         $fechaInicio = !empty($d['fecha_inicio']) ? date('d-m-Y', strtotime($d['fecha_inicio'])) : '—';
-                        $bulkRowStatus = !$brow['valid'] ? 'error' : (!empty($brow['warnings']) ? 'warn' : 'ok');
+                        if (!$brow['valid']) {
+                            $bulkRowStatus = 'error';
+                        } elseif (!empty($brow['already_prevalidar'])) {
+                            $bulkRowStatus = 'prevalidar';
+                        } elseif (!empty($brow['warnings'])) {
+                            $bulkRowStatus = 'warn';
+                        } else {
+                            $bulkRowStatus = 'ok';
+                        }
                     ?>
-                        <tr class="<?php echo !$brow['valid'] ? 'bulk-import-row--error' : (!empty($brow['warnings']) ? 'bulk-import-row--warn' : 'bulk-import-row--ok'); ?>"
+                        <tr class="<?php echo $bulkRowStatus === 'error' ? 'bulk-import-row--error' : ($bulkRowStatus === 'prevalidar' ? 'bulk-import-row--prevalidar' : ($bulkRowStatus === 'warn' ? 'bulk-import-row--warn' : 'bulk-import-row--ok')); ?>"
                             data-bulk-status="<?php echo $bulkRowStatus; ?>">
                             <td><?php echo (int)$brow['line']; ?></td>
                             <td style="font-family: monospace;"><?php echo htmlspecialchars($d['rut'] ?? ''); ?></td>
@@ -1050,6 +1101,8 @@ foreach ($data['calles'] as $calleItem) {
                             <td>
                                 <?php if (!$brow['valid']): ?>
                                     <span class="bulk-import-badge bulk-import-badge--error">Error</span>
+                                <?php elseif (!empty($brow['already_prevalidar'])): ?>
+                                    <span class="bulk-import-badge bulk-import-badge--prevalidar">PRE-VALIDAR</span>
                                 <?php elseif (!empty($brow['warnings'])): ?>
                                     <span class="bulk-import-badge bulk-import-badge--warn">OK · revisar</span>
                                 <?php else: ?>
@@ -1065,12 +1118,13 @@ foreach ($data['calles'] as $calleItem) {
                                     </ul>
                                 <?php else: ?>
                                     <?php if (!empty($brow['warnings'])): ?>
-                                    <ul class="bulk-import-msg-list bulk-import-msg-list--warn">
+                                    <ul class="bulk-import-msg-list bulk-import-msg-list--<?php echo !empty($brow['already_prevalidar']) ? 'prevalidar' : 'warn'; ?>">
                                         <?php foreach ($brow['warnings'] as $warn): ?>
                                             <li><?php echo htmlspecialchars($warn); ?></li>
                                         <?php endforeach; ?>
                                     </ul>
                                     <?php endif; ?>
+                                    <?php if (empty($brow['already_prevalidar'])): ?>
                                     <div class="bulk-import-normalized">
                                         <?php if (!empty($d['estado_civil'])): ?>
                                             <span>Estado civil: <?php echo htmlspecialchars(SocioInput::estadoCivilLabel($d['estado_civil'])); ?></span>
@@ -1085,6 +1139,7 @@ foreach ($data['calles'] as $calleItem) {
                                             <span>Calle vinculada</span>
                                         <?php endif; ?>
                                     </div>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -1605,7 +1660,7 @@ document.addEventListener('DOMContentLoaded', function() {
             rows.forEach(function(row) {
                 const status = row.getAttribute('data-bulk-status');
                 const show = filter === 'all'
-                    || (filter === 'issues' && (status === 'error' || status === 'warn'))
+                    || (filter === 'issues' && (status === 'error' || status === 'warn' || status === 'prevalidar'))
                     || status === filter;
                 row.hidden = !show;
                 if (show) {
@@ -1638,6 +1693,112 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     initBulkImportPreviewFilter();
+
+    function initPrevalidarTableControls() {
+        const table = document.getElementById('prevalidarTable');
+        if (!table) {
+            return;
+        }
+        const rows = Array.from(table.querySelectorAll('tr[data-prevalidar-row]'));
+        const searchInput = document.getElementById('prevalidarSearch');
+        const pageSizeSelect = document.getElementById('prevalidarPageSize');
+        const prevBtn = document.getElementById('prevalidarPrevPage');
+        const nextBtn = document.getElementById('prevalidarNextPage');
+        const meta = document.getElementById('prevalidarPageMeta');
+        const emptyMsg = document.getElementById('prevalidarSearchEmpty');
+        let currentPage = 1;
+
+        function normalizeQuery(str) {
+            return (str || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/\s+/g, ' ').trim();
+        }
+
+        function getFilteredRows() {
+            const q = normalizeQuery(searchInput ? searchInput.value : '');
+            if (q === '') {
+                return rows;
+            }
+            return rows.filter(function(row) {
+                return normalizeQuery(row.getAttribute('data-search') || '').includes(q);
+            });
+        }
+
+        function renderPrevalidarTable() {
+            const pageSize = parseInt(pageSizeSelect ? pageSizeSelect.value : '10', 10) || 10;
+            const filtered = getFilteredRows();
+            const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            if (currentPage < 1) {
+                currentPage = 1;
+            }
+            const start = (currentPage - 1) * pageSize;
+            const visibleSet = new Set(filtered.slice(start, start + pageSize));
+            rows.forEach(function(row) {
+                row.hidden = !visibleSet.has(row);
+            });
+            if (meta) {
+                if (filtered.length === 0) {
+                    meta.textContent = '0 registros';
+                } else {
+                    const from = start + 1;
+                    const to = Math.min(start + pageSize, filtered.length);
+                    let text = 'Mostrando ' + from + '–' + to + ' de ' + filtered.length;
+                    if (filtered.length !== rows.length) {
+                        text += ' (filtrado de ' + rows.length + ')';
+                    }
+                    meta.textContent = text;
+                }
+            }
+            if (emptyMsg) {
+                emptyMsg.hidden = filtered.length > 0;
+            }
+            if (prevBtn) {
+                prevBtn.disabled = currentPage <= 1;
+            }
+            if (nextBtn) {
+                nextBtn.disabled = currentPage >= totalPages || filtered.length === 0;
+            }
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                currentPage = 1;
+                renderPrevalidarTable();
+            });
+        }
+        if (pageSizeSelect) {
+            pageSizeSelect.addEventListener('change', function() {
+                currentPage = 1;
+                renderPrevalidarTable();
+            });
+        }
+        if (prevBtn) {
+            prevBtn.addEventListener('click', function() {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderPrevalidarTable();
+                }
+            });
+        }
+        if (nextBtn) {
+            nextBtn.addEventListener('click', function() {
+                const filtered = getFilteredRows();
+                const pageSize = parseInt(pageSizeSelect ? pageSizeSelect.value : '10', 10) || 10;
+                const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderPrevalidarTable();
+                }
+            });
+        }
+
+        renderPrevalidarTable();
+    }
+
+    initPrevalidarTableControls();
 
     <?php if (!empty($bulkPreview['result']['rows'])): ?>
     openModal(cargaMasivaModal);

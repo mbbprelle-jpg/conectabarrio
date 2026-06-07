@@ -2506,6 +2506,10 @@ body.cb-loading-active .main-content {
     background: rgba(245, 158, 11, 0.06);
 }
 
+.bulk-import-row--prevalidar {
+    background: rgba(56, 189, 248, 0.07);
+}
+
 .bulk-import-badge {
     display: inline-block;
     font-size: 0.68rem;
@@ -2530,6 +2534,11 @@ body.cb-loading-active .main-content {
     color: var(--danger);
 }
 
+.bulk-import-badge--prevalidar {
+    background: rgba(56, 189, 248, 0.16);
+    color: #38bdf8;
+}
+
 .bulk-import-msg-list {
     margin: 0 0 0.35rem;
     padding-left: 1rem;
@@ -2544,6 +2553,16 @@ body.cb-loading-active .main-content {
     color: var(--warning);
 }
 
+.bulk-import-msg-list--prevalidar {
+    color: #38bdf8;
+}
+
+.bulk-import-filter-chip--prevalidar.is-active {
+    border-color: rgba(56, 189, 248, 0.55);
+    background: rgba(56, 189, 248, 0.16);
+    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.12) inset;
+}
+
 .bulk-import-normalized {
     display: flex;
     flex-wrap: wrap;
@@ -2554,6 +2573,86 @@ body.cb-loading-active .main-content {
 
 .bulk-import-normalized span {
     white-space: nowrap;
+}
+
+/* Tabla con búsqueda y paginación (alta provisional, etc.) */
+.cb-table-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.cb-table-toolbar--prevalidar {
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.cb-table-search-input {
+    flex: 1 1 220px;
+    max-width: 420px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.cb-table-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+
+.cb-table-page-size-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.cb-table-page-size {
+    width: auto;
+    min-width: 4.5rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.82rem;
+}
+
+.cb-table-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.cb-table-page-meta {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.cb-table-page-nav {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.cb-table-search-empty {
+    margin: 0.75rem 0 0;
+    padding: 0.75rem;
+    text-align: center;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
 }
 
 .bulk-import-detail {

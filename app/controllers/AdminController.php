@@ -440,29 +440,50 @@ class AdminController extends Controller {
         $validRows = [];
         foreach ($pending as $idx => $data) {
             $rowErrors = [];
+            $rowWarnings = $result['rows'][$idx]['warnings'] ?? [];
             $existing = $usersByRut[$data['rut']] ?? null;
             if ($existing) {
-                if (($existing->status ?? '') !== 'prevalidar' || (int)$existing->junta_id !== $juntaId) {
+                $sameJunta = (int)$existing->junta_id === $juntaId;
+                $isPrevalidar = ($existing->status ?? '') === 'prevalidar';
+                if ($isPrevalidar && $sameJunta) {
+                    $idSocioLabel = !empty($existing->id_socio) ? (' (ID socio #' . (int)$existing->id_socio . ')') : '';
+                    $rowWarnings[] = 'RUT ya está en alta provisional (PRE-VALIDAR) en esta organización' . $idSocioLabel . '. No se volverá a importar.';
+                    $result['rows'][$idx]['warnings'] = $rowWarnings;
+                    $result['rows'][$idx]['already_prevalidar'] = true;
+                    continue;
+                }
+                if (!$isPrevalidar || !$sameJunta) {
                     $rowErrors[] = 'RUT ya registrado';
                 }
             }
             if (!empty($data['email']) && !str_contains($data['email'], '@prevalidar.conectabarrio')) {
                 $emailKey = mb_strtolower($data['email'], 'UTF-8');
                 $byEmail = $usersByEmail[$emailKey] ?? null;
-                if ($byEmail && (($byEmail->status ?? '') !== 'prevalidar' || (int)$byEmail->junta_id !== $juntaId)) {
-                    $rowErrors[] = 'Correo ya registrado';
+                if ($byEmail) {
+                    $sameJuntaEmail = (int)$byEmail->junta_id === $juntaId;
+                    $isPrevalidarEmail = ($byEmail->status ?? '') === 'prevalidar';
+                    if ($isPrevalidarEmail && $sameJuntaEmail && ($byEmail->rut ?? '') === $data['rut']) {
+                        // mismo registro PRE-VALIDAR, aviso ya agregado por RUT
+                    } elseif (!$isPrevalidarEmail || !$sameJuntaEmail) {
+                        $rowErrors[] = 'Correo ya registrado';
+                    }
                 }
             }
             if (!empty($data['id_socio'])) {
                 $taken = $takenIdSocios[(int)$data['id_socio']] ?? null;
                 if ($taken && ($taken->status ?? '') !== 'prevalidar') {
                     $rowErrors[] = 'ID socio en uso';
+                } elseif ($taken && ($taken->status ?? '') === 'prevalidar' && (int)$taken->id !== (int)($existing->id ?? 0)) {
+                    $rowErrors[] = 'ID socio en uso por otro registro PRE-VALIDAR';
                 }
             }
             if (!empty($rowErrors)) {
                 $result['rows'][$idx]['valid'] = false;
                 $result['rows'][$idx]['errors'] = array_merge($result['rows'][$idx]['errors'], $rowErrors);
             } else {
+                if (!empty($rowWarnings)) {
+                    $result['rows'][$idx]['warnings'] = $rowWarnings;
+                }
                 $validRows[] = $data;
             }
         }
@@ -746,22 +767,23 @@ class AdminController extends Controller {
 
         $result = SocioBulkImport::parse($raw, $calles, $juntaId, $usesCalles);
         [$result, $validRows] = $this->finalizeBulkImportValidation($result, $juntaId);
-        $validCount = 0;
+        $validCount = count($validRows);
         $errorCount = 0;
         $warningCount = 0;
+        $prevalidarDupCount = 0;
         foreach ($result['rows'] as $row) {
-            if ($row['valid']) {
-                $validCount++;
-                if (!empty($row['warnings'])) {
-                    $warningCount++;
-                }
-            } else {
+            if (!$row['valid']) {
                 $errorCount++;
+            } elseif (!empty($row['already_prevalidar'])) {
+                $prevalidarDupCount++;
+            } elseif (!empty($row['warnings'])) {
+                $warningCount++;
             }
         }
         $result['valid_count'] = $validCount;
         $result['error_count'] = $errorCount;
         $result['warning_count'] = $warningCount;
+        $result['prevalidar_dup_count'] = $prevalidarDupCount;
 
         $_SESSION['bulk_import_preview'] = [
             'junta_id' => $juntaId,
@@ -772,6 +794,9 @@ class AdminController extends Controller {
 
         $msg = 'Validación completada: ' . (int)$result['valid_count'] . ' fila(s) importable(s), '
             . (int)$result['error_count'] . ' con errores';
+        if ($prevalidarDupCount > 0) {
+            $msg .= ', ' . $prevalidarDupCount . ' ya en PRE-VALIDAR (no se reimportan)';
+        }
         if ($warningCount > 0) {
             $msg .= ', ' . $warningCount . ' con observaciones (se importan, pero revise antes de activar)';
         }
