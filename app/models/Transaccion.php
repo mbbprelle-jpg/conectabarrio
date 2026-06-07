@@ -40,9 +40,23 @@ class Transaccion extends Model {
         return $this->db->single() ? true : false;
     }
 
+    public static function socioNombreCompleto($row): string {
+        $parts = array_filter([
+            trim($row->socio_nombre ?? ''),
+            trim($row->socio_apellido_paterno ?? ''),
+            trim($row->socio_apellido_materno ?? ''),
+        ], static fn($p) => $p !== '');
+        return implode(' ', $parts);
+    }
+
     // Obtener todas las transacciones de una Junta de Vecinos
     public function getTransaccionesByJunta($juntaId) {
-        $this->db->query("SELECT t.*, u.nombre as socio_nombre, r.nombre as admin_nombre 
+        $this->db->query("SELECT t.*,
+            u.nombre AS socio_nombre,
+            u.apellido_paterno AS socio_apellido_paterno,
+            u.apellido_materno AS socio_apellido_materno,
+            u.rut AS socio_rut,
+            r.nombre AS admin_nombre
                          FROM transacciones t 
                          LEFT JOIN usuarios u ON t.socio_id = u.id 
                          LEFT JOIN usuarios r ON t.registrado_por = r.id 
@@ -50,6 +64,65 @@ class Transaccion extends Model {
                          ORDER BY t.fecha DESC, t.id DESC");
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->resultSet();
+    }
+
+    public function getTransaccionByIdAndJunta(int $id, int $juntaId) {
+        $this->db->query("SELECT t.*,
+            u.nombre AS socio_nombre,
+            u.apellido_paterno AS socio_apellido_paterno,
+            u.apellido_materno AS socio_apellido_materno,
+            u.rut AS socio_rut
+            FROM transacciones t
+            LEFT JOIN usuarios u ON t.socio_id = u.id
+            WHERE t.id = :id AND t.junta_id = :junta_id
+            LIMIT 1");
+        $this->db->bind(':id', $id);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->single();
+    }
+
+    public function updateTransaccion(int $id, int $juntaId, array $data): bool {
+        $this->db->query("UPDATE transacciones SET
+            tipo = :tipo,
+            categoria = :categoria,
+            monto = :monto,
+            descripcion = :descripcion,
+            fecha = :fecha,
+            socio_id = :socio_id,
+            mes_pagado = :mes_pagado
+            WHERE id = :id AND junta_id = :junta_id");
+        $this->db->bind(':tipo', $data['tipo']);
+        $this->db->bind(':categoria', $data['categoria']);
+        $this->db->bind(':monto', $data['monto']);
+        $this->db->bind(':descripcion', $data['descripcion'] ?? null);
+        $this->db->bind(':fecha', $data['fecha']);
+        $this->db->bind(':socio_id', $data['socio_id'] ?? null);
+        $this->db->bind(':mes_pagado', $data['mes_pagado'] ?? null);
+        $this->db->bind(':id', $id);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->execute();
+    }
+
+    public function deleteTransaccion(int $id, int $juntaId): bool {
+        $this->db->query("DELETE FROM transacciones WHERE id = :id AND junta_id = :junta_id");
+        $this->db->bind(':id', $id);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->execute();
+    }
+
+    public function checkPagoSocioExcluding(int $socioId, string $mesPagado, int $juntaId, int $excludeId): bool {
+        $this->db->query("SELECT id FROM transacciones
+            WHERE socio_id = :socio_id
+            AND junta_id = :junta_id
+            AND categoria IN ('Cuota Socio', 'Cuota Condonada')
+            AND mes_pagado = :mes_pagado
+            AND id != :exclude_id
+            LIMIT 1");
+        $this->db->bind(':socio_id', $socioId);
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':mes_pagado', $mesPagado);
+        $this->db->bind(':exclude_id', $excludeId);
+        return (bool)$this->db->single();
     }
 
     // Obtener los pagos realizados por un socio en una organización

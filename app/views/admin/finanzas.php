@@ -2,13 +2,47 @@
 <?php require_once APPROOT . '/core/AuthContext.php'; ?>
 
 <?php
+function cbFinanzasSocioFullName($socio) {
+    return trim(implode(' ', array_filter([
+        $socio->nombre ?? '',
+        $socio->apellido_paterno ?? '',
+        $socio->apellido_materno ?? '',
+    ], static fn($p) => trim((string)$p) !== '')));
+}
+
 function cbFinanzasSocioLabel($socio) {
-    $label = ($socio->nombre ?? '') . ' (' . ($socio->rut ?? '') . ')';
+    $label = cbFinanzasSocioFullName($socio);
+    if (!empty($socio->rut)) {
+        $label .= ' — ' . $socio->rut;
+    }
     if (($socio->status ?? '') === 'prevalidar') {
-        $label .= ' — Alta provisional';
+        $label .= ' (Alta provisional)';
     }
     return $label;
 }
+
+function cbFinanzasSocioDisplayFromTx($t) {
+    if (!empty($t->socio_id)) {
+        $fake = (object)[
+            'nombre' => $t->socio_nombre ?? '',
+            'apellido_paterno' => $t->socio_apellido_paterno ?? '',
+            'apellido_materno' => $t->socio_apellido_materno ?? '',
+            'rut' => $t->socio_rut ?? '',
+        ];
+        return cbFinanzasSocioFullName($fake) ?: ($t->socio_nombre ?? 'Desafiliado');
+    }
+    return '';
+}
+
+$sociosPickerJson = array_map(static function ($socio) {
+    $full = cbFinanzasSocioFullName($socio);
+    return [
+        'id' => (int)$socio->id,
+        'label' => cbFinanzasSocioLabel($socio),
+        'search' => mb_strtolower($full . ' ' . ($socio->rut ?? ''), 'UTF-8'),
+        'prevalidar' => ($socio->status ?? '') === 'prevalidar',
+    ];
+}, $data['socios'] ?? []);
 ?>
 
 <style>
@@ -194,12 +228,11 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
                     <div id="socio_provisional_alert" class="alert alert-warning" style="display: none; padding: 0.65rem 0.85rem; font-size: 0.78rem; margin-bottom: 0.65rem;">
                         Este socio está en <strong>alta provisional</strong> (sin correo). Puede registrar el pago; el vecino aún no tiene acceso al portal hasta activar su cuenta.
                     </div>
-                    <select name="socio_id" id="socio_id" class="form-control" required>
-                        <option value="">-- Seleccionar Socio --</option>
-                        <?php foreach ($data['socios'] as $socio): ?>
-                            <option value="<?php echo $socio->id; ?>" data-prevalidar="<?php echo ($socio->status ?? '') === 'prevalidar' ? '1' : '0'; ?>"><?php echo htmlspecialchars(cbFinanzasSocioLabel($socio)); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="cb-socio-picker" id="picker_cuota_socio" data-required="1" data-placeholder="Escriba nombre, apellido o RUT…">
+                        <input type="hidden" name="socio_id" id="socio_id" value="" required>
+                        <input type="text" class="form-control cb-socio-picker-input" id="socio_id_input" autocomplete="off" placeholder="Escriba nombre, apellido o RUT…">
+                        <ul class="cb-socio-picker-list" hidden></ul>
+                    </div>
                 </div>
 
                 <div class="grid-2col" style="margin-bottom: 1rem;">
@@ -290,12 +323,12 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
 
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label for="asociar_socio_id" class="form-label">Asociar a Socio Vecino (Opcional)</label>
-                    <select name="socio_id" id="asociar_socio_id" class="form-control">
-                        <option value="">-- No asociar (Movimiento General) --</option>
-                        <?php foreach ($data['socios'] as $socio): ?>
-                            <option value="<?php echo $socio->id; ?>"><?php echo htmlspecialchars(cbFinanzasSocioLabel($socio)); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <div class="cb-socio-picker" id="picker_asociar_socio" data-placeholder="No asociar — escriba para buscar socio…">
+                        <input type="hidden" name="socio_id" id="asociar_socio_id" value="">
+                        <input type="text" class="form-control cb-socio-picker-input" id="asociar_socio_id_input" autocomplete="off" placeholder="No asociar — escriba para buscar socio…">
+                        <button type="button" class="cb-socio-picker-clear" title="Quitar socio" hidden aria-label="Quitar socio">&times;</button>
+                        <ul class="cb-socio-picker-list" hidden></ul>
+                    </div>
                     <small style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">
                         Permite registrar un ingreso (donación) o egreso a cuenta de un socio específico para su visualización en el portal vecinal.
                     </small>
@@ -347,6 +380,7 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
         <?php if (empty($data['transacciones'])): ?>
             <p style="color: var(--text-muted); text-align: center; padding: 2rem;">No se han registrado ingresos ni egresos en esta junta aún.</p>
         <?php else: ?>
+            <?php $mesesCerrados = $rango['meses_cerrados'] ?? []; ?>
             <div class="table-responsive" style="max-height: 520px; overflow-y: auto;">
                 <table class="table">
                     <thead>
@@ -355,10 +389,15 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
                             <th>Categoría / Detalle</th>
                             <th>Monto</th>
                             <th>Comprobante</th>
+                            <th style="text-align:center;">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <?php foreach ($data['transacciones'] as $t): ?>
+                        <?php foreach ($data['transacciones'] as $t):
+                            $mesTx = substr($t->fecha, 0, 7);
+                            $puedeEditar = !in_array($mesTx, $mesesCerrados, true);
+                            $socioDisplay = cbFinanzasSocioDisplayFromTx($t);
+                        ?>
                             <tr>
                                 <td style="font-size: 0.8rem; color: var(--text-muted); font-family: monospace;"><?php echo date('d-m-Y', strtotime($t->fecha)); ?></td>
                                 <td>
@@ -371,11 +410,11 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
                                     <div style="font-size: 0.75rem; color: var(--text-muted);">
                                         <?php 
                                         if ($t->categoria === 'Cuota Socio' || $t->categoria === 'Cuota Condonada') {
-                                            echo 'Socio: ' . htmlspecialchars($t->socio_nombre ?? 'Desafiliado') . ' (' . htmlspecialchars($t->mes_pagado) . ')';
+                                            echo 'Socio: ' . htmlspecialchars($socioDisplay ?: 'Desafiliado') . ' (' . htmlspecialchars($t->mes_pagado) . ')';
                                         } else {
                                             $detalles = htmlspecialchars($t->descripcion ?? 'Sin detalle');
-                                            if (!empty($t->socio_nombre)) {
-                                                $detalles .= ' | <span style="color:var(--primary)">Asoc: ' . htmlspecialchars($t->socio_nombre) . '</span>';
+                                            if ($socioDisplay !== '') {
+                                                $detalles .= ' | <span style="color:var(--primary)">Asoc: ' . htmlspecialchars($socioDisplay) . '</span>';
                                             }
                                             echo $detalles;
                                         }
@@ -403,25 +442,222 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
                                         <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">Interno</span>
                                     <?php endif; ?>
                                 </td>
+                                <td style="text-align: center; white-space: nowrap;">
+                                    <?php if ($puedeEditar): ?>
+                                    <button type="button" class="btn btn-secondary btn-sm btn-edit-tx" style="padding:0.25rem 0.45rem;font-size:0.72rem;margin:0.1rem;"
+                                        data-tx="<?php echo htmlspecialchars(json_encode([
+                                            'id' => (int)$t->id,
+                                            'tipo' => $t->tipo,
+                                            'categoria' => $t->categoria,
+                                            'monto' => (int)$t->monto,
+                                            'fecha' => $t->fecha,
+                                            'descripcion' => $t->descripcion ?? '',
+                                            'socio_id' => $t->socio_id ? (int)$t->socio_id : null,
+                                            'socio_label' => $socioDisplay,
+                                            'mes_pagado' => $t->mes_pagado ?? '',
+                                            'es_cuota' => in_array($t->categoria, ['Cuota Socio', 'Cuota Condonada'], true),
+                                        ], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>">
+                                        Editar
+                                    </button>
+                                    <form action="<?php echo URLROOT; ?>/admin/transaccion_eliminar" method="POST" style="display:inline;" class="form-delete-tx"
+                                        onsubmit="return confirm('¿Eliminar este movimiento? Esta acción no se puede deshacer.');">
+                                        <input type="hidden" name="transaccion_id" value="<?php echo (int)$t->id; ?>">
+                                        <button type="submit" class="btn btn-danger btn-sm" style="padding:0.25rem 0.45rem;font-size:0.72rem;margin:0.1rem;">Eliminar</button>
+                                    </form>
+                                    <?php else: ?>
+                                    <span style="font-size:0.68rem;color:var(--text-muted);" title="Mes cerrado">Bloqueado</span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
             </div>
+            <p style="font-size:0.72rem;color:var(--text-muted);margin:0.5rem 0 0;">Solo puede editar o eliminar movimientos de meses aún no cerrados.</p>
         <?php endif; ?>
 
     </div>
 
 </div>
 
+<!-- Modal editar transacción -->
+<div id="modalEditTx" class="cb-modal-overlay">
+    <div class="cb-modal-box" role="dialog" aria-labelledby="modalEditTxTitle" style="max-width:520px;">
+        <h3 class="cb-modal-title" id="modalEditTxTitle">Editar movimiento</h3>
+        <form action="<?php echo URLROOT; ?>/admin/transaccion_actualizar" method="POST" id="formEditTx">
+            <input type="hidden" name="transaccion_id" id="edit_tx_id" value="">
+            <div id="edit_tx_cuota_info" class="alert alert-info" style="display:none;font-size:0.82rem;padding:0.65rem 0.85rem;margin-bottom:1rem;"></div>
+
+            <div class="grid-2col" id="edit_tx_general_fields" style="margin-bottom:1rem;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Tipo</label>
+                    <select name="tipo" id="edit_tx_tipo" class="form-control">
+                        <option value="ingreso">Ingreso (+)</option>
+                        <option value="egreso">Egreso (-)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Categoría</label>
+                    <select name="categoria" id="edit_tx_categoria" class="form-control"></select>
+                </div>
+            </div>
+
+            <div class="grid-2col" style="margin-bottom:1rem;">
+                <div class="form-group" id="edit_tx_monto_wrap" style="margin-bottom:0;">
+                    <label class="form-label">Monto ($)</label>
+                    <input type="number" name="monto" id="edit_tx_monto" class="form-control" min="1" step="1">
+                </div>
+                <div class="form-group cb-date-field-wrap" style="margin-bottom:0;">
+                    <label class="form-label">Fecha</label>
+                    <input type="date" name="fecha" id="edit_tx_fecha" class="form-control cb-finanzas-date" min="<?php echo htmlspecialchars($fechaMin); ?>" max="<?php echo htmlspecialchars($fechaMax); ?>" required>
+                </div>
+            </div>
+
+            <div class="form-group" id="edit_tx_mes_wrap" style="display:none;margin-bottom:1rem;">
+                <label class="form-label">Mes de cuota (YYYY-MM)</label>
+                <input type="month" name="mes_pagado" id="edit_tx_mes_pagado" class="form-control">
+            </div>
+
+            <div class="form-group" id="edit_tx_socio_wrap" style="margin-bottom:1rem;">
+                <label class="form-label">Socio asociado (opcional)</label>
+                <div class="cb-socio-picker" id="picker_edit_tx_socio" data-placeholder="Sin socio asociado…">
+                    <input type="hidden" name="socio_id" id="edit_tx_socio_id" value="">
+                    <input type="text" class="form-control cb-socio-picker-input" id="edit_tx_socio_input" autocomplete="off">
+                    <button type="button" class="cb-socio-picker-clear" title="Quitar socio" hidden aria-label="Quitar socio">&times;</button>
+                    <ul class="cb-socio-picker-list" hidden></ul>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:1.25rem;">
+                <label class="form-label" id="edit_tx_desc_label">Descripción</label>
+                <input type="text" name="descripcion" id="edit_tx_descripcion" class="form-control">
+            </div>
+
+            <div style="display:flex;gap:0.5rem;justify-content:flex-end;flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" id="btnCloseEditTx">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- JavaScript de Motor de Cuotas e Interacción Dinámica -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    
+
+    const SOCIOS_DATA = <?php echo json_encode($sociosPickerJson, JSON_UNESCAPED_UNICODE); ?>;
+
+    function initSocioPicker(root, onSelect) {
+        if (!root) return null;
+        const hidden = root.querySelector('input[type="hidden"]');
+        const input = root.querySelector('.cb-socio-picker-input');
+        const list = root.querySelector('.cb-socio-picker-list');
+        const clearBtn = root.querySelector('.cb-socio-picker-clear');
+        const isRequired = root.dataset.required === '1';
+        let activeIdx = -1;
+
+        const renderList = (query) => {
+            const q = (query || '').trim().toLowerCase();
+            const items = q === ''
+                ? SOCIOS_DATA.slice(0, 40)
+                : SOCIOS_DATA.filter(s => s.search.includes(q)).slice(0, 40);
+
+            list.innerHTML = '';
+            if (items.length === 0) {
+                const li = document.createElement('li');
+                li.className = 'cb-socio-picker-empty';
+                li.textContent = 'Sin coincidencias';
+                list.appendChild(li);
+            } else {
+                items.forEach((s, idx) => {
+                    const li = document.createElement('li');
+                    li.className = 'cb-socio-picker-item' + (idx === activeIdx ? ' is-active' : '');
+                    li.dataset.id = s.id;
+                    li.dataset.prevalidar = s.prevalidar ? '1' : '0';
+                    li.innerHTML = s.label + (s.prevalidar ? ' <span class="badge badge-warning" style="font-size:0.62rem;">Provisional</span>' : '');
+                    li.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        selectSocio(s);
+                    });
+                    list.appendChild(li);
+                });
+            }
+            list.hidden = false;
+        };
+
+        const selectSocio = (s) => {
+            hidden.value = s.id;
+            input.value = s.label;
+            list.hidden = true;
+            activeIdx = -1;
+            if (clearBtn) clearBtn.hidden = false;
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            if (typeof onSelect === 'function') onSelect(s);
+        };
+
+        const clearSocio = () => {
+            hidden.value = '';
+            input.value = '';
+            list.hidden = true;
+            activeIdx = -1;
+            if (clearBtn) clearBtn.hidden = true;
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            if (typeof onSelect === 'function') onSelect(null);
+        };
+
+        input.addEventListener('focus', () => renderList(input.value));
+        input.addEventListener('input', () => {
+            hidden.value = '';
+            if (clearBtn) clearBtn.hidden = true;
+            activeIdx = -1;
+            renderList(input.value);
+        });
+        input.addEventListener('keydown', (e) => {
+            const items = list.querySelectorAll('.cb-socio-picker-item');
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIdx = Math.min(activeIdx + 1, items.length - 1);
+                renderList(input.value);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIdx = Math.max(activeIdx - 1, 0);
+                renderList(input.value);
+            } else if (e.key === 'Enter' && activeIdx >= 0 && items[activeIdx]) {
+                e.preventDefault();
+                const id = parseInt(items[activeIdx].dataset.id, 10);
+                const s = SOCIOS_DATA.find(x => x.id === id);
+                if (s) selectSocio(s);
+            } else if (e.key === 'Escape') {
+                list.hidden = true;
+            }
+        });
+        input.addEventListener('blur', () => {
+            setTimeout(() => { list.hidden = true; }, 150);
+            if (isRequired && !hidden.value && input.value.trim() !== '') {
+                input.value = '';
+            }
+        });
+        if (clearBtn) clearBtn.addEventListener('click', clearSocio);
+
+        return {
+            setValue(id, label) {
+                hidden.value = id || '';
+                input.value = label || '';
+                if (clearBtn) clearBtn.hidden = !id;
+            },
+            clear: clearSocio,
+            getHidden: () => hidden,
+        };
+    }
+
+    const pickerCuota = initSocioPicker(document.getElementById('picker_cuota_socio'));
+    initSocioPicker(document.getElementById('picker_asociar_socio'));
+    const pickerEditTx = initSocioPicker(document.getElementById('picker_edit_tx_socio'));
+
     // ==========================================
     // SECCIÓN 1: PAGO DE CUOTAS Y CONDONACIÓN
     // ==========================================
-    const socioSelect = document.getElementById('socio_id');
+    const socioHidden = document.getElementById('socio_id');
     const socioProvisionalAlert = document.getElementById('socio_provisional_alert');
     const mesesContainer = document.getElementById('meses_checkboxes_container');
     const quickActions = document.getElementById('quick_actions_container');
@@ -434,16 +670,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const visualMonto = document.getElementById('monto_cuota_visual');
     const btnSubmitCuota = document.getElementById('btn_submit_cuota');
 
-    if (socioSelect && mesesContainer) {
-        const syncProvisionalAlert = () => {
+    if (socioHidden && mesesContainer) {
+        const syncProvisionalAlert = (prevalidar) => {
             if (!socioProvisionalAlert) return;
-            const opt = socioSelect.options[socioSelect.selectedIndex];
-            const isProv = opt && opt.dataset.prevalidar === '1';
-            socioProvisionalAlert.style.display = isProv ? 'block' : 'none';
+            socioProvisionalAlert.style.display = prevalidar ? 'block' : 'none';
         };
-        socioSelect.addEventListener('change', function() {
-            syncProvisionalAlert();
-            const socioId = this.value;
+        socioHidden.addEventListener('change', function() {
+            const socioId = socioHidden.value;
+            const s = SOCIOS_DATA.find(x => String(x.id) === String(socioId));
+            syncProvisionalAlert(s && s.prevalidar);
             
             if (!socioId) {
                 mesesContainer.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">-- Primero seleccione un socio vecino --</p>';
@@ -691,6 +926,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const formCuota = document.querySelector('form[action*="registrar_pago_cuota"]');
     if (formCuota) {
         formCuota.addEventListener('submit', function(e) {
+            if (!socioHidden.value) {
+                e.preventDefault();
+                alert('Debe seleccionar un socio de la lista.');
+                return;
+            }
             const checkedCheckboxes = mesesContainer.querySelectorAll('.mes-checkbox:checked');
             if (checkedCheckboxes.length === 0) {
                 e.preventDefault();
@@ -770,8 +1010,116 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (tipoSelect) {
         tipoSelect.addEventListener('change', populateCategorias);
-        // Cargar por defecto
         populateCategorias();
+    }
+
+    // ==========================================
+    // SECCIÓN 3: EDITAR / ELIMINAR TRANSACCIONES
+    // ==========================================
+    const modalEditTx = document.getElementById('modalEditTx');
+    const formEditTx = document.getElementById('formEditTx');
+    const editTxTipo = document.getElementById('edit_tx_tipo');
+    const editTxCat = document.getElementById('edit_tx_categoria');
+    const editTxGeneral = document.getElementById('edit_tx_general_fields');
+    const editTxMontoWrap = document.getElementById('edit_tx_monto_wrap');
+    const editTxMesWrap = document.getElementById('edit_tx_mes_wrap');
+    const editTxSocioWrap = document.getElementById('edit_tx_socio_wrap');
+    const editTxCuotaInfo = document.getElementById('edit_tx_cuota_info');
+    const editTxDescLabel = document.getElementById('edit_tx_desc_label');
+
+    function populateEditCategorias() {
+        if (!editTxTipo || !editTxCat) return;
+        const tipo = editTxTipo.value;
+        editTxCat.innerHTML = '';
+        const list = (tipo === 'ingreso') ? ingresosCategorias : egresosCategorias;
+        list.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.val;
+            opt.textContent = c.text;
+            editTxCat.appendChild(opt);
+        });
+    }
+
+    if (editTxTipo) {
+        editTxTipo.addEventListener('change', populateEditCategorias);
+    }
+
+    function openEditModal(tx) {
+        document.getElementById('edit_tx_id').value = tx.id;
+        document.getElementById('edit_tx_fecha').value = tx.fecha;
+        document.getElementById('edit_tx_descripcion').value = tx.descripcion || '';
+
+        if (tx.es_cuota) {
+            editTxGeneral.style.display = 'none';
+            editTxMontoWrap.style.display = 'none';
+            editTxMesWrap.style.display = 'block';
+            editTxSocioWrap.style.display = 'none';
+            editTxCuotaInfo.style.display = 'block';
+            editTxCuotaInfo.innerHTML = '<strong>' + tx.categoria + '</strong> — Socio: ' + (tx.socio_label || '—') + ' (no editable)';
+            document.getElementById('edit_tx_mes_pagado').value = tx.mes_pagado || '';
+            document.getElementById('edit_tx_mes_pagado').required = true;
+            document.getElementById('edit_tx_mes_pagado').disabled = false;
+            document.getElementById('edit_tx_monto').required = false;
+            editTxDescLabel.textContent = tx.categoria === 'Cuota Condonada' ? 'Justificación / Motivo *' : 'Descripción';
+            const editSocioHidden = document.getElementById('edit_tx_socio_id');
+            if (editSocioHidden) editSocioHidden.disabled = true;
+        } else {
+            editTxGeneral.style.display = 'grid';
+            editTxMontoWrap.style.display = 'block';
+            editTxMesWrap.style.display = 'none';
+            editTxSocioWrap.style.display = 'block';
+            editTxCuotaInfo.style.display = 'none';
+            document.getElementById('edit_tx_mes_pagado').required = false;
+            document.getElementById('edit_tx_mes_pagado').disabled = true;
+            document.getElementById('edit_tx_monto').required = true;
+            editTxDescLabel.textContent = 'Descripción / Justificación';
+            const editSocioHidden = document.getElementById('edit_tx_socio_id');
+            if (editSocioHidden) editSocioHidden.disabled = false;
+            editTxTipo.value = tx.tipo;
+            populateEditCategorias();
+            editTxCat.value = tx.categoria;
+            document.getElementById('edit_tx_monto').value = tx.monto;
+            if (pickerEditTx) {
+                if (tx.socio_id) {
+                    const s = SOCIOS_DATA.find(x => x.id === tx.socio_id);
+                    pickerEditTx.setValue(tx.socio_id, s ? s.label : (tx.socio_label || ''));
+                } else {
+                    pickerEditTx.clear();
+                }
+            }
+        }
+
+        modalEditTx.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+    }
+
+    document.querySelectorAll('.btn-edit-tx').forEach(btn => {
+        btn.addEventListener('click', function() {
+            try {
+                openEditModal(JSON.parse(this.dataset.tx));
+            } catch (e) {
+                console.error(e);
+            }
+        });
+    });
+
+    function closeEditModal() {
+        modalEditTx.classList.remove('is-open');
+        document.body.style.overflow = '';
+    }
+
+    document.getElementById('btnCloseEditTx')?.addEventListener('click', closeEditModal);
+    modalEditTx?.addEventListener('click', (e) => {
+        if (e.target === modalEditTx) closeEditModal();
+    });
+
+    if (formEditTx) {
+        formEditTx.addEventListener('submit', function(e) {
+            const dateInput = formEditTx.querySelector('.cb-finanzas-date');
+            if (dateInput && !validarFechaFinanzasInput(dateInput)) {
+                e.preventDefault();
+            }
+        });
     }
 });
 </script>

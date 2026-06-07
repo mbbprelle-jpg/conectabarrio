@@ -138,6 +138,18 @@ class AdminController extends Controller {
         return $this->cierreModel->validarFechaMovimiento($juntaId, $fecha);
     }
 
+    private function assertTransaccionMesAbierto(int $juntaId, string $fecha): ?string {
+        $mes = substr($fecha, 0, 7);
+        if ($this->cierreModel->checkCierreExist($juntaId, $mes)) {
+            return 'El mes ' . $mes . ' ya fue cerrado. No puede modificar ni eliminar movimientos de periodos cerrados.';
+        }
+        return null;
+    }
+
+    private function esTransaccionCuota(object $tx): bool {
+        return in_array($tx->categoria ?? '', ['Cuota Socio', 'Cuota Condonada'], true);
+    }
+
     private function finanzasContextData(int $juntaId): array {
         $this->conceptoModel->ensureDefaults($juntaId);
         $esPrimerCierre = $this->cierreModel->esPrimerCierre($juntaId);
@@ -1952,6 +1964,170 @@ class AdminController extends Controller {
             } else {
                 $_SESSION['error_msg'] = 'Error al registrar la transacción.';
             }
+        }
+        $this->redirect('/admin/finanzas');
+    }
+
+    public function transaccion_actualizar() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $id = (int)($post['transaccion_id'] ?? 0);
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $tx = $this->transaccionModel->getTransaccionByIdAndJunta($id, $juntaId);
+
+        if (!$tx) {
+            $_SESSION['error_msg'] = 'Movimiento no encontrado.';
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $errMes = $this->assertTransaccionMesAbierto($juntaId, $tx->fecha);
+        if ($errMes) {
+            $_SESSION['error_msg'] = $errMes;
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $fecha = trim($post['fecha'] ?? $tx->fecha);
+        $descripcion = trim($post['descripcion'] ?? '');
+        $fechaError = $this->validarFechaFinanzas($juntaId, $fecha);
+        if ($fechaError) {
+            $_SESSION['error_msg'] = $fechaError;
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $errNuevoMes = $this->assertTransaccionMesAbierto($juntaId, $fecha);
+        if ($errNuevoMes) {
+            $_SESSION['error_msg'] = $errNuevoMes;
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        if ($this->esTransaccionCuota($tx)) {
+            $mesPagado = trim($post['mes_pagado'] ?? $tx->mes_pagado ?? '');
+            if ($mesPagado === '' || !preg_match('/^\d{4}-\d{2}$/', $mesPagado)) {
+                $_SESSION['error_msg'] = 'Indique un mes válido para la cuota (YYYY-MM).';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            if ((int)$tx->socio_id > 0 && $this->transaccionModel->checkPagoSocioExcluding((int)$tx->socio_id, $mesPagado, $juntaId, $id)) {
+                $_SESSION['error_msg'] = 'El mes ' . $mesPagado . ' ya tiene un pago o exención registrado para este socio.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            if ($tx->categoria === 'Cuota Condonada') {
+                if ($descripcion === '') {
+                    $_SESSION['error_msg'] = 'Debe indicar la justificación de la condonación.';
+                    $this->redirect('/admin/finanzas');
+                    return;
+                }
+                $monto = 0;
+            } else {
+                $quotaConfig = $this->cuotaModel->getCuotaVigente($juntaId, $mesPagado);
+                $monto = $quotaConfig ? (int)$quotaConfig->monto : 0;
+                if ($monto <= 0) {
+                    $_SESSION['error_msg'] = 'No hay valor de cuota configurado para el mes ' . $mesPagado . '.';
+                    $this->redirect('/admin/finanzas');
+                    return;
+                }
+                if ($descripcion === '') {
+                    $descripcion = 'Pago cuota correspondiente a ' . $mesPagado;
+                }
+            }
+
+            $dataUpdate = [
+                'tipo' => 'ingreso',
+                'categoria' => $tx->categoria,
+                'monto' => $monto,
+                'descripcion' => $descripcion,
+                'fecha' => $fecha,
+                'socio_id' => $tx->socio_id,
+                'mes_pagado' => $mesPagado,
+            ];
+        } else {
+            $tipo = $post['tipo'] ?? $tx->tipo;
+            $categoria = trim($post['categoria'] ?? $tx->categoria);
+            $monto = (int)($post['monto'] ?? 0);
+            $socioId = !empty($post['socio_id']) ? (int)$post['socio_id'] : null;
+
+            if (!in_array($tipo, ['ingreso', 'egreso'], true) || $categoria === '' || $monto <= 0) {
+                $_SESSION['error_msg'] = 'Complete tipo, categoría y monto válidos.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            $this->conceptoModel->ensureDefaults($juntaId);
+            if (!$this->conceptoModel->isConceptoValido($juntaId, $tipo, $categoria)) {
+                $_SESSION['error_msg'] = 'La categoría seleccionada no es válida.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            if ($socioId) {
+                $socio = $this->userModel->getSocioOperativoById($socioId, $juntaId);
+                if (!$socio) {
+                    $_SESSION['error_msg'] = 'El socio seleccionado no es válido.';
+                    $this->redirect('/admin/finanzas');
+                    return;
+                }
+            }
+
+            $dataUpdate = [
+                'tipo' => $tipo,
+                'categoria' => $categoria,
+                'monto' => $monto,
+                'descripcion' => $descripcion !== '' ? $descripcion : null,
+                'fecha' => $fecha,
+                'socio_id' => $socioId,
+                'mes_pagado' => null,
+            ];
+        }
+
+        if ($this->transaccionModel->updateTransaccion($id, $juntaId, $dataUpdate)) {
+            $_SESSION['success_msg'] = 'Movimiento actualizado correctamente.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo actualizar el movimiento.';
+        }
+        $this->redirect('/admin/finanzas');
+    }
+
+    public function transaccion_eliminar() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $id = (int)($post['transaccion_id'] ?? 0);
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $tx = $this->transaccionModel->getTransaccionByIdAndJunta($id, $juntaId);
+
+        if (!$tx) {
+            $_SESSION['error_msg'] = 'Movimiento no encontrado.';
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $errMes = $this->assertTransaccionMesAbierto($juntaId, $tx->fecha);
+        if ($errMes) {
+            $_SESSION['error_msg'] = $errMes;
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        if ($this->transaccionModel->deleteTransaccion($id, $juntaId)) {
+            $_SESSION['success_msg'] = 'Movimiento eliminado correctamente.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo eliminar el movimiento.';
         }
         $this->redirect('/admin/finanzas');
     }

@@ -3351,6 +3351,60 @@ body.cb-loading-active .main-content {
 .cb-reunion-check { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; margin-bottom: 0.35rem; cursor: pointer; }
 .cb-reunion-socio-list { max-height: 180px; overflow-y: auto; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-sm); }
 .cb-reunion-next-banner { margin-bottom: 1.25rem; }
+
+/* Finanzas — buscador de socios */
+.cb-socio-picker {
+    position: relative;
+}
+.cb-socio-picker-input {
+    width: 100%;
+    padding-right: 2rem;
+}
+.cb-socio-picker-clear {
+    position: absolute;
+    right: 0.45rem;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25rem;
+}
+.cb-socio-picker-clear:hover { color: var(--text-main); }
+.cb-socio-picker-list {
+    position: absolute;
+    z-index: 50;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 0.35rem 0;
+    list-style: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+.cb-socio-picker-item {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.84rem;
+    cursor: pointer;
+    color: var(--text-main);
+}
+.cb-socio-picker-item:hover,
+.cb-socio-picker-item.is-active {
+    background: rgba(99, 102, 241, 0.12);
+}
+.cb-socio-picker-empty {
+    padding: 0.65rem 0.85rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
 .cb-cal-nav { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
 .cb-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .cb-cal-head { text-align: center; font-size: 0.68rem; font-weight: 700; color: var(--text-muted); padding: 0.25rem; }

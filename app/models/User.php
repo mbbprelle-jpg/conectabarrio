@@ -398,7 +398,8 @@ class User extends Model {
             return $this->getSociosByJunta($juntaId);
         }
         $this->db->query("SELECT * FROM usuarios WHERE junta_id = :junta_id AND rol = 'socio' AND estado = 1
-            AND status IN ('active', 'prevalidar') ORDER BY nombre ASC");
+            AND status IN ('active', 'prevalidar')
+            ORDER BY nombre ASC, apellido_paterno ASC, apellido_materno ASC");
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->resultSet();
     }
