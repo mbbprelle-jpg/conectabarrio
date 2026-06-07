@@ -126,6 +126,48 @@ function cbFinanzasSocioLabel($socio) {
     </div>
 <?php endif; ?>
 
+<?php
+$rango = $data['rango_fechas'] ?? ['min' => date('Y-m-d'), 'max' => date('Y-m-d'), 'meses_cerrados' => [], 'mes_inicio' => date('Y-m')];
+$fechaMin = $rango['min'];
+$fechaMax = $rango['max'];
+$fechaDefault = ($fechaMax >= $fechaMin) ? $fechaMax : $fechaMin;
+$mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
+?>
+
+<?php if (!empty($data['puede_editar_saldo_inicial'])): ?>
+<div class="card card-primary cb-saldo-inicial-setup" style="margin-bottom: 1.5rem; border-color: rgba(99,102,241,0.25); background: radial-gradient(100% 100% at 0% 0%, rgba(99,102,241,0.08) 0%, transparent 100%), var(--bg-card);">
+    <h3 class="card-title">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+        Configuración de arranque — Saldo inicial de caja
+    </h3>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.45;">
+        Declare una sola vez el dinero contable con el que inicia su organización en ConectaBarrio (caja + banco).
+        Puede editarlo hasta realizar el <strong>primer cierre mensual</strong>; después quedará bloqueado.
+    </p>
+    <form action="<?php echo URLROOT; ?>/admin/guardar_saldo_inicial" method="POST" style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end;">
+        <div class="form-group" style="flex: 1; min-width: 220px; margin-bottom: 0;">
+            <label for="saldo_inicial" class="form-label">Saldo inicial ($) *</label>
+            <input type="number" name="saldo_inicial" id="saldo_inicial" class="form-control" min="0" step="1" placeholder="Ej: 150000" required
+                value="<?php echo $data['saldo_inicial'] !== null ? (int)$data['saldo_inicial'] : ''; ?>">
+        </div>
+        <button type="submit" class="btn btn-primary" style="min-width: 160px;">
+            <?php echo !empty($data['saldo_inicial_declarado']) ? 'Actualizar saldo' : 'Guardar saldo inicial'; ?>
+        </button>
+    </form>
+    <div style="margin-top: 0.85rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between;">
+        <small style="color: var(--text-muted); font-size: 0.72rem;">
+            Inicio de actividades: <?php echo htmlspecialchars($mesInicioLabel); ?> · Personalice sus categorías en
+            <a href="<?php echo URLROOT; ?>/admin/conceptos_caja" style="color: var(--primary);">Conceptos de Caja</a>.
+        </small>
+        <?php if (!empty($data['saldo_inicial_declarado'])): ?>
+            <span class="badge badge-info">Saldo declarado: $<?php echo number_format((int)$data['saldo_inicial'], 0, ',', '.'); ?></span>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<div class="grid-2col">
+
     <!-- COLUMNA REGISTRO FINANCIERO (IZQUIERDA) -->
     <div style="display: flex; flex-direction: column; gap: 1.5rem;">
         
@@ -152,9 +194,10 @@ function cbFinanzasSocioLabel($socio) {
                 </div>
 
                 <div class="grid-2col" style="margin-bottom: 1rem;">
-                    <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-group cb-date-field-wrap" style="margin-bottom: 0;">
                         <label for="fecha_pago" class="form-label">Fecha de Pago *</label>
-                        <input type="date" name="fecha_pago" id="fecha_pago" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                        <input type="date" name="fecha_pago" id="fecha_pago" class="form-control cb-finanzas-date" value="<?php echo htmlspecialchars($fechaDefault); ?>" min="<?php echo htmlspecialchars($fechaMin); ?>" max="<?php echo htmlspecialchars($fechaMax); ?>" required>
+                        <small class="cb-date-hint">Permitido entre <?php echo date('d-m-Y', strtotime($fechaMin)); ?> y hoy. No se admiten meses cerrados.</small>
                     </div>
                     <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end; padding-bottom: 0.65rem;">
                         <label class="switch-container" style="display: inline-flex; align-items: center; cursor: pointer; gap: 0.6rem; user-select: none;">
@@ -201,6 +244,10 @@ function cbFinanzasSocioLabel($socio) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
                 Otros Movimientos de Caja
             </h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted); margin: -0.5rem 0 1rem;">
+                Categorías definidas por su organización —
+                <a href="<?php echo URLROOT; ?>/admin/conceptos_caja" style="color: var(--primary);">administrar conceptos</a>.
+            </p>
 
             <form action="<?php echo URLROOT; ?>/admin/registrar_transaccion" method="POST">
                 
@@ -225,9 +272,10 @@ function cbFinanzasSocioLabel($socio) {
                         <label for="monto" class="form-label">Monto ($) *</label>
                         <input type="number" name="monto" id="monto" class="form-control" placeholder="Ej: 25000" min="1" required>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-group cb-date-field-wrap" style="margin-bottom: 0;">
                         <label for="fecha" class="form-label">Fecha del Movimiento *</label>
-                        <input type="date" name="fecha" id="fecha" class="form-control" value="<?php echo date('Y-m-d'); ?>" required>
+                        <input type="date" name="fecha" id="fecha" class="form-control cb-finanzas-date" value="<?php echo htmlspecialchars($fechaDefault); ?>" min="<?php echo htmlspecialchars($fechaMin); ?>" max="<?php echo htmlspecialchars($fechaMax); ?>" required>
+                        <small class="cb-date-hint">Permitido entre <?php echo date('d-m-Y', strtotime($fechaMin)); ?> y hoy. No se admiten meses cerrados.</small>
                     </div>
                 </div>
 
@@ -266,18 +314,24 @@ function cbFinanzasSocioLabel($socio) {
         </h3>
 
         <!-- Caja Resumen Rápido -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem 1rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.75rem; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.75rem 1rem;">
+            <?php if ($data['saldo_inicial'] !== null): ?>
+            <div style="text-align: center;">
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Saldo inicial</div>
+                <strong style="color: var(--info); font-size: 0.9rem;">$<?php echo number_format($data['saldo_inicial'], 0, ',', '.'); ?></strong>
+            </div>
+            <?php endif; ?>
             <div style="text-align: center;">
                 <div style="font-size: 0.75rem; color: var(--text-muted);">Ingresos</div>
                 <strong style="color: var(--success); font-size: 0.95rem;">+$<?php echo number_format($data['balance']['ingresos'], 0, ',', '.'); ?></strong>
             </div>
-            <div style="text-align: center; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
+            <div style="text-align: center;">
                 <div style="font-size: 0.75rem; color: var(--text-muted);">Egresos</div>
                 <strong style="color: var(--danger); font-size: 0.95rem;">-$<?php echo number_format($data['balance']['egresos'], 0, ',', '.'); ?></strong>
             </div>
             <div style="text-align: center;">
-                <div style="font-size: 0.75rem; color: var(--text-muted);">Balance</div>
-                <strong style="color: var(--primary); font-size: 0.95rem;">$<?php echo number_format($data['balance']['neto'], 0, ',', '.'); ?></strong>
+                <div style="font-size: 0.75rem; color: var(--text-muted);"><?php echo $data['saldo_inicial'] !== null ? 'Saldo contable' : 'Balance'; ?></div>
+                <strong style="color: var(--primary); font-size: 0.95rem;">$<?php echo number_format($data['balance']['contable'] ?? $data['balance']['neto'], 0, ',', '.'); ?></strong>
             </div>
         </div>
 
@@ -643,22 +697,43 @@ document.addEventListener('DOMContentLoaded', function() {
     const tipoSelect = document.getElementById('tipo');
     const catSelect = document.getElementById('categoria');
 
-    const ingresosCategorias = [
-        { val: 'Donación', text: 'Donación (Ingreso)' },
-        { val: 'Subsidio Municipal', text: 'Subsidio Municipal (Ingreso)' },
-        { val: 'Evento', text: 'Evento Vecinal (Ingreso)' },
-        { val: 'Otros', text: 'Otros Ingresos' }
-    ];
+    const ingresosCategorias = <?php echo json_encode(array_map(static fn($c) => ['val' => $c->nombre, 'text' => $c->nombre . ' (Ingreso)'], $data['conceptos_ingreso'] ?? []), JSON_UNESCAPED_UNICODE); ?>;
+    const egresosCategorias = <?php echo json_encode(array_map(static fn($c) => ['val' => $c->nombre, 'text' => $c->nombre . ' (Egreso)'], $data['conceptos_egreso'] ?? []), JSON_UNESCAPED_UNICODE); ?>;
 
-    const egresosCategorias = [
-        { val: 'Pago Luz', text: 'Pago de Luz (Egreso)' },
-        { val: 'Pago Agua', text: 'Pago de Agua (Egreso)' },
-        { val: 'Pago Gas', text: 'Pago de Gas (Egreso)' },
-        { val: 'Insumos Oficina', text: 'Insumos de Oficina (Egreso)' },
-        { val: 'Reparaciones', text: 'Reparaciones Sede/Plaza (Egreso)' },
-        { val: 'Gastos de Oficina', text: 'Gastos de Oficina (Egreso)' },
-        { val: 'Otros', text: 'Otros Egresos' }
-    ];
+    const finanzasFechaMin = <?php echo json_encode($fechaMin); ?>;
+    const finanzasFechaMax = <?php echo json_encode($fechaMax); ?>;
+    const finanzasMesesCerrados = <?php echo json_encode($rango['meses_cerrados'] ?? []); ?>;
+
+    function validarFechaFinanzasInput(input) {
+        if (!input || !input.value) return true;
+        const val = input.value;
+        if (val < finanzasFechaMin || val > finanzasFechaMax) {
+            alert('La fecha debe estar entre ' + finanzasFechaMin.split('-').reverse().join('-') + ' y hoy.');
+            input.value = val > finanzasFechaMax ? finanzasFechaMax : finanzasFechaMin;
+            return false;
+        }
+        const mes = val.substring(0, 7);
+        if (finanzasMesesCerrados.includes(mes)) {
+            alert('No puede registrar movimientos en el mes ' + mes + ' porque ya fue cerrado.');
+            input.value = finanzasFechaMax;
+            return false;
+        }
+        return true;
+    }
+
+    document.querySelectorAll('.cb-finanzas-date').forEach(function(input) {
+        input.addEventListener('change', function() { validarFechaFinanzasInput(this); });
+    });
+
+    [formCuota, document.querySelector('form[action*="registrar_transaccion"]')].forEach(function(form) {
+        if (!form) return;
+        form.addEventListener('submit', function(e) {
+            const dateInput = form.querySelector('.cb-finanzas-date');
+            if (dateInput && !validarFechaFinanzasInput(dateInput)) {
+                e.preventDefault();
+            }
+        });
+    });
 
     function populateCategorias() {
         if (!tipoSelect || !catSelect) return;
@@ -667,6 +742,15 @@ document.addEventListener('DOMContentLoaded', function() {
         catSelect.innerHTML = '';
 
         const list = (tipo === 'ingreso') ? ingresosCategorias : egresosCategorias;
+        if (list.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '-- Configure conceptos en Conceptos de Caja --';
+            catSelect.appendChild(opt);
+            catSelect.required = false;
+            return;
+        }
+        catSelect.required = true;
         list.forEach(c => {
             const opt = document.createElement('option');
             opt.value = c.val;

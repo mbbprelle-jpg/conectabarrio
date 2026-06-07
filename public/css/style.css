@@ -473,6 +473,43 @@ select.form-control {
     padding-right: 2.5rem;
 }
 
+/* Campos de fecha: icono de calendario visible sobre fondo oscuro */
+input[type="date"].form-control,
+input[type="month"].form-control {
+    color-scheme: dark;
+    position: relative;
+    padding-right: 2.75rem;
+    cursor: pointer;
+}
+
+input[type="date"].form-control::-webkit-calendar-picker-indicator,
+input[type="month"].form-control::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(1.15);
+    opacity: 0.92;
+    cursor: pointer;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.15rem;
+}
+
+input[type="date"].form-control::-webkit-calendar-picker-indicator:hover,
+input[type="month"].form-control::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    filter: invert(1) brightness(1.35);
+}
+
+.cb-date-field-wrap {
+    position: relative;
+}
+
+.cb-date-field-wrap .cb-date-hint {
+    display: block;
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
 /* Botones Premium */
 .btn {
     display: inline-flex;

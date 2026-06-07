@@ -132,4 +132,42 @@ class JuntaVecinos extends Model {
         $this->db->bind(':id', $id);
         return $this->db->execute();
     }
+
+    private static $hasSaldoInicialColumn = null;
+
+    public function hasSaldoInicialColumn(): bool {
+        if (self::$hasSaldoInicialColumn === null) {
+            try {
+                $this->db->query('SELECT saldo_inicial FROM juntas_vecinos LIMIT 1');
+                $this->db->execute();
+                self::$hasSaldoInicialColumn = true;
+            } catch (Exception $e) {
+                self::$hasSaldoInicialColumn = false;
+            }
+        }
+        return self::$hasSaldoInicialColumn;
+    }
+
+    public function getSaldoInicial(int $id): ?int {
+        if (!$this->hasSaldoInicialColumn()) {
+            return null;
+        }
+        $this->db->query('SELECT saldo_inicial FROM juntas_vecinos WHERE id = :id LIMIT 1');
+        $this->db->bind(':id', $id);
+        $row = $this->db->single();
+        if (!$row || $row->saldo_inicial === null) {
+            return null;
+        }
+        return (int)$row->saldo_inicial;
+    }
+
+    public function setSaldoInicial(int $id, int $monto): bool {
+        if (!$this->hasSaldoInicialColumn()) {
+            return false;
+        }
+        $this->db->query('UPDATE juntas_vecinos SET saldo_inicial = :saldo, saldo_inicial_actualizado_at = NOW() WHERE id = :id');
+        $this->db->bind(':saldo', max(0, $monto));
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
 }

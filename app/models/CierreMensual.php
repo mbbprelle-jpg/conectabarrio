@@ -149,8 +149,84 @@ class CierreMensual extends Model {
         if ($res) {
             return (int)$res->saldo_final;
         }
+
+        if ($this->esPrimerCierre($juntaId)) {
+            return $this->getSaldoInicialJunta($juntaId);
+        }
         
-        return 0; // Si no hay mes anterior cerrado (por ejemplo, en el primer cierre)
+        return 0;
+    }
+
+    public function getSaldoInicialJunta($juntaId) {
+        try {
+            $this->db->query('SELECT saldo_inicial FROM juntas_vecinos WHERE id = :id LIMIT 1');
+            $this->db->bind(':id', $juntaId);
+            $res = $this->db->single();
+            if ($res && $res->saldo_inicial !== null) {
+                return (int)$res->saldo_inicial;
+            }
+        } catch (Exception $e) {
+            // Columna aún no migrada
+        }
+        return 0;
+    }
+
+    public function getMesesCerrados($juntaId) {
+        $this->db->query('SELECT mes FROM cierres_mensuales WHERE junta_id = :junta_id ORDER BY mes ASC');
+        $this->db->bind(':junta_id', $juntaId);
+        $rows = $this->db->resultSet();
+        return array_map(static fn($row) => $row->mes, $rows);
+    }
+
+    public function getRangoFechasPermitidas($juntaId) {
+        $mesInicio = $this->getMesInicioJunta($juntaId);
+        $min = $mesInicio . '-01';
+        $mesesCerrados = $this->getMesesCerrados($juntaId);
+
+        if (!empty($mesesCerrados)) {
+            $ultimoCerrado = $mesesCerrados[count($mesesCerrados) - 1];
+            $dt = new DateTime($ultimoCerrado . '-01');
+            $dt->modify('+1 month');
+            $minTrasCierre = $dt->format('Y-m-d');
+            if ($minTrasCierre > $min) {
+                $min = $minTrasCierre;
+            }
+        }
+
+        return [
+            'min' => $min,
+            'max' => date('Y-m-d'),
+            'meses_cerrados' => $mesesCerrados,
+            'mes_inicio' => $mesInicio,
+        ];
+    }
+
+    public function validarFechaMovimiento($juntaId, $fecha) {
+        $fecha = substr(trim((string)$fecha), 0, 10);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            return 'La fecha del movimiento no es válida.';
+        }
+
+        $rango = $this->getRangoFechasPermitidas($juntaId);
+
+        if ($fecha > $rango['max']) {
+            return 'La fecha no puede ser superior a hoy (' . date('d-m-Y') . ').';
+        }
+
+        if ($fecha < $rango['min']) {
+            if (!empty($rango['meses_cerrados'])) {
+                return 'La fecha cae en un mes ya cerrado o fuera del periodo abierto. Solo puede registrar movimientos desde el ' . date('d-m-Y', strtotime($rango['min'])) . '.';
+            }
+            $parts = explode('-', $rango['mes_inicio']);
+            return 'No puede registrar movimientos anteriores al inicio de actividades de la organización (' . ($parts[1] ?? '') . '-' . ($parts[0] ?? '') . ').';
+        }
+
+        $mesFecha = substr($fecha, 0, 7);
+        if ($this->checkCierreExist($juntaId, $mesFecha)) {
+            return 'El mes ' . $mesFecha . ' ya fue cerrado. No puede registrar movimientos en periodos cerrados.';
+        }
+
+        return null;
     }
 
     // Obtener la lista de transacciones del mes detallada

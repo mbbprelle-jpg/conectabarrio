@@ -10,6 +10,7 @@ class AdminController extends Controller {
     private $membresiaModel;
     private $invitationModel;
     private $cambioModel;
+    private $conceptoModel;
     private $db;
 
     public function __construct() {
@@ -23,6 +24,7 @@ class AdminController extends Controller {
         $this->membresiaModel = $this->model('Membresia');
         $this->invitationModel = $this->model('Invitation');
         $this->cambioModel = $this->model('SocioCambioSolicitud');
+        $this->conceptoModel = $this->model('FinanzaConcepto');
         $this->db = new Database();
     }
 
@@ -46,6 +48,30 @@ class AdminController extends Controller {
             $this->redirect('/admin/dashboard');
             exit;
         }
+    }
+
+    private function validarFechaFinanzas(int $juntaId, string $fecha): ?string {
+        return $this->cierreModel->validarFechaMovimiento($juntaId, $fecha);
+    }
+
+    private function finanzasContextData(int $juntaId): array {
+        $this->conceptoModel->ensureDefaults($juntaId);
+        $esPrimerCierre = $this->cierreModel->esPrimerCierre($juntaId);
+        $saldoInicial = $this->juntaModel->getSaldoInicial($juntaId);
+        $rangoFechas = $this->cierreModel->getRangoFechasPermitidas($juntaId);
+        $conceptosIngreso = $this->conceptoModel->getByJunta($juntaId, 'ingreso', true);
+        $conceptosEgreso = $this->conceptoModel->getByJunta($juntaId, 'egreso', true);
+
+        return [
+            'es_primer_cierre' => $esPrimerCierre,
+            'puede_editar_saldo_inicial' => $esPrimerCierre,
+            'saldo_inicial' => $saldoInicial,
+            'saldo_inicial_declarado' => $saldoInicial !== null,
+            'rango_fechas' => $rangoFechas,
+            'conceptos_ingreso' => $conceptosIngreso,
+            'conceptos_egreso' => $conceptosEgreso,
+            'mes_inicio' => $rangoFechas['mes_inicio'],
+        ];
     }
 
     private function requireViewMapaSocios() {
@@ -1328,24 +1354,169 @@ class AdminController extends Controller {
     // =========================================================================
     public function finanzas() {
         $this->requireRegisterPayments();
-        $juntaId = $_SESSION['user_junta_id'];
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $ctx = $this->finanzasContextData($juntaId);
+        $balance = $this->transaccionModel->getBalanceConsolidado($juntaId);
+        if ($ctx['saldo_inicial'] !== null) {
+            $balance['saldo_inicial'] = $ctx['saldo_inicial'];
+            $balance['contable'] = $ctx['saldo_inicial'] + $balance['neto'];
+        } else {
+            $balance['saldo_inicial'] = null;
+            $balance['contable'] = $balance['neto'];
+        }
 
-        $data = [
+        $data = array_merge([
             'title' => 'Flujo de Caja',
             'header_title' => 'Registro de Caja (Ingresos y Egresos)',
             'header_subtitle' => 'Registre recaudación de cuotas, otros ingresos y gastos generales de la junta',
             'active_menu' => 'finanzas',
             'socios' => $this->userModel->getSociosOperativosByJunta($juntaId),
             'transacciones' => $this->transaccionModel->getTransaccionesByJunta($juntaId),
-            'balance' => $this->transaccionModel->getBalanceConsolidado($juntaId),
+            'balance' => $balance,
             'success' => $_SESSION['success_msg'] ?? '',
-            'error' => $_SESSION['error_msg'] ?? ''
-        ];
+            'error' => $_SESSION['error_msg'] ?? '',
+        ], $ctx);
 
         unset($_SESSION['success_msg']);
         unset($_SESSION['error_msg']);
 
         $this->view('admin/finanzas', $data);
+    }
+
+    public function guardar_saldo_inicial() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        if (!$this->cierreModel->esPrimerCierre($juntaId)) {
+            $_SESSION['error_msg'] = 'El saldo inicial ya no puede modificarse porque existe al menos un cierre mensual.';
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        if (!isset($post['saldo_inicial']) || $post['saldo_inicial'] === '') {
+            $_SESSION['error_msg'] = 'Debe indicar el saldo inicial de caja.';
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        $monto = (int)$post['saldo_inicial'];
+        if ($monto < 0) {
+            $_SESSION['error_msg'] = 'El saldo inicial no puede ser negativo.';
+            $this->redirect('/admin/finanzas');
+            return;
+        }
+
+        if ($this->juntaModel->setSaldoInicial($juntaId, $monto)) {
+            $_SESSION['success_msg'] = 'Saldo inicial de caja guardado: $' . number_format($monto, 0, ',', '.') . '. Podrá editarlo hasta realizar el primer cierre mensual.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo guardar el saldo inicial. Verifique que la migración SQL esté aplicada.';
+        }
+        $this->redirect('/admin/finanzas');
+    }
+
+    public function conceptos_caja() {
+        $this->requireRegisterPayments();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $this->conceptoModel->ensureDefaults($juntaId);
+
+        $data = [
+            'title' => 'Conceptos de Caja',
+            'header_title' => 'Conceptos de Ingreso y Egreso',
+            'header_subtitle' => 'Personalice cómo agrupa los movimientos de caja su organización',
+            'active_menu' => 'conceptos_caja',
+            'conceptos_ingreso' => $this->conceptoModel->getByJunta($juntaId, 'ingreso'),
+            'conceptos_egreso' => $this->conceptoModel->getByJunta($juntaId, 'egreso'),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ];
+
+        unset($_SESSION['success_msg']);
+        unset($_SESSION['error_msg']);
+
+        $this->view('admin/conceptos_caja', $data);
+    }
+
+    public function concepto_caja_crear() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/conceptos_caja');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $tipo = $post['tipo'] ?? '';
+        $nombre = trim($post['nombre'] ?? '');
+
+        if (!in_array($tipo, ['ingreso', 'egreso'], true) || $nombre === '') {
+            $_SESSION['error_msg'] = 'Indique tipo y nombre del concepto.';
+            $this->redirect('/admin/conceptos_caja');
+            return;
+        }
+
+        if ($this->conceptoModel->createConcepto($juntaId, $tipo, $nombre)) {
+            $_SESSION['success_msg'] = 'Concepto "' . htmlspecialchars($nombre) . '" creado correctamente.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo crear el concepto. Puede que ya exista con ese nombre.';
+        }
+        $this->redirect('/admin/conceptos_caja');
+    }
+
+    public function concepto_caja_actualizar() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/conceptos_caja');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($post['concepto_id'] ?? 0);
+        $nombre = trim($post['nombre'] ?? '');
+        $activo = isset($post['activo']) && $post['activo'] === '1';
+
+        if ($id <= 0 || $nombre === '') {
+            $_SESSION['error_msg'] = 'Datos incompletos para actualizar el concepto.';
+            $this->redirect('/admin/conceptos_caja');
+            return;
+        }
+
+        if ($this->conceptoModel->updateConcepto($id, $juntaId, $nombre, $activo)) {
+            $_SESSION['success_msg'] = 'Concepto actualizado correctamente.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo actualizar el concepto.';
+        }
+        $this->redirect('/admin/conceptos_caja');
+    }
+
+    public function concepto_caja_eliminar() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/conceptos_caja');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($post['concepto_id'] ?? 0);
+
+        if ($id <= 0) {
+            $_SESSION['error_msg'] = 'Concepto no válido.';
+            $this->redirect('/admin/conceptos_caja');
+            return;
+        }
+
+        if ($this->conceptoModel->deleteConcepto($id, $juntaId)) {
+            $_SESSION['success_msg'] = 'Concepto eliminado.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo eliminar el concepto.';
+        }
+        $this->redirect('/admin/conceptos_caja');
     }
 
     // Registrar pago de cuota de socio (POST, soporta múltiples meses)
@@ -1381,6 +1552,13 @@ class AdminController extends Controller {
 
             if ($esCondonado && empty($justificacion)) {
                 $_SESSION['error_msg'] = 'Debe indicar una justificación/motivo para eximir el pago de las cuotas.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            $fechaError = $this->validarFechaFinanzas($juntaId, $fechaPago);
+            if ($fechaError) {
+                $_SESSION['error_msg'] = $fechaError;
                 $this->redirect('/admin/finanzas');
                 return;
             }
@@ -1567,6 +1745,22 @@ class AdminController extends Controller {
             if (empty($tipo) || empty($categoria) || empty($monto) || $monto <= 0) {
                 $_SESSION['error_msg'] = 'Por favor, rellene todos los campos requeridos correctamente.';
                 $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            $juntaId = (int)$_SESSION['user_junta_id'];
+            $this->conceptoModel->ensureDefaults($juntaId);
+            if (!$this->conceptoModel->isConceptoValido($juntaId, $tipo, $categoria)) {
+                $_SESSION['error_msg'] = 'La categoría seleccionada no es válida para su organización.';
+                $this->redirect('/admin/finanzas');
+                return;
+            }
+
+            $fechaError = $this->validarFechaFinanzas($juntaId, $fecha);
+            if ($fechaError) {
+                $_SESSION['error_msg'] = $fechaError;
+                $this->redirect('/admin/finanzas');
+                return;
             }
 
             // Validar que el socio pertenece a la misma junta si se especificó
@@ -1886,6 +2080,7 @@ class AdminController extends Controller {
         $mesInicio = $this->cierreModel->getMesInicioJunta($juntaId);
         $mesPrevioSinCerrar = $this->cierreModel->tieneMesPrevioSinCerrar($juntaId, $mesSeleccionado);
         $esFuturoOMesEnCurso = ($mesSeleccionado >= date('Y-m'));
+        $saldoInicialJunta = $this->juntaModel->getSaldoInicial($juntaId);
 
         $data = [
             'title' => 'Cierres Mensuales',
@@ -1900,6 +2095,8 @@ class AdminController extends Controller {
             'mes_inicio' => $mesInicio,
             'mes_previo_sin_cerrar' => $mesPrevioSinCerrar,
             'es_futuro_o_mes_en_curso' => $esFuturoOMesEnCurso,
+            'saldo_inicial_junta' => $saldoInicialJunta,
+            'saldo_inicial_declarado' => $saldoInicialJunta !== null,
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? ''
         ];
@@ -1945,13 +2142,17 @@ class AdminController extends Controller {
             // Obtener el resumen del mes
             $resumen = $this->cierreModel->getResumenFinancieroMes($juntaId, $mes);
             
-            // Si es el primer cierre, permitir saldo inicial manual
             $esPrimerCierre = $this->cierreModel->esPrimerCierre($juntaId);
             if ($esPrimerCierre) {
-                $saldoAnterior = isset($post['saldo_anterior_manual']) ? (int)$post['saldo_anterior_manual'] : 0;
-            } else {
-                $saldoAnterior = $this->cierreModel->getSaldoAnterior($juntaId, $mes);
+                $saldoInicial = $this->juntaModel->getSaldoInicial($juntaId);
+                if ($saldoInicial === null) {
+                    $_SESSION['error_msg'] = 'Debe declarar el saldo inicial de caja en Finanzas antes de realizar el primer cierre mensual.';
+                    $this->redirect('/admin/cierres');
+                    return;
+                }
             }
+
+            $saldoAnterior = $this->cierreModel->getSaldoAnterior($juntaId, $mes);
             
             $saldoFinal = $saldoAnterior + $resumen['saldo_neto'];
             

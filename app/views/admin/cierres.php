@@ -150,15 +150,21 @@
                     </div>
 
                     <?php if ($data['es_primer_cierre']): ?>
-                        <!-- Entrada Saldo Inicial Manual (Solo primer cierre) -->
                         <div class="form-group" style="background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.15); padding: 1rem; border-radius: var(--radius-sm); margin-bottom: 1.25rem;">
-                            <label for="saldo_anterior_manual" class="form-label" style="color: var(--primary); font-weight: bold; font-family: var(--font-heading);">
-                                Saldo Inicial que viene del Mes Anterior ($) *
-                            </label>
-                            <input type="number" name="saldo_anterior_manual" id="saldo_anterior_manual" class="form-control" style="background: var(--bg-main); border-color: rgba(99,102,241,0.3); font-size: 1.1rem; font-weight: bold; color: var(--text-main);" placeholder="Ej: 100000" min="0" value="0" required>
-                            <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem; line-height: 1.3;">
-                                ⚠️ <strong>Primer cierre histórico de la organización</strong>. Escriba manualmente el monto contable total con el que cuenta la junta antes de realizar este primer cierre. En los meses posteriores, el saldo se calculará automáticamente.
-                            </small>
+                            <?php if ($data['saldo_inicial_declarado']): ?>
+                                <span style="color: var(--text-muted); font-size: 0.85rem; display: block;">Saldo inicial de caja (declarado en Finanzas):</span>
+                                <strong style="font-size: 1.15rem; color: var(--primary); font-family: var(--font-heading); display: block; margin-top: 0.25rem;">
+                                    $<?php echo number_format((int)$data['saldo_inicial_junta'], 0, ',', '.'); ?>
+                                </strong>
+                                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.35rem; line-height: 1.3;">
+                                    Este monto se usará como saldo anterior en el primer cierre. Si necesita corregirlo, edítelo en <a href="<?php echo URLROOT; ?>/admin/finanzas" style="color: var(--primary);">Finanzas</a> antes de cerrar.
+                                </small>
+                            <?php else: ?>
+                                <span style="color: var(--warning); font-size: 0.85rem; font-weight: 600; display: block;">⚠️ Falta declarar el saldo inicial</span>
+                                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.35rem; line-height: 1.3;">
+                                    Antes del primer cierre debe registrar el saldo inicial de caja en <a href="<?php echo URLROOT; ?>/admin/finanzas" style="color: var(--primary);">Finanzas → Configuración de arranque</a>.
+                                </small>
+                            <?php endif; ?>
                         </div>
                     <?php endif; ?>
                     
@@ -550,42 +556,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const ingresosMes = <?php echo (int)($data['resumen_mes']['ingresos'] ?? 0); ?>;
     const egresosMes = <?php echo (int)($data['resumen_mes']['egresos'] ?? 0); ?>;
     const saldoNetoMes = <?php echo (int)($data['resumen_mes']['saldo_neto'] ?? 0); ?>;
-    const esPrimerCierre = <?php echo $data['es_primer_cierre'] ? 'true' : 'false'; ?>;
     const saldoAnteriorInicial = <?php echo (int)($data['resumen_mes']['saldo_anterior'] ?? 0); ?>;
-    
     // Obtener nombres de meses de PHP
     const mesNombreSeleccionado = "<?php 
         $parts = explode('-', $data['mes_seleccionado']);
         echo htmlspecialchars(($meses[$parts[1]] ?? 'Mes') . ' ' . $parts[0]);
     ?>";
 
-    const saldoAnteriorInput = document.getElementById('saldo_anterior_manual');
-    const cardSaldoAnterior = document.getElementById('card_saldo_anterior');
-    const cardSaldoFinal = document.getElementById('card_saldo_final');
-
     function formatCLP(val) {
         return '$' + new Intl.NumberFormat('es-CL').format(val);
-    }
-
-    if (saldoAnteriorInput && cardSaldoAnterior && cardSaldoFinal) {
-        saldoAnteriorInput.addEventListener('input', function() {
-            let val = parseInt(this.value) || 0;
-            if (val < 0) {
-                val = 0;
-                this.value = 0;
-            }
-            
-            let finalVal = val + saldoNetoMes;
-            
-            cardSaldoAnterior.textContent = formatCLP(val);
-            cardSaldoFinal.textContent = formatCLP(finalVal);
-            
-            if (finalVal >= 0) {
-                cardSaldoFinal.style.color = 'var(--success)';
-            } else {
-                cardSaldoFinal.style.color = 'var(--danger)';
-            }
-        });
     }
 
     // 3. Interceptar submit de Cierre Mensual y mostrar Modal Glassmorphic
@@ -621,7 +600,7 @@ document.addEventListener('DOMContentLoaded', function() {
         form.addEventListener('submit', function(e) {
             e.preventDefault(); // Detener envío por defecto
             
-            let ant = esPrimerCierre && saldoAnteriorInput ? (parseInt(saldoAnteriorInput.value) || 0) : saldoAnteriorInicial;
+            let ant = saldoAnteriorInicial;
             let fin = ant + saldoNetoMes;
             
             // Poblar valores formateados
