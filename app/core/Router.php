@@ -41,6 +41,8 @@ class Router {
             }
         } elseif ($this->currentController instanceof AdminController && method_exists($this->currentController, 'dashboard')) {
             $this->currentMethod = 'dashboard';
+        } elseif (method_exists($this->currentController, 'index')) {
+            $this->currentMethod = 'index';
         }
 
         // 3. Obtener parámetros restantes
