@@ -481,34 +481,103 @@ document.addEventListener('DOMContentLoaded', function() {
     const authModalOverlay = document.getElementById('authModalOverlay');
     const triggerButtons = document.querySelectorAll('.trigger-login');
     const modalCloseBtn = document.getElementById('modalCloseBtn');
+    const loginPasswordMount = document.getElementById('loginPasswordMount');
+    const loginForm = document.getElementById('loginForm');
+    const inputRut = document.getElementById('rut_or_email');
+
+    function mountLoginPasswordField() {
+        if (!loginPasswordMount || loginPasswordMount.querySelector('input[name="password"]')) {
+            return;
+        }
+        loginPasswordMount.innerHTML =
+            '<label for="password" class="form-label">Contraseña</label>' +
+            '<div class="password-input-wrap">' +
+            '<input type="password" name="password" id="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">' +
+            '<button type="button" class="password-toggle-btn" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">' +
+            '<svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' +
+            '<svg class="icon-eye-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>' +
+            '</button></div>';
+        bindPasswordToggleButtons(loginPasswordMount);
+    }
+
+    function bindPasswordToggleButtons(root) {
+        (root || document).querySelectorAll('.password-toggle-btn').forEach(function(btn) {
+            if (btn.dataset.boundLoginToggle) return;
+            btn.dataset.boundLoginToggle = '1';
+            btn.addEventListener('click', function() {
+                const wrap = this.closest('.password-input-wrap');
+                const input = wrap ? wrap.querySelector('input') : null;
+                if (!input) return;
+                const visible = input.type === 'text';
+                input.type = visible ? 'password' : 'text';
+                this.classList.toggle('is-visible', !visible);
+                this.setAttribute('aria-pressed', visible ? 'false' : 'true');
+                this.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+                input.focus();
+            });
+        });
+    }
+
+    function openAuthModal() {
+        if (!authModalOverlay) return;
+        authModalOverlay.classList.add('active');
+        authModalOverlay.removeAttribute('inert');
+        authModalOverlay.setAttribute('aria-hidden', 'false');
+        mountLoginPasswordField();
+        if (inputRut) {
+            inputRut.setAttribute('tabindex', '0');
+            inputRut.setAttribute('autocomplete', 'username');
+            setTimeout(function() { inputRut.focus(); }, 120);
+        }
+        if (loginForm) {
+            loginForm.setAttribute('autocomplete', 'on');
+        }
+    }
+
+    function closeAuthModal() {
+        if (!authModalOverlay) return;
+        authModalOverlay.classList.remove('active');
+        authModalOverlay.setAttribute('inert', '');
+        authModalOverlay.setAttribute('aria-hidden', 'true');
+        if (inputRut) {
+            inputRut.setAttribute('tabindex', '-1');
+            inputRut.setAttribute('autocomplete', 'off');
+            inputRut.blur();
+        }
+        if (loginForm) {
+            loginForm.setAttribute('autocomplete', 'off');
+        }
+    }
 
     if (authModalOverlay) {
         triggerButtons.forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.preventDefault();
-                authModalOverlay.classList.add('active');
-                // Poner el foco en el primer input al abrir
-                const inputRut = document.getElementById('rut_or_email');
-                if (inputRut) {
-                    setTimeout(function() {
-                        inputRut.focus();
-                    }, 100);
-                }
+                openAuthModal();
             });
         });
 
         if (modalCloseBtn) {
-            modalCloseBtn.addEventListener('click', function() {
-                authModalOverlay.classList.remove('active');
-            });
+            modalCloseBtn.addEventListener('click', closeAuthModal);
         }
 
-        // Cerrar con la tecla Escape
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape' && authModalOverlay.classList.contains('active')) {
-                authModalOverlay.classList.remove('active');
+        authModalOverlay.addEventListener('click', function(e) {
+            if (e.target === authModalOverlay) {
+                closeAuthModal();
             }
         });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && authModalOverlay.classList.contains('active')) {
+                closeAuthModal();
+            }
+        });
+
+        if (authModalOverlay.classList.contains('active')) {
+            authModalOverlay.removeAttribute('inert');
+            authModalOverlay.setAttribute('aria-hidden', 'false');
+            bindPasswordToggleButtons(loginPasswordMount);
+        }
     }
 
     // Teléfono Chile (+56 + 9 dígitos ingresados por el usuario)

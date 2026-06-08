@@ -164,7 +164,10 @@
 </div>
 
 <!-- Modal de Autenticación (Glassmorphism Premium) -->
-<div class="auth-modal-overlay <?php echo !empty($data['error']) ? 'active' : ''; ?>" id="authModalOverlay">
+<div class="auth-modal-overlay <?php echo !empty($data['error']) ? 'active' : ''; ?>"
+     id="authModalOverlay"
+     <?php echo empty($data['error']) ? 'inert' : ''; ?>
+     aria-hidden="<?php echo empty($data['error']) ? 'true' : 'false'; ?>">
     <div class="auth-modal login-card">
         <!-- Botón de Cerrar (solo X) -->
         <button class="modal-close" id="modalCloseBtn">
@@ -196,8 +199,8 @@
             </div>
         <?php endif; ?>
 
-        <!-- Formulario de Acceso Seguro -->
-        <form action="<?php echo URLROOT; ?>/auth/authenticate" method="POST">
+        <!-- Formulario de Acceso Seguro (contraseña se monta al abrir el modal para evitar autofill en móvil) -->
+        <form action="<?php echo URLROOT; ?>/auth/authenticate" method="POST" id="loginForm" autocomplete="off">
             
             <div class="form-group">
                 <label for="rut_or_email" class="form-label">RUT o Correo Electrónico</label>
@@ -207,11 +210,16 @@
                        class="form-control" 
                        placeholder="Ej: 11.111.111-1 o admin@progreso.cl" 
                        value="<?php echo htmlspecialchars($data['rut_or_email']); ?>" 
-                       required 
-                       autofocus>
+                       required
+                       autocomplete="off"
+                       autocapitalize="off"
+                       autocorrect="off"
+                       spellcheck="false"
+                       <?php echo !empty($data['error']) ? 'autofocus' : 'tabindex="-1"'; ?>>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" id="loginPasswordMount">
+                <?php if (!empty($data['error'])): ?>
                 <label for="password" class="form-label">Contraseña</label>
                 <div class="password-input-wrap">
                     <input type="password"
@@ -219,8 +227,9 @@
                            id="password"
                            class="form-control"
                            placeholder="••••••••"
-                           required>
-                    <button type="button" class="password-toggle-btn" id="togglePasswordBtn" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">
+                           required
+                           autocomplete="current-password">
+                    <button type="button" class="password-toggle-btn" aria-label="Mostrar contraseña" aria-pressed="false" title="Mostrar contraseña">
                         <svg class="icon-eye" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
                             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                             <circle cx="12" cy="12" r="3"></circle>
@@ -232,6 +241,7 @@
                         </svg>
                     </button>
                 </div>
+                <?php endif; ?>
             </div>
 
             <p style="font-size: 0.72rem; color: var(--text-muted); margin: -0.25rem 0 0.75rem;">
