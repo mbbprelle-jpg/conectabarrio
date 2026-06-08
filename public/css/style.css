@@ -1593,7 +1593,7 @@ html {
     text-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
 }
 
-/* Sección Hero — plaza comunitaria (recorte superior oculta texto stock) */
+/* Sección Hero — foto visible + panel legible sobre el texto */
 .landing-hero {
     position: relative;
     min-height: 90vh;
@@ -1602,7 +1602,7 @@ html {
     padding: 7rem 5% 4rem;
     background-color: #030712;
     background-repeat: no-repeat;
-    background-position: center 62%;
+    background-position: center center;
     background-size: cover;
     overflow: hidden;
 }
@@ -1613,8 +1613,8 @@ html {
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 100px;
-    background: linear-gradient(to top, #030712, transparent);
+    height: 120px;
+    background: linear-gradient(to top, rgba(3, 7, 18, 0.75), transparent);
     z-index: 2;
     pointer-events: none;
 }
@@ -1623,25 +1623,32 @@ html {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, rgba(3, 7, 18, 0.35) 0%, transparent 50%, rgba(3, 7, 18, 0.15) 100%);
+    background: linear-gradient(105deg, rgba(3, 7, 18, 0.18) 0%, transparent 55%);
     z-index: 1;
     pointer-events: none;
 }
 
 .landing-hero-content {
-    max-width: 750px;
+    max-width: 720px;
     position: relative;
     z-index: 10;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1.35rem;
+    padding: 2rem 2.1rem;
+    border-radius: var(--radius-lg);
+    background: rgba(3, 7, 18, 0.48);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 .landing-hero-tag {
     align-self: flex-start;
-    background: rgba(99, 102, 241, 0.15);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    color: #818cf8;
+    background: rgba(99, 102, 241, 0.22);
+    border: 1px solid rgba(129, 140, 248, 0.45);
+    color: #c7d2fe;
     padding: 0.35rem 1rem;
     border-radius: 50px;
     font-size: 0.8rem;
@@ -1651,6 +1658,7 @@ html {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .landing-hero-tag::before {
@@ -1668,19 +1676,24 @@ html {
     font-weight: 800;
     line-height: 1.15;
     font-family: var(--font-heading);
+    color: #f8fafc;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
 }
 
 .landing-hero-title span {
-    background: var(--gradient-primary);
+    background: linear-gradient(135deg, #a5b4fc 0%, #67e8f9 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
 }
 
 .landing-hero-desc {
-    font-size: 1.15rem;
-    color: var(--text-muted);
-    line-height: 1.7;
+    font-size: 1.08rem;
+    color: #e2e8f0;
+    line-height: 1.75;
     max-width: 600px;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
 }
 
 .landing-hero-ctas {
@@ -1947,10 +1960,6 @@ html {
 
 /* Responsividad para la Landing */
 @media (max-width: 768px) {
-    .landing-hero-title {
-        font-size: 2.5rem;
-    }
-    
     .landing-nav-links {
         display: none; /* Simplificado para móviles */
     }
@@ -1960,8 +1969,17 @@ html {
     }
     
     .landing-hero {
-        padding: 6rem 1.5rem 3rem;
-        background-position: center 68%;
+        padding: 6rem 1.25rem 3rem;
+        background-position: center center;
+    }
+
+    .landing-hero-content {
+        padding: 1.5rem 1.35rem;
+        max-width: 100%;
+    }
+
+    .landing-hero-title {
+        font-size: 2.35rem;
     }
     
     .landing-hero-ctas {
