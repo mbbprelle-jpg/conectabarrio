@@ -7,7 +7,7 @@
 class Router {
     // Añadimos ruta pública para la presentación ejecutiva
     protected $publicRoutes = [
-        'presentacion' => ['controller' => 'PresentationController', 'method' => 'index']
+        'presentacion' => ['controller' => 'PresentacionController', 'method' => 'index']
     ];
     protected $currentController = 'AuthController';
     protected $currentMethod = 'login';
@@ -80,6 +80,7 @@ class Router {
         $publicRoutes = [
             'AuthController' => ['login', 'logout', 'authenticate', 'recover', 'select_context', 'set_context'],
             'InviteController' => ['registro', 'registrar', 'verificar_rut'],
+            'PresentacionController' => ['index'], // Ruta pública para la presentación ejecutiva
         ];
 
         // Si la ruta no es pública y el usuario no está logueado, forzar login
