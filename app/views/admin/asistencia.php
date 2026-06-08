@@ -179,8 +179,16 @@ $urlConvocar = $edit
             </div>
 
             <div class="cb-asistencia-panel" data-panel="qr" hidden>
+                <div class="cb-qr-scanner-toolbar">
+                    <button type="button" class="btn btn-primary btn-sm" id="cbQrScannerFullscreenBtn">
+                        Ampliar cámara (pantalla completa)
+                    </button>
+                    <span class="cb-qr-scanner-tip">Encuadre el QR del socio; no hace falta encajarlo en un recuadro pequeño.</span>
+                </div>
                 <div class="cb-qr-scanner-wrap">
-                    <div id="cbQrReader" class="cb-qr-reader"></div>
+                    <div class="cb-qr-scanner-camera-col">
+                        <div id="cbQrReader" class="cb-qr-reader"></div>
+                    </div>
                     <div class="cb-qr-scanner-side">
                         <div class="cb-qr-scanner-stat">
                             <span class="cb-qr-scanner-stat-num" id="cbQrPresentesLive"><?php echo (int)($data['presentes_count'] ?? 0); ?></span>
@@ -197,6 +205,15 @@ $urlConvocar = $edit
                         <ul id="cbQrScanLog" class="cb-qr-scan-log"></ul>
                     </div>
                 </div>
+            </div>
+
+            <div id="cbQrScannerFullscreen" class="cb-qr-scanner-fs" hidden>
+                <div class="cb-qr-scanner-fs-header">
+                    <strong>Escanear asistencia</strong>
+                    <button type="button" class="btn btn-secondary btn-sm cb-qr-scanner-fs-close">Cerrar</button>
+                </div>
+                <div id="cbQrReaderFs" class="cb-qr-reader cb-qr-reader--fs"></div>
+                <p class="cb-qr-scanner-fs-hint">Mantenga el celular a 20–40 cm del QR del socio</p>
             </div>
         </div>
 

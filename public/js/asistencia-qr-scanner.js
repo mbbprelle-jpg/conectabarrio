@@ -1,9 +1,10 @@
 /**
- * Escáner QR de asistencia — usa html5-qrcode (cámara del dispositivo).
+ * Escáner QR de asistencia — html5-qrcode, optimizado para móvil.
  */
 (function () {
     let scanner = null;
     let scanning = false;
+    let activeContainerId = null;
     const recentTokens = new Map();
     const DEDUPE_MS = 4000;
 
@@ -46,22 +47,64 @@
         row.classList.add('is-present');
     }
 
-    window.cbInitAsistenciaQrScanner = function (cfg) {
-        if (scanning || typeof Html5Qrcode === 'undefined') return;
-        const readerEl = document.getElementById(cfg.readerId);
-        if (!readerEl || readerEl.dataset.initialized === '1') return;
-        readerEl.dataset.initialized = '1';
+    function qrBoxSize(viewfinderWidth, viewfinderHeight) {
+        var w = viewfinderWidth || 300;
+        var h = viewfinderHeight || 300;
+        var minEdge = Math.min(w, h);
+        var size = Math.floor(minEdge * 0.92);
+        return { width: size, height: size };
+    }
 
-        scanner = new Html5Qrcode(cfg.readerId);
+    function buildScanConfig() {
+        return {
+            fps: 15,
+            /* Sin qrbox fijo pequeño: usa casi todo el visor */
+            qrbox: qrBoxSize,
+            aspectRatio: 1.333333,
+            disableFlip: false,
+            videoConstraints: {
+                facingMode: { ideal: 'environment' },
+                width: { min: 640, ideal: 1280, max: 1920 },
+                height: { min: 480, ideal: 720, max: 1080 }
+            }
+        };
+    }
+
+    function stopScanner() {
+        if (!scanner || !scanning) return Promise.resolve();
+        scanning = false;
+        return scanner.stop().then(function () {
+            return scanner.clear();
+        }).catch(function () { /* ya detenido */ });
+    }
+
+    function startOnContainer(containerId, cfg, onScan, feedback) {
+        activeContainerId = containerId;
+        scanner = new Html5Qrcode(containerId, /* verbose= */ false);
         scanning = true;
 
-        const feedback = document.getElementById(cfg.feedbackId);
-        const logEl = document.getElementById(cfg.logId);
-        let busy = false;
+        var cameraConfig = { facingMode: 'environment' };
 
-        const onScan = async function (decodedText) {
-            const tokenKey = decodedText.slice(0, 64);
-            const now = Date.now();
+        return scanner.start(cameraConfig, buildScanConfig(), onScan, function () { /* sin QR en frame */ })
+            .then(function () {
+                showFeedback(feedback, 'Cámara activa — encuadre el QR en pantalla', 'info');
+            });
+    }
+
+    window.cbInitAsistenciaQrScanner = function (cfg) {
+        if (typeof Html5Qrcode === 'undefined') return;
+
+        var readerEl = document.getElementById(cfg.readerId);
+        if (!readerEl) return;
+        if (readerEl.dataset.initialized === '1' && scanning) return;
+
+        var feedback = document.getElementById(cfg.feedbackId);
+        var logEl = document.getElementById(cfg.logId);
+        var busy = false;
+
+        var onScan = async function (decodedText) {
+            var tokenKey = decodedText.slice(0, 64);
+            var now = Date.now();
             if (busy) return;
             if (recentTokens.has(tokenKey) && now - recentTokens.get(tokenKey) < DEDUPE_MS) return;
 
@@ -69,25 +112,25 @@
             recentTokens.set(tokenKey, now);
 
             try {
-                const body = new URLSearchParams();
+                var body = new URLSearchParams();
                 body.set('reunion_id', String(cfg.reunionId));
                 body.set('payload', decodedText);
 
-                const res = await fetch(cfg.endpoint, {
+                var res = await fetch(cfg.endpoint, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
                     credentials: 'same-origin',
                     body: body.toString()
                 });
-                const data = await res.json();
+                var data = await res.json();
 
                 if (data.ok) {
                     playBeep(true);
                     showFeedback(feedback, data.message, data.ya_presente ? 'warn' : 'ok');
                     prependLog(logEl, data.message, data.ya_presente ? 'warn' : 'ok');
                     if (data.socio_id) markRowPresent(data.socio_id);
-                    const pLive = document.getElementById(cfg.presentesId);
-                    const pHead = document.getElementById(cfg.presentesHeaderId);
+                    var pLive = document.getElementById(cfg.presentesId);
+                    var pHead = document.getElementById(cfg.presentesHeaderId);
                     if (typeof data.presentes === 'number') {
                         if (pLive) pLive.textContent = String(data.presentes);
                         if (pHead) pHead.textContent = String(data.presentes);
@@ -105,31 +148,49 @@
             }
         };
 
+        readerEl.dataset.initialized = '1';
+
         Html5Qrcode.getCameras().then(function (cameras) {
             if (!cameras || !cameras.length) {
-                showFeedback(feedback, 'No se detectó cámara. Use HTTPS o permisos del navegador.', 'err');
-                scanning = false;
+                showFeedback(feedback, 'No se detectó cámara. Use HTTPS y permita el acceso.', 'err');
                 return;
             }
-            const backCam = cameras.find(function (c) {
-                return /back|rear|environment/i.test(c.label);
-            });
-            const camId = (backCam || cameras[cameras.length - 1]).id;
-
-            scanner.start(
-                camId,
-                { fps: 12, qrbox: { width: 240, height: 240 }, aspectRatio: 1 },
-                onScan,
-                function () { /* frame sin QR */ }
-            ).then(function () {
-                showFeedback(feedback, 'Cámara activa — escaneando…', 'info');
-            }).catch(function () {
-                showFeedback(feedback, 'No se pudo iniciar la cámara.', 'err');
-                scanning = false;
-            });
+            return startOnContainer(cfg.readerId, cfg, onScan, feedback);
         }).catch(function () {
             showFeedback(feedback, 'Permita el acceso a la cámara para escanear.', 'err');
             scanning = false;
         });
+
+        /* Pantalla completa — visor mucho más grande en móvil */
+        var fsBtn = document.getElementById('cbQrScannerFullscreenBtn');
+        var overlay = document.getElementById('cbQrScannerFullscreen');
+        if (fsBtn && overlay && !fsBtn.dataset.bound) {
+            fsBtn.dataset.bound = '1';
+            fsBtn.addEventListener('click', function () {
+                overlay.hidden = false;
+                document.body.classList.add('cb-qr-scanner-fs-open');
+
+                stopScanner().then(function () {
+                    var fsReader = document.getElementById('cbQrReaderFs');
+                    if (fsReader) fsReader.innerHTML = '';
+                    return startOnContainer('cbQrReaderFs', cfg, onScan, feedback);
+                }).catch(function () {
+                    showFeedback(feedback, 'No se pudo abrir la cámara en pantalla completa.', 'err');
+                });
+            });
+
+            overlay.querySelector('.cb-qr-scanner-fs-close')?.addEventListener('click', function () {
+                stopScanner().then(function () {
+                    overlay.hidden = true;
+                    document.body.classList.remove('cb-qr-scanner-fs-open');
+                    var inlineReader = document.getElementById(cfg.readerId);
+                    if (inlineReader) inlineReader.innerHTML = '';
+                    readerEl.dataset.initialized = '0';
+                    return startOnContainer(cfg.readerId, cfg, onScan, feedback);
+                }).then(function () {
+                    readerEl.dataset.initialized = '1';
+                });
+            });
+        }
     };
 })();
