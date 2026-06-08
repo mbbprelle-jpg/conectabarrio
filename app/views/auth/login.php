@@ -24,8 +24,7 @@
     </nav>
 
     <!-- Sección Hero -->
-    <?php $heroBgUrl = URLROOT . '/img/landing_bg.png?v=3'; ?>
-    <header class="landing-hero" id="inicio" style="background-image: url('<?php echo htmlspecialchars($heroBgUrl, ENT_QUOTES); ?>');">
+    <header class="landing-hero" id="inicio">
         <div class="landing-hero-content">
             <div class="landing-hero-tag">
                 Gestión Comunitaria Inteligente
