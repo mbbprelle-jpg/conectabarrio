@@ -3,8 +3,10 @@
 </div> <!-- Cierre de app-container -->
 <?php endif; ?>
 
+<?php if (empty($data['skip_chartjs'])): ?>
 <!-- Gráficas Premium (Chart.js via CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<?php endif; ?>
 
 <!-- Scripts Personalizados -->
 <div id="cbConfirmModal" class="cb-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true">

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo SITENAME; ?></title>
+    <title><?php echo htmlspecialchars(!empty($data['title']) ? $data['title'] : SITENAME); ?></title>
     <!-- Estilos Premium con Cache Buster -->
     <link rel="stylesheet" href="<?php echo URLROOT; ?>/css/style.css?v=<?php echo time(); ?>">
     <link rel="icon" href="<?php echo URLROOT; ?>/favicon.svg" type="image/svg+xml">

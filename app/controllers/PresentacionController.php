@@ -2,10 +2,10 @@
 class PresentacionController extends Controller {
     public function index() {
         $data = [
-            'header_title' => 'Presentación Ejecutiva',
-            'header_subtitle' => 'Descubre las ventajas de ConectaBarrio para organizaciones territoriales',
+            'title' => 'Presentación Ejecutiva — ConectaBarrio',
             'active_menu' => 'presentacion',
             'public_layout' => true,
+            'skip_chartjs' => true,
         ];
         $this->view('presentacion', $data);
     }
