@@ -1647,7 +1647,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_genero').value = this.dataset.genero || '';
             document.getElementById('edit_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
             document.getElementById('edit_estado_civil').value = this.dataset.estadoCivil || '';
-            document.getElementById('edit_nacionalidad').value = this.dataset.nacionalidad || '';
+            if (window.cbSetNacionalidadField) {
+                cbSetNacionalidadField('edit_', this.dataset.nacionalidad || '');
+            }
             document.getElementById('edit_profesion').value = this.dataset.profesion || '';
             document.getElementById('edit_fecha_inicio').value = this.dataset.fechaInicio || '';
             setDomicilioFromDataset('edit_', this.dataset);
@@ -1671,7 +1673,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('pend_aprobar_genero').value = document.getElementById('pend_genero').value;
         document.getElementById('pend_aprobar_fecha_nacimiento').value = document.getElementById('pend_fecha_nacimiento').value;
         document.getElementById('pend_aprobar_estado_civil').value = document.getElementById('pend_estado_civil').value;
-        document.getElementById('pend_aprobar_nacionalidad').value = document.getElementById('pend_nacionalidad').value;
+        document.getElementById('pend_aprobar_nacionalidad').value = document.querySelector('#pend_nacionalidad_select')?.value === '__OTRA__'
+            ? (document.getElementById('pend_nacionalidad_otra')?.value || '')
+            : (document.getElementById('pend_nacionalidad_select')?.value || document.querySelector('.cb-nacionalidad-field[data-prefix="pend_"] input[name="nacionalidad"]')?.value || '');
         document.getElementById('pend_aprobar_profesion').value = document.getElementById('pend_profesion').value;
         document.getElementById('pend_aprobar_telefono').value = document.getElementById('pend_telefono').value;
         document.getElementById('pend_aprobar_fecha_inicio').value = document.getElementById('pend_fecha_inicio').value;
@@ -1697,7 +1701,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('pend_genero').value = this.dataset.genero || '';
             document.getElementById('pend_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
             document.getElementById('pend_estado_civil').value = this.dataset.estadoCivil || '';
-            document.getElementById('pend_nacionalidad').value = this.dataset.nacionalidad || '';
+            if (window.cbSetNacionalidadField) {
+                cbSetNacionalidadField('pend_', this.dataset.nacionalidad || '');
+            }
             document.getElementById('pend_profesion').value = this.dataset.profesion || '';
             setDomicilioFromDataset('pend_', this.dataset);
             loadGeoref('pend_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');
@@ -1890,7 +1896,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('prev_aprobar_genero').value = document.getElementById('prev_genero').value;
         document.getElementById('prev_aprobar_fecha_nacimiento').value = document.getElementById('prev_fecha_nacimiento').value;
         document.getElementById('prev_aprobar_estado_civil').value = document.getElementById('prev_estado_civil').value;
-        document.getElementById('prev_aprobar_nacionalidad').value = document.getElementById('prev_nacionalidad').value;
+        document.getElementById('prev_aprobar_nacionalidad').value = document.querySelector('#prev_nacionalidad_select')?.value === '__OTRA__'
+            ? (document.getElementById('prev_nacionalidad_otra')?.value || '')
+            : (document.getElementById('prev_nacionalidad_select')?.value || document.querySelector('.cb-nacionalidad-field[data-prefix="prev_"] input[name="nacionalidad"]')?.value || '');
         document.getElementById('prev_aprobar_profesion').value = document.getElementById('prev_profesion').value;
         document.getElementById('prev_aprobar_telefono').value = document.getElementById('prev_telefono').value;
         document.getElementById('prev_aprobar_fecha_inicio').value = document.getElementById('prev_fecha_inicio').value;
@@ -1916,7 +1924,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('prev_genero').value = this.dataset.genero || '';
             document.getElementById('prev_fecha_nacimiento').value = this.dataset.fechaNacimiento || '';
             document.getElementById('prev_estado_civil').value = this.dataset.estadoCivil || '';
-            document.getElementById('prev_nacionalidad').value = this.dataset.nacionalidad || '';
+            if (window.cbSetNacionalidadField) {
+                cbSetNacionalidadField('prev_', this.dataset.nacionalidad || '');
+            }
             document.getElementById('prev_profesion').value = this.dataset.profesion || '';
             setDomicilioFromDataset('prev_', this.dataset);
             loadGeoref('prev_', this.dataset.latitud || '', this.dataset.longitud || '', this.dataset.linkGoogle || '');

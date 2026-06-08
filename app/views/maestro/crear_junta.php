@@ -16,7 +16,7 @@
     </div>
 <?php endif; ?>
 
-<form action="<?php echo URLROOT; ?>/maestro/crear_junta" method="POST">
+<form action="<?php echo URLROOT; ?>/maestro/crear_junta" method="POST" enctype="multipart/form-data">
     <div class="grid-2col">
         
         <!-- SECCIÓN 1: DATOS DE LA JUNTA -->
@@ -43,6 +43,29 @@
             <div class="form-group">
                 <label for="junta_rut" class="form-label">RUT de la Organización (Identificador Legal) *</label>
                 <input type="text" name="junta_rut" id="junta_rut" class="form-control" placeholder="Ej: 70.123.456-7" value="<?php echo htmlspecialchars($data['junta_rut']); ?>" required>
+            </div>
+
+            <div class="form-group">
+                <label for="personalidad_juridica_num" class="form-label">N° Personalidad Jurídica <span style="font-weight:normal;color:var(--text-muted);">(opcional)</span></label>
+                <input type="text" name="personalidad_juridica_num" id="personalidad_juridica_num" class="form-control" placeholder="Ej: 12345" maxlength="50" value="<?php echo htmlspecialchars($data['personalidad_juridica_num'] ?? ''); ?>">
+                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.25rem;">
+                    Visible solo para la directiva de la organización.
+                </small>
+            </div>
+
+            <div class="form-group" style="background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.08); padding: 1rem; border-radius: var(--radius-sm);">
+                <label class="form-label">Documento legal <span style="font-weight:normal;color:var(--text-muted);">(opcional)</span></label>
+                <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label for="doc_legal_titulo" class="form-label" style="font-size:0.82rem;">Título del documento</label>
+                    <input type="text" name="doc_legal_titulo" id="doc_legal_titulo" class="form-control" maxlength="200" placeholder="Ej: Resolución de personalidad jurídica" value="<?php echo htmlspecialchars($data['doc_legal_titulo'] ?? ''); ?>">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="doc_legal" class="form-label" style="font-size:0.82rem;">Archivo (PDF o imagen, máx. 10 MB)</label>
+                    <input type="file" name="doc_legal" id="doc_legal" class="form-control" accept=".pdf,image/*">
+                </div>
+                <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.35rem;">
+                    Quedará en el módulo Doc. legal, visible solo para directiva.
+                </small>
             </div>
 
             <div class="form-group">

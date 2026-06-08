@@ -220,4 +220,39 @@ class DocumentStorage {
     public static function supportsImageOptimization(): bool {
         return extension_loaded('gd') && function_exists('imagewebp');
     }
+
+    public static function storeLegalFile(int $juntaId, array $file): ?array {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return null;
+        }
+        if (($file['size'] ?? 0) > self::MAX_BYTES || ($file['size'] ?? 0) <= 0) {
+            return null;
+        }
+
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime = $finfo->file($file['tmp_name']);
+        if (!isset(self::MIME_EXT[$mime])) {
+            return null;
+        }
+
+        $ext = self::MIME_EXT[$mime];
+        $dir = self::documentosRoot() . DIRECTORY_SEPARATOR . $juntaId . DIRECTORY_SEPARATOR . 'legal';
+        if (!is_dir($dir) && !@mkdir($dir, 0775, true)) {
+            return null;
+        }
+
+        $uuid = bin2hex(random_bytes(16));
+        $filename = $uuid . '.' . $ext;
+        $dest = $dir . DIRECTORY_SEPARATOR . $filename;
+        if (!move_uploaded_file($file['tmp_name'], $dest)) {
+            return null;
+        }
+
+        return [
+            'path' => 'documentos/' . $juntaId . '/legal/' . $filename,
+            'mime_type' => $mime,
+            'tamano_bytes' => (int)filesize($dest),
+            'archivo_nombre_original' => basename($file['name'] ?? $filename),
+        ];
+    }
 }

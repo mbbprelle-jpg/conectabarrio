@@ -209,7 +209,7 @@ class SocioBulkImport {
             'genero' => SocioInput::normalizeGenero($generoRaw),
             'fecha_nacimiento' => $fechaNacimiento === false ? null : $fechaNacimiento,
             'estado_civil' => $estadoCivil,
-            'nacionalidad' => SocioInput::normalizeNacionalidad($nacionalidadRaw),
+            'nacionalidad' => SocioInput::normalizeNacionalidadFromImport($nacionalidadRaw),
             'profesion' => SocioInput::normalizeProfesion(self::cell($cells, $map, 'profesion')),
             'calle_id' => $calleId,
             'numero_casa' => self::cell($cells, $map, 'numero_casa'),

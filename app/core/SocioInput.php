@@ -12,6 +12,32 @@ class SocioInput {
         'VIUDO' => 'Viudo/a',
     ];
 
+    public const NACIONALIDAD_OTRA = '__OTRA__';
+
+    /** @var string[]|null */
+    private static $nacionalidadesSorted = null;
+
+    /** @return string[] */
+    public static function getNacionalidadesSorted(): array {
+        if (self::$nacionalidadesSorted === null) {
+            $path = APPROOT . '/data/nacionalidades.php';
+            $list = is_file($path) ? require $path : self::NACIONALIDADES_LEGACY;
+            $list = array_values(array_unique(array_map('trim', $list)));
+            sort($list, SORT_LOCALE_STRING);
+            self::$nacionalidadesSorted = $list;
+        }
+        return self::$nacionalidadesSorted;
+    }
+
+    /** Listado histórico (Latinoamérica) — fallback si falta el archivo de datos */
+    private const NACIONALIDADES_LEGACY = [
+        'Argentina', 'Boliviana', 'Brasileña', 'Chilena', 'Colombiana', 'Costarricense',
+        'Cubana', 'Dominicana', 'Ecuatoriana', 'Salvadoreña', 'Guatemalteca', 'Haitiana',
+        'Hondureña', 'Mexicana', 'Nicaragüense', 'Panameña', 'Paraguaya', 'Peruana',
+        'Uruguaya', 'Venezolana',
+    ];
+
+    /** @deprecated Use getNacionalidadesSorted() */
     public const NACIONALIDADES = [
         'Argentina',
         'Boliviana',
@@ -126,12 +152,19 @@ class SocioInput {
         return false;
     }
 
-    public static function normalizeNacionalidad($nacionalidad) {
+    public static function normalizeNacionalidad($nacionalidad, ?string $otraTexto = null) {
         $value = trim((string)$nacionalidad);
+        if ($value === self::NACIONALIDAD_OTRA || $value === 'OTRA' || $value === 'Otra') {
+            $custom = trim((string)$otraTexto);
+            if ($custom === '') {
+                return null;
+            }
+            return self::formatNacionalidadCustom($custom);
+        }
         if ($value === '') {
             return null;
         }
-        foreach (self::NACIONALIDADES as $pais) {
+        foreach (self::getNacionalidadesSorted() as $pais) {
             if (mb_strtolower($pais, 'UTF-8') === mb_strtolower($value, 'UTF-8')) {
                 return $pais;
             }
@@ -140,7 +173,45 @@ class SocioInput {
         if (isset(self::NACIONALIDAD_ALIASES[$key])) {
             return self::NACIONALIDAD_ALIASES[$key];
         }
+        if (mb_strlen($value, 'UTF-8') >= 2 && mb_strlen($value, 'UTF-8') <= 80) {
+            return self::formatNacionalidadCustom($value);
+        }
         return null;
+    }
+
+    public static function formatNacionalidadCustom(string $text): string {
+        $text = preg_replace('/\s+/u', ' ', trim($text));
+        return mb_convert_case($text, MB_CASE_TITLE, 'UTF-8');
+    }
+
+    public static function isNacionalidadEnListado(?string $nacionalidad): bool {
+        if ($nacionalidad === null || $nacionalidad === '') {
+            return false;
+        }
+        foreach (self::getNacionalidadesSorted() as $pais) {
+            if (mb_strtolower($pais, 'UTF-8') === mb_strtolower($nacionalidad, 'UTF-8')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static function parseNacionalidadFromPost(array $post): ?string {
+        $select = trim((string)($post['nacionalidad_select'] ?? ''));
+        $legacy = trim((string)($post['nacionalidad'] ?? ''));
+        $otra = trim((string)($post['nacionalidad_otra'] ?? ''));
+
+        if ($select !== '') {
+            return self::normalizeNacionalidad($select, $otra);
+        }
+        if ($legacy !== '') {
+            return self::normalizeNacionalidad($legacy, $otra);
+        }
+        return null;
+    }
+
+    public static function normalizeNacionalidadFromImport($nacionalidad) {
+        return self::normalizeNacionalidad($nacionalidad);
     }
 
     public static function normalizeTelefono($telefono) {
@@ -196,7 +267,7 @@ class SocioInput {
             'genero' => self::normalizeGenero($post['genero'] ?? ''),
             'fecha_nacimiento' => !empty($post['fecha_nacimiento']) ? $post['fecha_nacimiento'] : null,
             'estado_civil' => self::normalizeEstadoCivil($post['estado_civil'] ?? ''),
-            'nacionalidad' => self::normalizeNacionalidad($post['nacionalidad'] ?? ''),
+            'nacionalidad' => self::parseNacionalidadFromPost($post),
             'profesion' => self::normalizeProfesion($post['profesion'] ?? ''),
             'telefono' => self::normalizeTelefono($post['telefono'] ?? ''),
         ];

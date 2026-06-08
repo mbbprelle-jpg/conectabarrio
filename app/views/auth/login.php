@@ -30,7 +30,7 @@
                 Gestión Comunitaria Inteligente
             </div>
             <h1 class="landing-hero-title">
-                Tu Junta de Vecinos, Comité u Organización <br><span>más conectada y eficiente</span>
+                Tu organización comunitaria <br><span>más conectada y eficiente</span>
             </h1>
             <p class="landing-hero-desc">
                 Moderniza la administración de tu comunidad con ConectaBarrio. Controla asistencias a asambleas, envía recordatorios automáticos de cuotas, publica eventos comunitarios y comparte flujos financieros transparentes directamente con tus socios.

@@ -14,6 +14,7 @@ class AdminController extends Controller {
     private $documentoModel;
     private $documentoCategoriaModel;
     private $reunionConvocadoModel;
+    private $juntaDocumentoLegalModel;
     private $db;
 
     public function __construct() {
@@ -31,6 +32,7 @@ class AdminController extends Controller {
         $this->documentoModel = $this->model('Documento');
         $this->documentoCategoriaModel = $this->model('DocumentoCategoria');
         $this->reunionConvocadoModel = $this->model('ReunionConvocado');
+        $this->juntaDocumentoLegalModel = $this->model('JuntaDocumentoLegal');
         $this->db = new Database();
     }
 
@@ -3627,5 +3629,181 @@ class AdminController extends Controller {
         }
         $redirect = !empty($this->sanitizePost()['redirect_documentos']) ? '/admin/documentos' : '/admin/socios';
         $this->redirect($redirect);
+    }
+
+    public function calendario() {
+        if (!$this->requireReunionesPlan()) {
+            $this->view('admin/upgrade_required', [
+                'title' => 'Mejora Requerida',
+                'header_title' => 'Calendario de Actividades',
+                'header_subtitle' => 'Se requiere Plan Mediano o superior',
+                'active_menu' => 'calendario',
+                'required_plan' => 'Mediano',
+            ]);
+            return;
+        }
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::isDirectivo() && !AuthContext::canManageReuniones()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para ver el calendario de actividades.';
+            $this->redirectUserHome();
+            return;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $calMes = max(1, min(12, (int)($_GET['mes'] ?? date('n'))));
+        $calAnio = (int)($_GET['anio'] ?? date('Y'));
+        $usuarioId = null;
+        if (($_SESSION['user_rol'] ?? '') === 'socio' && !AuthContext::canManageReuniones()) {
+            $usuarioId = (int)$_SESSION['user_id'];
+        }
+
+        $eventosPorDia = $this->reunionModel->getEventosCalendarioMes($juntaId, $calMes, $calAnio, $usuarioId);
+        $reuniones = $usuarioId !== null
+            ? $this->reunionConvocadoModel->getReunionesForUsuario($juntaId, $usuarioId)
+            : $this->reunionModel->getReunionesByJunta($juntaId);
+
+        $this->view('admin/calendario', [
+            'title' => 'Calendario de Actividades',
+            'header_title' => 'Calendario comunitario',
+            'header_subtitle' => 'Convocatorias, asambleas y reuniones de su organización',
+            'active_menu' => 'calendario',
+            'cal_mes' => $calMes,
+            'cal_anio' => $calAnio,
+            'eventos_por_dia' => $eventosPorDia,
+            'reuniones' => $reuniones,
+            'es_vista_directorio' => $usuarioId === null,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ]);
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+    }
+
+    public function documentacion_legal() {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::isDirectivo()) {
+            $_SESSION['error_msg'] = 'Solo la directiva puede acceder a la documentación legal de la organización.';
+            $this->redirectUserHome();
+            return;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+
+        $this->view('admin/documentacion_legal', [
+            'title' => 'Documentación Legal',
+            'header_title' => 'Personalidad jurídica y documentos',
+            'header_subtitle' => 'Visible solo para la directiva. Solo quien sube un archivo puede eliminarlo.',
+            'active_menu' => 'documentacion_legal',
+            'junta' => $junta,
+            'documentos' => $this->juntaDocumentoLegalModel->getByJunta($juntaId),
+            'migration_pending' => !$this->juntaDocumentoLegalModel->hasTable(),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ]);
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+    }
+
+    public function junta_documento_legal_subir() {
+        require_once APPROOT . '/core/AuthContext.php';
+        require_once APPROOT . '/core/DocumentStorage.php';
+        if (!AuthContext::isDirectivo()) {
+            $this->redirect('/admin/documentacion_legal');
+            return;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/documentacion_legal');
+            return;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $titulo = trim($post['titulo'] ?? 'Documento legal');
+
+        if (!$this->juntaDocumentoLegalModel->hasTable()) {
+            $_SESSION['error_msg'] = 'Ejecute la migración sql/add_junta_personalidad_juridica_docs.sql';
+            $this->redirect('/admin/documentacion_legal');
+            return;
+        }
+
+        $stored = DocumentStorage::storeLegalFile($juntaId, $_FILES['archivo'] ?? []);
+        if (!$stored) {
+            $_SESSION['error_msg'] = 'No se pudo adjuntar el archivo. Use PDF o imagen (máx. 10 MB).';
+            $this->redirect('/admin/documentacion_legal');
+            return;
+        }
+
+        if ($this->juntaDocumentoLegalModel->create($juntaId, (int)$_SESSION['user_id'], $stored, $titulo)) {
+            $_SESSION['success_msg'] = 'Documento legal adjuntado correctamente.';
+        } else {
+            DocumentStorage::deleteRelativePath($stored['path']);
+            $_SESSION['error_msg'] = 'Error al registrar el documento en la base de datos.';
+        }
+        $this->redirect('/admin/documentacion_legal');
+    }
+
+    public function junta_documento_legal_eliminar() {
+        require_once APPROOT . '/core/AuthContext.php';
+        require_once APPROOT . '/core/DocumentStorage.php';
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/documentacion_legal');
+            return;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $id = (int)($post['documento_id'] ?? 0);
+        $doc = $this->juntaDocumentoLegalModel->getById($id, $juntaId);
+
+        if (!$doc) {
+            $_SESSION['error_msg'] = 'Documento no encontrado.';
+            $this->redirect('/admin/documentacion_legal');
+            return;
+        }
+
+        $puedeEliminar = ((int)$doc->subido_por === (int)$_SESSION['user_id'])
+            || (($_SESSION['user_rol'] ?? '') === 'maestro');
+        if (!$puedeEliminar) {
+            $_SESSION['error_msg'] = 'Solo quien subió el documento puede eliminarlo.';
+            $this->redirect('/admin/documentacion_legal');
+            return;
+        }
+
+        $path = $this->juntaDocumentoLegalModel->delete($id, $juntaId);
+        if ($path) {
+            DocumentStorage::deleteRelativePath($path);
+            $_SESSION['success_msg'] = 'Documento eliminado.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo eliminar el documento.';
+        }
+        $this->redirect('/admin/documentacion_legal');
+    }
+
+    public function junta_documento_legal_descargar($id = 0) {
+        require_once APPROOT . '/core/AuthContext.php';
+        require_once APPROOT . '/core/DocumentStorage.php';
+        if (!AuthContext::isDirectivo() && ($_SESSION['user_rol'] ?? '') !== 'maestro') {
+            http_response_code(403);
+            exit;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)$id;
+        $doc = $this->juntaDocumentoLegalModel->getById($id, $juntaId);
+        if (!$doc || !DocumentStorage::pathBelongsToJunta($doc->archivo_path, $juntaId)) {
+            http_response_code(404);
+            exit;
+        }
+
+        $abs = DocumentStorage::absolutePath($doc->archivo_path);
+        if (!is_file($abs)) {
+            http_response_code(404);
+            exit;
+        }
+
+        header('Content-Type: ' . ($doc->mime_type ?: 'application/octet-stream'));
+        header('Content-Disposition: attachment; filename="' . rawurlencode($doc->archivo_nombre_original) . '"');
+        header('Content-Length: ' . filesize($abs));
+        readfile($abs);
+        exit;
     }
 }

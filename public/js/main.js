@@ -549,6 +549,76 @@ document.addEventListener('DOMContentLoaded', function() {
             input.focus();
         });
     });
+
+    // Nacionalidad: selector + «Otra» con buscador
+    document.querySelectorAll('.cb-nacionalidad-field').forEach(function(wrap) {
+        const select = wrap.querySelector('.cb-nacionalidad-select');
+        const otraWrap = wrap.querySelector('.cb-nacionalidad-otra-wrap');
+        const otraInput = wrap.querySelector('.cb-nacionalidad-otra-input');
+        const hidden = wrap.querySelector('input[name="nacionalidad"]');
+        const OTRA = '__OTRA__';
+
+        function syncHidden() {
+            if (!select || !hidden) return;
+            if (select.value === OTRA) {
+                hidden.value = (otraInput && otraInput.value.trim()) || '';
+            } else {
+                hidden.value = select.value || '';
+            }
+        }
+
+        function toggleOtra() {
+            if (!select || !otraWrap || !otraInput) return;
+            const isOtra = select.value === OTRA;
+            otraWrap.hidden = !isOtra;
+            otraInput.required = isOtra && select.hasAttribute('required');
+            if (!isOtra) {
+                otraInput.value = '';
+            }
+            syncHidden();
+        }
+
+        if (select) {
+            select.addEventListener('change', toggleOtra);
+            toggleOtra();
+        }
+        if (otraInput) {
+            otraInput.addEventListener('input', syncHidden);
+            otraInput.addEventListener('change', syncHidden);
+        }
+
+        const form = wrap.closest('form');
+        if (form) {
+            form.addEventListener('submit', syncHidden);
+        }
+    });
+
+    window.cbSetNacionalidadField = function(prefix, value) {
+        const wrap = document.querySelector('.cb-nacionalidad-field[data-prefix="' + prefix + '"]');
+        if (!wrap) return;
+        const select = wrap.querySelector('.cb-nacionalidad-select');
+        const otraInput = wrap.querySelector('.cb-nacionalidad-otra-input');
+        const hidden = wrap.querySelector('input[name="nacionalidad"]');
+        const OTRA = '__OTRA__';
+        if (!select) return;
+        const val = (value || '').trim();
+        let found = false;
+        Array.from(select.options).forEach(function(opt) {
+            if (opt.value && opt.value !== OTRA && opt.value.toLowerCase() === val.toLowerCase()) {
+                select.value = opt.value;
+                found = true;
+            }
+        });
+        if (!found && val !== '') {
+            select.value = OTRA;
+            if (otraInput) otraInput.value = val;
+        } else if (!found) {
+            select.value = '';
+            if (otraInput) otraInput.value = '';
+        }
+        select.dispatchEvent(new Event('change'));
+        if (hidden) hidden.value = val;
+    };
 });
 
 // 5. Animación interactiva de la simulación de digitalización y transmisión municipal

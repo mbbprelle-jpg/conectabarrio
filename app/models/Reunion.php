@@ -136,4 +136,49 @@ class Reunion extends Model {
         $this->db->bind(':id', $id);
         return $this->db->execute();
     }
+
+    /**
+     * Eventos del mes para calendario: día => [{id, titulo, hora, estado}]
+     * @param int|null $usuarioId Si se indica, solo reuniones donde el usuario está convocado.
+     */
+    public function getEventosCalendarioMes(int $juntaId, int $mes, int $anio, ?int $usuarioId = null): array {
+        $desde = sprintf('%04d-%02d-01 00:00:00', $anio, $mes);
+        $hasta = date('Y-m-t 23:59:59', strtotime($desde));
+        $eventos = [];
+
+        if ($usuarioId !== null) {
+            try {
+                $this->db->query('SELECT r.id, r.titulo, r.fecha_reunion, r.estado
+                    FROM reuniones r
+                    INNER JOIN reunion_convocados rc ON rc.reunion_id = r.id AND rc.usuario_id = :usuario_id
+                    WHERE r.junta_id = :junta_id AND r.fecha_reunion >= :desde AND r.fecha_reunion <= :hasta
+                    ORDER BY r.fecha_reunion ASC');
+                $this->db->bind(':usuario_id', $usuarioId);
+            } catch (Exception $e) {
+                return [];
+            }
+        } else {
+            $this->db->query('SELECT id, titulo, fecha_reunion, estado FROM reuniones
+                WHERE junta_id = :junta_id AND fecha_reunion >= :desde AND fecha_reunion <= :hasta
+                ORDER BY fecha_reunion ASC');
+        }
+
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':desde', $desde);
+        $this->db->bind(':hasta', $hasta);
+
+        foreach ($this->db->resultSet() as $row) {
+            $dia = (int)date('j', strtotime($row->fecha_reunion));
+            if (!isset($eventos[$dia])) {
+                $eventos[$dia] = [];
+            }
+            $eventos[$dia][] = [
+                'id' => (int)$row->id,
+                'titulo' => (string)$row->titulo,
+                'hora' => date('H:i', strtotime($row->fecha_reunion)),
+                'estado' => (string)$row->estado,
+            ];
+        }
+        return $eventos;
+    }
 }

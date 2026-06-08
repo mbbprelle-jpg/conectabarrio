@@ -40,17 +40,7 @@ $reqAttr = $required ? 'required' : '';
             <?php endforeach; ?>
         </select>
     </div>
-    <div class="form-group">
-        <label for="<?php echo htmlspecialchars($prefix); ?>nacionalidad" class="form-label">Nacionalidad<?php echo $required ? ' *' : ''; ?></label>
-        <select name="nacionalidad" id="<?php echo htmlspecialchars($prefix); ?>nacionalidad" class="form-control" <?php echo $reqAttr; ?>>
-            <option value="">-- Seleccionar --</option>
-            <?php foreach (SocioInput::NACIONALIDADES as $pais): ?>
-                <option value="<?php echo htmlspecialchars($pais); ?>" <?php echo (($values['nacionalidad'] ?? '') === $pais) ? 'selected' : ''; ?>>
-                    <?php echo htmlspecialchars($pais); ?>
-                </option>
-            <?php endforeach; ?>
-        </select>
-    </div>
+    <?php require APPROOT . '/views/partials/nacionalidad_field.php'; ?>
 </div>
 <div class="form-group">
     <label for="<?php echo htmlspecialchars($prefix); ?>profesion" class="form-label">Profesión u oficio<?php echo $required ? ' *' : ''; ?></label>

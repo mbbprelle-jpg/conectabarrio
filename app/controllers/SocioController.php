@@ -82,14 +82,7 @@ class SocioController extends Controller {
             // Tabla reunion_convocados aún no migrada
         }
 
-        $diasConEvento = [];
-        foreach ($reuniones as $r) {
-            $ts = strtotime($r->fecha_reunion);
-            if ((int)date('n', $ts) === $calMes && (int)date('Y', $ts) === $calAnio) {
-                $diasConEvento[] = (int)date('j', $ts);
-            }
-        }
-        $diasConEvento = array_values(array_unique($diasConEvento));
+        $eventosPorDia = $this->reunionModel->getEventosCalendarioMes($juntaId, $calMes, $calAnio, $socioId);
 
         $this->view('socio/reuniones', [
             'title' => 'Mis Reuniones',
@@ -100,7 +93,7 @@ class SocioController extends Controller {
             'proxima' => $proxima,
             'cal_mes' => $calMes,
             'cal_anio' => $calAnio,
-            'dias_con_evento' => $diasConEvento,
+            'eventos_por_dia' => $eventosPorDia,
         ]);
     }
 

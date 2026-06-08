@@ -5,6 +5,7 @@ class MaestroController extends Controller {
     private $userModel;
     private $cuotaModel;
     private $membresiaModel;
+    private $juntaDocumentoLegalModel;
 
     public function __construct() {
         $this->juntaModel = $this->model('JuntaVecinos');
@@ -12,6 +13,7 @@ class MaestroController extends Controller {
         $this->userModel = $this->model('User');
         $this->cuotaModel = $this->model('CuotaConfig');
         $this->membresiaModel = $this->model('Membresia');
+        $this->juntaDocumentoLegalModel = $this->model('JuntaDocumentoLegal');
     }
 
     // Cargar Dashboard Maestro
@@ -61,6 +63,8 @@ class MaestroController extends Controller {
             'junta_precio_anual' => 59880,
             'cuota_inicial' => '5000',
             'cuota_mes_inicio' => date('Y-m'),
+            'personalidad_juridica_num' => '',
+            'doc_legal_titulo' => '',
             'error' => ''
         ];
 
@@ -85,6 +89,8 @@ class MaestroController extends Controller {
             $data['junta_precio_anual'] = isset($post['junta_precio_anual']) ? (int)$post['junta_precio_anual'] : 59880;
             $data['cuota_inicial'] = $post['cuota_inicial'] ?? '0';
             $data['cuota_mes_inicio'] = $post['cuota_mes_inicio'] ?? date('Y-m');
+            $data['personalidad_juridica_num'] = trim($post['personalidad_juridica_num'] ?? '');
+            $data['doc_legal_titulo'] = trim($post['doc_legal_titulo'] ?? '');
 
             // Validar RUT de la organización (único)
             if ($this->juntaModel->getJuntaByRut($data['junta_rut'])) {
@@ -112,6 +118,10 @@ class MaestroController extends Controller {
                 $this->juntaModel->db->bind(':mes_inicio_suscripcion', $data['junta_suscripcion_mes_inicio']);
                 $this->juntaModel->db->execute();
                 $juntaId = $this->juntaModel->db->lastInsertId();
+
+                if ($this->juntaModel->hasPersonalidadJuridicaColumn() && $data['personalidad_juridica_num'] !== '') {
+                    $this->juntaModel->setPersonalidadJuridicaNum((int)$juntaId, $data['personalidad_juridica_num']);
+                }
 
                 // 2. Registrar Configuración de Cuota Inicial de la Junta
                 $this->cuotaModel->db->query("INSERT INTO configuracion_cuotas (junta_id, monto, mes_inicio) VALUES (:junta_id, :monto, :mes_inicio)");
@@ -154,8 +164,29 @@ class MaestroController extends Controller {
 
                 // Confirmar transacción
                 $db->commit();
+
+                $docNote = '';
+                if (!empty($_FILES['doc_legal']['tmp_name']) && is_uploaded_file($_FILES['doc_legal']['tmp_name'])) {
+                    require_once APPROOT . '/core/DocumentStorage.php';
+                    if ($this->juntaDocumentoLegalModel->hasTable()) {
+                        $stored = DocumentStorage::storeLegalFile((int)$juntaId, $_FILES['doc_legal']);
+                        if ($stored) {
+                            $tituloDoc = $data['doc_legal_titulo'] !== '' ? $data['doc_legal_titulo'] : 'Documento legal de la organización';
+                            if ($this->juntaDocumentoLegalModel->create((int)$juntaId, (int)$_SESSION['user_id'], $stored, $tituloDoc)) {
+                                $docNote = ' Documento legal adjuntado.';
+                            } else {
+                                DocumentStorage::deleteRelativePath($stored['path']);
+                                $docNote = ' No se pudo registrar el documento legal.';
+                            }
+                        } else {
+                            $docNote = ' No se pudo adjuntar el documento (PDF o imagen, máx. 10 MB).';
+                        }
+                    } else {
+                        $docNote = ' Ejecute sql/add_junta_personalidad_juridica_docs.sql para adjuntar documentos legales.';
+                    }
+                }
                 
-                $_SESSION['success_msg'] = 'Junta de Vecinos "' . $data['junta_nombre'] . '" creada exitosamente. Administrador: ' . $data['admin_email'] . ' (Clave: admin123)';
+                $_SESSION['success_msg'] = 'Junta de Vecinos "' . $data['junta_nombre'] . '" creada exitosamente. Administrador: ' . $data['admin_email'] . ' (Clave: admin123).' . $docNote;
                 $this->redirect('/maestro/dashboard');
                 
             } catch (Exception $e) {

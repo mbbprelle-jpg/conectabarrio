@@ -284,6 +284,15 @@ class AuthContext {
                 'asistencia_guardar', 'reunion_minuta',
             ]);
         }
+        if (self::isDirectivo() || self::canManageReuniones()) {
+            $methods[] = 'calendario';
+        }
+        if (self::isDirectivo()) {
+            $methods = array_merge($methods, [
+                'documentacion_legal', 'junta_documento_legal_subir',
+                'junta_documento_legal_eliminar', 'junta_documento_legal_descargar',
+            ]);
+        }
         return array_unique($methods);
     }
 

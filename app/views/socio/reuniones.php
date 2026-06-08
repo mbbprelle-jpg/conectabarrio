@@ -5,12 +5,6 @@
 <?php
 $proxima = $data['proxima'] ?? null;
 $reuniones = $data['reuniones'] ?? [];
-$calMes = (int)($data['cal_mes'] ?? date('n'));
-$calAnio = (int)($data['cal_anio'] ?? date('Y'));
-$diasConEvento = $data['dias_con_evento'] ?? [];
-$nombresMes = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-$primerDia = (int)date('N', mktime(0, 0, 0, $calMes, 1, $calAnio));
-$diasMes = (int)date('t', mktime(0, 0, 0, $calMes, 1, $calAnio));
 ?>
 
 <?php if ($proxima): ?>
@@ -23,34 +17,15 @@ $diasMes = (int)date('t', mktime(0, 0, 0, $calMes, 1, $calAnio));
 
 <div class="grid-2col">
     <div class="card card-primary">
-        <h3 class="card-title">Calendario — <?php echo $nombresMes[$calMes] . ' ' . $calAnio; ?></h3>
-        <div class="cb-cal-nav">
-            <?php
-            $prevM = $calMes === 1 ? 12 : $calMes - 1;
-            $prevY = $calMes === 1 ? $calAnio - 1 : $calAnio;
-            $nextM = $calMes === 12 ? 1 : $calMes + 1;
-            $nextY = $calMes === 12 ? $calAnio + 1 : $calAnio;
-            ?>
-            <a href="?mes=<?php echo $prevM; ?>&anio=<?php echo $prevY; ?>" class="btn btn-secondary btn-sm">←</a>
-            <a href="?mes=<?php echo $nextM; ?>&anio=<?php echo $nextY; ?>" class="btn btn-secondary btn-sm">→</a>
-        </div>
-        <div class="cb-cal-grid">
-            <?php foreach (['L','M','X','J','V','S','D'] as $d): ?>
-                <div class="cb-cal-head"><?php echo $d; ?></div>
-            <?php endforeach; ?>
-            <?php for ($i = 1; $i < $primerDia; $i++): ?><div class="cb-cal-cell is-empty"></div><?php endfor; ?>
-            <?php for ($d = 1; $d <= $diasMes; $d++):
-                $hasEv = in_array($d, $diasConEvento, true);
-                $isToday = ($d === (int)date('j') && $calMes === (int)date('n') && $calAnio === (int)date('Y'));
-            ?>
-            <div class="cb-cal-cell <?php echo $hasEv ? 'has-event' : ''; ?> <?php echo $isToday ? 'is-today' : ''; ?>">
-                <span><?php echo $d; ?></span>
-            </div>
-            <?php endfor; ?>
-        </div>
-        <p style="font-size:0.75rem;color:var(--text-muted);margin:0.75rem 0 0;">
-            Los días resaltados tienen una convocatoria a su nombre.
-        </p>
+        <h3 class="card-title">Mi calendario de convocatorias</h3>
+        <?php
+        $cal_mes = $data['cal_mes'];
+        $cal_anio = $data['cal_anio'];
+        $eventos_por_dia = $data['eventos_por_dia'];
+        $url_base = URLROOT . '/socio/reuniones';
+        $hint = 'Los días con color muestran actividades a las que fue convocado/a.';
+        require APPROOT . '/views/partials/calendario_actividades.php';
+        ?>
     </div>
 
     <div class="card card-primary">
@@ -92,7 +67,7 @@ $diasMes = (int)date('t', mktime(0, 0, 0, $calMes, 1, $calAnio));
 <div class="card" style="margin-top:1.5rem;">
     <h3 class="card-title">Detalle próxima reunión</h3>
     <p><strong><?php echo htmlspecialchars($proxima->titulo); ?></strong></p>
-    <p style="color:var(--text-muted);font-size:0.85rem;"><?php echo date('l d/m/Y H:i', strtotime($proxima->fecha_reunion)); ?></p>
+    <p style="color:var(--text-muted);font-size:0.85rem;"><?php echo date('d/m/Y H:i', strtotime($proxima->fecha_reunion)); ?></p>
     <div class="cb-reunion-temas-box"><?php echo nl2br(htmlspecialchars($rm->getTemasText($proxima))); ?></div>
 </div>
 <?php endif; ?>

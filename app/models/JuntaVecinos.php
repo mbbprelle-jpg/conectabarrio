@@ -221,4 +221,31 @@ class JuntaVecinos extends Model {
         $this->db->bind(':id', $id);
         return $this->db->execute();
     }
+
+    private static $hasPersonalidadJuridicaColumn = null;
+
+    public function hasPersonalidadJuridicaColumn(): bool {
+        if (self::$hasPersonalidadJuridicaColumn === true) {
+            return true;
+        }
+        try {
+            $this->db->query('SELECT personalidad_juridica_num FROM juntas_vecinos LIMIT 1');
+            $this->db->execute();
+            self::$hasPersonalidadJuridicaColumn = true;
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public function setPersonalidadJuridicaNum(int $id, ?string $numero): bool {
+        if (!$this->hasPersonalidadJuridicaColumn()) {
+            return false;
+        }
+        $numero = trim((string)$numero);
+        $this->db->query('UPDATE juntas_vecinos SET personalidad_juridica_num = :num WHERE id = :id');
+        $this->db->bind(':num', $numero !== '' ? $numero : null);
+        $this->db->bind(':id', $id);
+        return $this->db->execute();
+    }
 }
