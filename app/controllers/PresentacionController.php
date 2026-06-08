@@ -4,9 +4,9 @@ class PresentacionController extends Controller {
         $data = [
             'header_title' => 'Presentación Ejecutiva',
             'header_subtitle' => 'Descubre las ventajas de ConectaBarrio para organizaciones territoriales',
-            'active_menu' => 'presentacion'
+            'active_menu' => 'presentacion',
+            'public_layout' => true,
         ];
         $this->view('presentacion', $data);
     }
 }
-?>
