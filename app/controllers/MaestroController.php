@@ -259,6 +259,10 @@ class MaestroController extends Controller {
             'lng_sede' => $georef['longitud'] ?? null,
         ];
         if ($this->juntaModel->updateJunta($juntaId, $payload)) {
+            $pj = trim($post['personalidad_juridica_num'] ?? '');
+            if ($this->juntaModel->hasPersonalidadJuridicaColumn()) {
+                $this->juntaModel->setPersonalidadJuridicaNum($juntaId, $pj !== '' ? $pj : null);
+            }
             $_SESSION['success_msg'] = 'Organización "' . $nombre . '" actualizada correctamente.';
         } else {
             $_SESSION['error_msg'] = 'No se pudo actualizar la organización.';

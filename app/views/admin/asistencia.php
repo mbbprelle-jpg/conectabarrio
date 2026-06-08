@@ -144,16 +144,24 @@ $urlConvocar = $edit
             <p style="font-size:0.82rem;color:var(--text-muted);margin:-0.5rem 0 1rem;">
                 Convocatoria: <?php echo date('d/m/Y H:i', strtotime($det->fecha_reunion)); ?>
                 · <?php echo count($data['convocados'] ?? []); ?> convocado(s)
+                · <strong id="cbPresentesCount"><?php echo (int)($data['presentes_count'] ?? 0); ?></strong> presentes
             </p>
+
+            <div class="cb-tabs cb-asistencia-mode-tabs" role="tablist">
+                <button type="button" class="cb-tab is-active" data-asist-mode="manual" role="tab">Lista manual</button>
+                <button type="button" class="cb-tab" data-asist-mode="qr" role="tab">Escanear QR</button>
+            </div>
+
+            <div class="cb-asistencia-panel" data-panel="manual">
             <form action="<?php echo URLROOT; ?>/admin/asistencia_guardar/<?php echo (int)$det->id; ?>" method="POST">
                 <div class="cb-reunion-roll-wrap">
-                    <table class="table">
+                    <table class="table cb-asistencia-table">
                         <thead><tr><th style="width:70px;text-align:center;">Asistió</th><th>Socio</th><th>RUT</th></tr></thead>
                         <tbody>
                         <?php foreach ($data['asistentes'] as $s): ?>
-                        <tr>
+                        <tr class="cb-asistencia-row" data-socio-id="<?php echo (int)$s->socio_id; ?>">
                             <td style="text-align:center;">
-                                <input type="checkbox" name="asistencia[]" value="<?php echo (int)$s->socio_id; ?>" <?php echo !empty($s->asistio) ? 'checked' : ''; ?>>
+                                <input type="checkbox" name="asistencia[]" value="<?php echo (int)$s->socio_id; ?>" class="cb-asistencia-check" <?php echo !empty($s->asistio) ? 'checked' : ''; ?>>
                             </td>
                             <td><?php echo htmlspecialchars($s->nombre); ?></td>
                             <td style="font-family:monospace;font-size:0.85rem;"><?php echo htmlspecialchars($s->rut); ?></td>
@@ -162,11 +170,34 @@ $urlConvocar = $edit
                         </tbody>
                     </table>
                 </div>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin:0.5rem 0 1rem;">Toque una fila para marcar o desmarcar (útil en celular).</p>
                 <div style="display:flex;gap:0.75rem;justify-content:flex-end;flex-wrap:wrap;">
                     <a href="<?php echo htmlspecialchars($urlBase . '?tab=listado'); ?>" class="btn btn-secondary btn-sm">Volver al listado</a>
                     <button type="submit" class="btn btn-success btn-sm">Guardar asistencia</button>
                 </div>
             </form>
+            </div>
+
+            <div class="cb-asistencia-panel" data-panel="qr" hidden>
+                <div class="cb-qr-scanner-wrap">
+                    <div id="cbQrReader" class="cb-qr-reader"></div>
+                    <div class="cb-qr-scanner-side">
+                        <div class="cb-qr-scanner-stat">
+                            <span class="cb-qr-scanner-stat-num" id="cbQrPresentesLive"><?php echo (int)($data['presentes_count'] ?? 0); ?></span>
+                            <span class="cb-qr-scanner-stat-label">Presentes</span>
+                        </div>
+                        <div class="cb-qr-scanner-stat">
+                            <span class="cb-qr-scanner-stat-num"><?php echo count($data['convocados'] ?? []); ?></span>
+                            <span class="cb-qr-scanner-stat-label">Convocados</span>
+                        </div>
+                        <p style="font-size:0.8rem;color:var(--text-muted);margin:0.75rem 0;">
+                            Apunte la cámara al QR del socio. Cada escaneo válido suma asistencia al instante — ideal para filas de entrada.
+                        </p>
+                        <div id="cbQrScanFeedback" class="cb-qr-scan-feedback" aria-live="polite"></div>
+                        <ul id="cbQrScanLog" class="cb-qr-scan-log"></ul>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="card card-primary">
@@ -205,7 +236,42 @@ $urlConvocar = $edit
 </div>
 
 <?php if ($det && $tabActiva === 'listado'): ?>
-<script>document.addEventListener('DOMContentLoaded',()=>document.getElementById('listaAsistenciaSeccion')?.scrollIntoView({behavior:'smooth'}));</script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="<?php echo URLROOT; ?>/js/asistencia-qr-scanner.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('listaAsistenciaSeccion')?.scrollIntoView({ behavior: 'smooth' });
+
+    document.querySelectorAll('.cb-asistencia-row').forEach(function(row) {
+        row.addEventListener('click', function(e) {
+            if (e.target.tagName === 'INPUT') return;
+            const cb = row.querySelector('.cb-asistencia-check');
+            if (cb) cb.checked = !cb.checked;
+        });
+    });
+
+    document.querySelectorAll('[data-asist-mode]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const mode = btn.getAttribute('data-asist-mode');
+            document.querySelectorAll('[data-asist-mode]').forEach(b => b.classList.toggle('is-active', b === btn));
+            document.querySelectorAll('.cb-asistencia-panel').forEach(p => {
+                p.hidden = p.getAttribute('data-panel') !== mode;
+            });
+            if (mode === 'qr' && window.cbInitAsistenciaQrScanner) {
+                window.cbInitAsistenciaQrScanner({
+                    reunionId: <?php echo (int)$det->id; ?>,
+                    endpoint: '<?php echo URLROOT; ?>/admin/asistencia_qr_registrar',
+                    readerId: 'cbQrReader',
+                    feedbackId: 'cbQrScanFeedback',
+                    logId: 'cbQrScanLog',
+                    presentesId: 'cbQrPresentesLive',
+                    presentesHeaderId: 'cbPresentesCount'
+                });
+            }
+        });
+    });
+});
+</script>
 <?php endif; ?>
 
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>

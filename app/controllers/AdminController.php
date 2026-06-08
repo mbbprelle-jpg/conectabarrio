@@ -275,6 +275,8 @@ class AdminController extends Controller {
         $socios = $this->userModel->getSociosByJunta($juntaId);
         $totalSocios = count($socios);
 
+        $actividades = $this->loadActividadesDashboardData($juntaId, null);
+
         $data = [
             'title' => 'Dashboard Financiero',
             'header_title' => 'Control de Finanzas y Gestión',
@@ -283,10 +285,31 @@ class AdminController extends Controller {
             'balance' => $balance,
             'flujo_historico' => $flujoHistorico,
             'promedio_asistencia' => $promedioAsistencia,
-            'total_socios' => $totalSocios
+            'total_socios' => $totalSocios,
         ];
+        $data = array_merge($data, $actividades);
 
         $this->view('admin/dashboard', $data);
+    }
+
+    /** Datos de calendario para el inicio del dashboard (Plan Mediano+). */
+    private function loadActividadesDashboardData(int $juntaId, ?int $usuarioId = null): array {
+        if (($_SESSION['user_junta_plan'] ?? 'basico') === 'basico') {
+            return ['mostrar_calendario' => false];
+        }
+        $calMes = max(1, min(12, (int)($_GET['mes'] ?? date('n'))));
+        $calAnio = (int)($_GET['anio'] ?? date('Y'));
+        $esSocio = $usuarioId !== null;
+        return [
+            'mostrar_calendario' => true,
+            'cal_mes' => $calMes,
+            'cal_anio' => $calAnio,
+            'eventos_por_dia' => $this->reunionModel->getEventosCalendarioMes($juntaId, $calMes, $calAnio, $usuarioId),
+            'proximas' => $this->reunionModel->getProximasReuniones($juntaId, 5, $usuarioId),
+            'url_calendario' => $esSocio ? (URLROOT . '/socio/reuniones') : (URLROOT . '/admin/calendario'),
+            'url_base_mes' => $esSocio ? (URLROOT . '/socio/dashboard') : (URLROOT . '/admin/dashboard'),
+            'es_socio' => $esSocio,
+        ];
     }
 
     // =========================================================================
@@ -2304,8 +2327,12 @@ class AdminController extends Controller {
             $reunion = $this->reunionModel->getReunionByIdAndJunta((int)$reunionId, $juntaId);
             if ($reunion) {
                 $data['reunion_detalle'] = $reunion;
-                $data['asistentes'] = $this->asistenciaModel->getAsistenciaByReunion((int)$reunionId, $juntaId);
-                $data['convocados'] = $this->reunionConvocadoModel->getUsuariosByReunion((int)$reunionId, $juntaId);
+                $convocados = $this->reunionConvocadoModel->getUsuariosByReunion((int)$reunionId, $juntaId);
+                $data['convocados'] = $convocados;
+                $data['asistentes'] = !empty($convocados)
+                    ? $this->asistenciaModel->getAsistenciaConvocadosByReunion((int)$reunionId, $juntaId)
+                    : $this->asistenciaModel->getAsistenciaByReunion((int)$reunionId, $juntaId);
+                $data['presentes_count'] = $this->asistenciaModel->countPresentesByReunion((int)$reunionId);
             }
         }
 
@@ -2443,12 +2470,90 @@ class AdminController extends Controller {
         }
 
         $sociosAsistentes = $_POST['asistencia'] ?? [];
-        foreach ($this->userModel->getSociosByJunta($juntaId) as $socio) {
+        $convocadoIds = $this->reunionConvocadoModel->getUsuarioIdsByReunion($reunionId);
+        $sociosLista = !empty($convocadoIds)
+            ? array_filter($this->userModel->getSociosByJunta($juntaId), static fn($s) => in_array((int)$s->id, $convocadoIds, true))
+            : $this->userModel->getSociosByJunta($juntaId);
+        foreach ($sociosLista as $socio) {
             $asistio = in_array((string)$socio->id, array_map('strval', $sociosAsistentes), true) ? 1 : 0;
             $this->asistenciaModel->saveAsistencia($reunionId, $socio->id, $asistio);
         }
         $_SESSION['success_msg'] = 'Lista de asistencia guardada.';
         $this->redirect('/admin/asistencia/' . $reunionId . '?tab=listado');
+    }
+
+    public function asistencia_qr_registrar() {
+        header('Content-Type: application/json; charset=utf-8');
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['ok' => false, 'message' => 'Método no permitido']);
+            return;
+        }
+        if (!$this->requireReunionesPlan()) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'message' => 'Requiere Plan Mediano o superior']);
+            return;
+        }
+        require_once APPROOT . '/core/AuthContext.php';
+        require_once APPROOT . '/core/AsistenciaQr.php';
+        if (!AuthContext::canManageReuniones()) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'message' => 'Sin permisos para registrar asistencia']);
+            return;
+        }
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $reunionId = (int)($post['reunion_id'] ?? 0);
+        $rawPayload = trim($post['payload'] ?? '');
+
+        $reunion = $this->reunionModel->getReunionByIdAndJunta($reunionId, $juntaId);
+        if (!$reunion) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'message' => 'Reunión no válida']);
+            return;
+        }
+
+        $token = AsistenciaQr::parseScannedText($rawPayload);
+        if (!$token) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'message' => 'Código QR no reconocido']);
+            return;
+        }
+
+        if (!$this->userModel->hasAsistenciaQrColumn()) {
+            http_response_code(503);
+            echo json_encode(['ok' => false, 'message' => 'Ejecute sql/add_asistencia_qr_token.sql']);
+            return;
+        }
+
+        $socio = $this->userModel->findByAsistenciaQrToken($token, $juntaId);
+        if (!$socio) {
+            http_response_code(404);
+            echo json_encode(['ok' => false, 'message' => 'Socio no encontrado en esta organización']);
+            return;
+        }
+
+        if (!$this->reunionConvocadoModel->isConvocado($reunionId, (int)$socio->id)) {
+            $nombreErr = trim(($socio->nombre ?? '') . ' ' . ($socio->apellido_paterno ?? ''));
+            http_response_code(422);
+            echo json_encode(['ok' => false, 'message' => $nombreErr . ' no está en la lista de convocados']);
+            return;
+        }
+
+        $yaPresente = $this->asistenciaModel->getAsistioForSocio($reunionId, (int)$socio->id);
+        $this->asistenciaModel->saveAsistencia($reunionId, (int)$socio->id, 1);
+        $nombre = trim(($socio->nombre ?? '') . ' ' . ($socio->apellido_paterno ?? ''));
+
+        echo json_encode([
+            'ok' => true,
+            'message' => $yaPresente ? ($nombre . ' ya estaba registrado/a') : ($nombre . ' — asistencia registrada'),
+            'socio_id' => (int)$socio->id,
+            'nombre' => $nombre,
+            'ya_presente' => $yaPresente,
+            'presentes' => $this->asistenciaModel->countPresentesByReunion($reunionId),
+            'total_convocados' => count($this->reunionConvocadoModel->getUsuarioIdsByReunion($reunionId)),
+        ]);
     }
 
     public function reunion_minuta($id) {

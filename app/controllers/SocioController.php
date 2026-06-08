@@ -49,6 +49,25 @@ class SocioController extends Controller {
 
         $cambioPendiente = $this->cambioModel->getPendingForUsuarioJunta((int)$socioId, (int)$juntaId);
 
+        require_once APPROOT . '/core/AsistenciaQr.php';
+        $qrToken = $this->userModel->getOrCreateAsistenciaQrToken((int)$socioId);
+        $qrPayload = $qrToken ? AsistenciaQr::buildPayload($qrToken) : null;
+        $planTieneReuniones = ($_SESSION['user_junta_plan'] ?? 'basico') !== 'basico';
+        $calMes = max(1, min(12, (int)($_GET['mes'] ?? date('n'))));
+        $calAnio = (int)($_GET['anio'] ?? date('Y'));
+        $actividades = $planTieneReuniones
+            ? [
+                'mostrar_calendario' => true,
+                'cal_mes' => $calMes,
+                'cal_anio' => $calAnio,
+                'eventos_por_dia' => $this->reunionModel->getEventosCalendarioMes($juntaId, $calMes, $calAnio, (int)$socioId),
+                'proximas' => $this->reunionModel->getProximasReuniones($juntaId, 5, (int)$socioId),
+                'url_calendario' => URLROOT . '/socio/reuniones',
+                'url_base_mes' => URLROOT . '/socio/dashboard',
+                'es_socio' => true,
+            ]
+            : ['mostrar_calendario' => false];
+
         $data = [
             'title' => 'Mi Perfil Vecinal',
             'header_title' => 'Panel de Socio Vecino',
@@ -62,7 +81,10 @@ class SocioController extends Controller {
             'cambio_pendiente' => $cambioPendiente,
             'org_tipo' => $_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos',
             'uses_calles' => OrgHelper::usesCallesJurisdiccion($_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos'),
+            'qr_payload' => $planTieneReuniones ? $qrPayload : null,
+            'qr_migration_pending' => $planTieneReuniones && !$this->userModel->hasAsistenciaQrColumn(),
         ];
+        $data = array_merge($data, $actividades);
 
         $this->view('socio/dashboard', $data);
     }

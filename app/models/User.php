@@ -868,5 +868,79 @@ class User extends Model {
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->execute();
     }
+
+    private static $hasAsistenciaQrColumn = null;
+
+    public function hasAsistenciaQrColumn(): bool {
+        if (self::$hasAsistenciaQrColumn === true) {
+            return true;
+        }
+        try {
+            $this->db->query('SELECT asistencia_qr_token FROM usuarios LIMIT 1');
+            $this->db->execute();
+            self::$hasAsistenciaQrColumn = true;
+            return true;
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    public function getOrCreateAsistenciaQrToken(int $userId): ?string {
+        if (!$this->hasAsistenciaQrColumn()) {
+            return null;
+        }
+        require_once APPROOT . '/core/AsistenciaQr.php';
+        $this->db->query('SELECT asistencia_qr_token FROM usuarios WHERE id = :id LIMIT 1');
+        $this->db->bind(':id', $userId);
+        $row = $this->db->single();
+        if (!$row) {
+            return null;
+        }
+        $existing = trim((string)($row->asistencia_qr_token ?? ''));
+        if ($existing !== '' && AsistenciaQr::isValidTokenFormat($existing)) {
+            return strtolower($existing);
+        }
+        for ($i = 0; $i < 5; $i++) {
+            $token = AsistenciaQr::generateToken();
+            $this->db->query('UPDATE usuarios SET asistencia_qr_token = :token WHERE id = :id AND (asistencia_qr_token IS NULL OR asistencia_qr_token = \'\')');
+            $this->db->bind(':token', $token);
+            $this->db->bind(':id', $userId);
+            if ($this->db->execute()) {
+                $this->db->query('SELECT asistencia_qr_token FROM usuarios WHERE id = :id LIMIT 1');
+                $this->db->bind(':id', $userId);
+                $check = $this->db->single();
+                $saved = trim((string)($check->asistencia_qr_token ?? ''));
+                if ($saved !== '') {
+                    return strtolower($saved);
+                }
+            }
+        }
+        return null;
+    }
+
+    public function findByAsistenciaQrToken(string $token, int $juntaId) {
+        if (!$this->hasAsistenciaQrColumn()) {
+            return null;
+        }
+        require_once APPROOT . '/core/AsistenciaQr.php';
+        $token = strtolower(trim($token));
+        if (!AsistenciaQr::isValidTokenFormat($token)) {
+            return null;
+        }
+        $this->db->query("SELECT u.* FROM usuarios u
+            WHERE u.asistencia_qr_token = :token AND u.estado = 1
+            AND (
+                u.junta_id = :junta_id
+                OR EXISTS (
+                    SELECT 1 FROM usuario_membresias m
+                    WHERE m.usuario_id = u.id AND m.junta_id = :junta_id2 AND m.estado = 1
+                )
+            )
+            LIMIT 1");
+        $this->db->bind(':token', $token);
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':junta_id2', $juntaId);
+        return $this->db->single();
+    }
 }
 

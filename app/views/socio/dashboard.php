@@ -1,6 +1,28 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 <?php require_once APPROOT . '/core/SocioInput.php'; ?>
 
+<?php
+$mostrar_calendario = $data['mostrar_calendario'] ?? false;
+if ($mostrar_calendario) {
+    extract([
+        'cal_mes' => $data['cal_mes'],
+        'cal_anio' => $data['cal_anio'],
+        'eventos_por_dia' => $data['eventos_por_dia'],
+        'proximas' => $data['proximas'],
+        'url_calendario' => $data['url_calendario'],
+        'url_base_mes' => $data['url_base_mes'],
+        'es_socio' => true,
+    ], EXTR_SKIP);
+    require APPROOT . '/views/partials/dashboard_actividades.php';
+}
+
+if (!empty($data['qr_payload'])) {
+    $qr_payload = $data['qr_payload'];
+    $qr_migration_pending = $data['qr_migration_pending'] ?? false;
+    require APPROOT . '/views/partials/socio_qr_asistencia.php';
+}
+?>
+
 <!-- Grid de Información y Estadísticas -->
 <div class="metrics-grid">
     

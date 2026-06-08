@@ -36,6 +36,40 @@ class Asistencia extends Model {
         return $this->db->execute();
     }
 
+    /** Pase de lista solo para convocados de la reunión. */
+    public function getAsistenciaConvocadosByReunion(int $reunionId, int $juntaId): array {
+        try {
+            $this->db->query("SELECT u.id AS socio_id, u.nombre, u.rut, COALESCE(a.asistio, 0) AS asistio
+                FROM reunion_convocados rc
+                INNER JOIN usuarios u ON u.id = rc.usuario_id
+                LEFT JOIN asistencia a ON u.id = a.socio_id AND a.reunion_id = :reunion_id
+                INNER JOIN usuario_membresias m ON m.usuario_id = u.id AND m.junta_id = :junta_id AND m.estado = 1
+                WHERE rc.reunion_id = :reunion_id2 AND u.estado = 1
+                ORDER BY u.nombre ASC");
+            $this->db->bind(':reunion_id', $reunionId);
+            $this->db->bind(':reunion_id2', $reunionId);
+            $this->db->bind(':junta_id', $juntaId);
+            return $this->db->resultSet();
+        } catch (Exception $e) {
+            return $this->getAsistenciaByReunion($reunionId, $juntaId);
+        }
+    }
+
+    public function countPresentesByReunion(int $reunionId): int {
+        $this->db->query('SELECT COUNT(*) AS c FROM asistencia WHERE reunion_id = :reunion_id AND asistio = 1');
+        $this->db->bind(':reunion_id', $reunionId);
+        $row = $this->db->single();
+        return (int)($row->c ?? 0);
+    }
+
+    public function getAsistioForSocio(int $reunionId, int $socioId): bool {
+        $this->db->query('SELECT asistio FROM asistencia WHERE reunion_id = :reunion_id AND socio_id = :socio_id LIMIT 1');
+        $this->db->bind(':reunion_id', $reunionId);
+        $this->db->bind(':socio_id', $socioId);
+        $row = $this->db->single();
+        return $row && (int)$row->asistio === 1;
+    }
+
     // Obtener resumen de asistencia promedio de socios para el Dashboard
     public function getPromedioAsistencia($juntaId) {
         $this->db->query("SELECT 

@@ -158,6 +158,7 @@
                                             data-tipo="<?php echo htmlspecialchars($junta->tipo ?? 'Junta de Vecinos'); ?>"
                                             data-comuna="<?php echo htmlspecialchars($junta->comuna ?? ''); ?>"
                                             data-direccion="<?php echo htmlspecialchars($junta->direccion ?? ''); ?>"
+                                            data-pj="<?php echo htmlspecialchars($junta->personalidad_juridica_num ?? ''); ?>"
                                             style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem;">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                         Editar org
@@ -277,6 +278,11 @@
                 <label for="org_edit_direccion" class="form-label">Dirección sede *</label>
                 <input type="text" name="direccion" id="org_edit_direccion" class="form-control" required placeholder="Ej: Pasaje Los Aromos 123">
                 <small style="color: var(--text-muted); font-size: 0.72rem;">Se geocodifica para centrar el mapa de socios sin calle registrada.</small>
+            </div>
+            <div class="form-group">
+                <label for="org_edit_pj" class="form-label">N° Personalidad Jurídica <span style="font-weight:normal;color:var(--text-muted);">(opcional)</span></label>
+                <input type="text" name="personalidad_juridica_num" id="org_edit_pj" class="form-control" maxlength="50" placeholder="Ej: 12345">
+                <small style="color: var(--text-muted); font-size: 0.72rem;">Visible solo para la directiva de la organización.</small>
             </div>
             <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1.5rem;">
                 <button id="cancelOrgEditBtn" type="button" class="btn btn-secondary">Cancelar</button>
@@ -751,6 +757,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('org_edit_tipo').value = this.getAttribute('data-tipo') || 'Junta de Vecinos';
             document.getElementById('org_edit_comuna').value = this.getAttribute('data-comuna') || '';
             document.getElementById('org_edit_direccion').value = this.getAttribute('data-direccion') || '';
+            const pjField = document.getElementById('org_edit_pj');
+            if (pjField) pjField.value = this.getAttribute('data-pj') || '';
             openModal(orgEditModal);
         });
     });

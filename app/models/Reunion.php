@@ -181,4 +181,26 @@ class Reunion extends Model {
         }
         return $eventos;
     }
+
+    /** Próximas reuniones (futuras o de hoy), ordenadas por fecha ascendente. */
+    public function getProximasReuniones(int $juntaId, int $limit = 5, ?int $usuarioId = null): array {
+        $limit = max(1, min(20, $limit));
+        try {
+            if ($usuarioId !== null) {
+                $this->db->query("SELECT r.* FROM reuniones r
+                    INNER JOIN reunion_convocados rc ON rc.reunion_id = r.id AND rc.usuario_id = :usuario_id
+                    WHERE r.junta_id = :junta_id AND r.fecha_reunion >= CURDATE()
+                    ORDER BY r.fecha_reunion ASC LIMIT {$limit}");
+                $this->db->bind(':usuario_id', $usuarioId);
+            } else {
+                $this->db->query("SELECT * FROM reuniones
+                    WHERE junta_id = :junta_id AND fecha_reunion >= CURDATE()
+                    ORDER BY fecha_reunion ASC LIMIT {$limit}");
+            }
+            $this->db->bind(':junta_id', $juntaId);
+            return $this->db->resultSet();
+        } catch (Exception $e) {
+            return [];
+        }
+    }
 }

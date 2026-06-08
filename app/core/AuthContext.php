@@ -281,7 +281,7 @@ class AuthContext {
         if (self::canManageReuniones()) {
             $methods = array_merge($methods, [
                 'asistencia', 'reunion_crear', 'reunion_actualizar', 'reunion_resultados',
-                'asistencia_guardar', 'reunion_minuta',
+                'asistencia_guardar', 'asistencia_qr_registrar', 'reunion_minuta',
             ]);
         }
         if (self::isDirectivo() || self::canManageReuniones()) {

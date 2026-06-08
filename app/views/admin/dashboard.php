@@ -1,5 +1,21 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 
+<?php
+$mostrar_calendario = $data['mostrar_calendario'] ?? false;
+if ($mostrar_calendario) {
+    extract([
+        'cal_mes' => $data['cal_mes'],
+        'cal_anio' => $data['cal_anio'],
+        'eventos_por_dia' => $data['eventos_por_dia'],
+        'proximas' => $data['proximas'],
+        'url_calendario' => $data['url_calendario'],
+        'url_base_mes' => $data['url_base_mes'],
+        'es_socio' => $data['es_socio'] ?? false,
+    ], EXTR_SKIP);
+    require APPROOT . '/views/partials/dashboard_actividades.php';
+}
+?>
+
 <!-- Grid de Métricas Financieras -->
 <div class="metrics-grid">
     
