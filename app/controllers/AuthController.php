@@ -17,7 +17,8 @@ class AuthController extends Controller {
         $data = [
             'title' => 'Iniciar Sesión',
             'rut_or_email' => '',
-            'error' => ''
+            'error' => '',
+            'public_layout' => true,
         ];
 
         $this->view('auth/login', $data);
@@ -36,7 +37,8 @@ class AuthController extends Controller {
             $data = [
                 'title' => 'Iniciar Sesión',
                 'rut_or_email' => $rutOrEmail,
-                'error' => ''
+                'error' => '',
+                'public_layout' => true,
             ];
 
             // Validar campos vacíos

@@ -24,7 +24,11 @@
     </nav>
 
     <!-- Sección Hero -->
-    <header class="landing-hero" id="inicio">
+    <?php
+    $heroBgUrl = URLROOT . '/img/landing_bg.png?v=2';
+    $heroBgStyle = "background-image: linear-gradient(180deg, rgba(3,7,18,0.55) 0%, rgba(3,7,18,0.2) 22%, rgba(15,23,42,0.15) 45%, rgba(15,23,42,0.45) 100%), linear-gradient(135deg, rgba(99,102,241,0.12) 0%, transparent 50%), url('" . htmlspecialchars($heroBgUrl, ENT_QUOTES) . "')";
+    ?>
+    <header class="landing-hero" id="inicio" style="<?php echo $heroBgStyle; ?>">
         <div class="landing-hero-content">
             <div class="landing-hero-tag">
                 Gestión Comunitaria Inteligente

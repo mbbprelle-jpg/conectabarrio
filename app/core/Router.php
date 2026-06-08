@@ -5,6 +5,10 @@
  * Implementa control de accesos por roles (RBAC).
  */
 class Router {
+    // Añadimos ruta pública para la presentación ejecutiva
+    protected $publicRoutes = [
+        'presentacion' => ['controller' => 'PresentationController', 'method' => 'index']
+    ];
     protected $currentController = 'AuthController';
     protected $currentMethod = 'login';
     protected $params = [];
