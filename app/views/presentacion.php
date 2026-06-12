@@ -28,10 +28,9 @@ require_once APPROOT . '/views/layouts/header.php';
             <section class="pres-slide pres-slide--cover" aria-hidden="false">
                 <div class="pres-slide-bg" style="background-image:url('<?php echo $img; ?>');"></div>
                 <div class="pres-slide-inner pres-cover">
-                    <span class="pres-eyebrow">Presentación Ejecutiva · Chile 2026</span>
-                    <h1 class="pres-title">Tu organización comunitaria<br><span>más conectada y bajo control</span></h1>
+                    <span class="pres-eyebrow">Presentación ConectaBarrio · Chile 2026</span>
+                    <h1 class="pres-title">Tu organización<br><span>más conectada y bajo control</span></h1>
                     <p class="pres-subtitle">ConectaBarrio digitaliza el padrón de socios, la tesorería, las asambleas y la comunicación vecinal en una sola plataforma — pensada para juntas de vecinos, clubes deportivos y organizaciones territoriales.</p>
-                    <p class="pres-meta">Use las flechas del teclado o los controles inferiores para avanzar</p>
                 </div>
             </section>
 
