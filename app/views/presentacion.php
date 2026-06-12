@@ -287,8 +287,6 @@ require_once APPROOT . '/views/layouts/header.php';
         </div>
     </div>
 
-    <p class="pres-hint">← → flechas · Espacio para avanzar · Deslizar en móvil</p>
-
     <nav class="pres-nav" aria-label="Navegación de presentación">
         <button type="button" class="pres-nav-btn" id="presPrev" aria-label="Lámina anterior" disabled>
             <svg viewBox="0 0 24 24" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
