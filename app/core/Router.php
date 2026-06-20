@@ -82,7 +82,9 @@ class Router {
         $publicRoutes = [
             'AuthController' => ['login', 'logout', 'authenticate', 'recover', 'select_context', 'set_context'],
             'InviteController' => ['registro', 'registrar', 'verificar_rut'],
-            'PresentacionController' => ['index'], // Ruta pública para la presentación ejecutiva
+            'PresentacionController' => ['index'],
+            'ReunionRsvpController' => ['responder'],
+            'VotacionLinkController' => ['ingresar'],
         ];
 
         // Si la ruta no es pública y el usuario no está logueado, forzar login

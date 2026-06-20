@@ -242,6 +242,21 @@ class AuthController extends Controller {
             $this->redirect('/auth/resetPassword');
             exit;
         }
+        if (!empty($_SESSION['pending_votacion_token'])) {
+            $token = $_SESSION['pending_votacion_token'];
+            unset($_SESSION['pending_votacion_token']);
+            require_once APPROOT . '/models/Votacion.php';
+            $vModel = new Votacion();
+            $v = $vModel->getByToken($token);
+            if ($v) {
+                if ($role === 'admin') {
+                    $this->redirect('/admin/votacion_votar/' . (int)$v->id);
+                } else {
+                    $this->redirect('/socio/votacion_votar/' . (int)$v->id);
+                }
+                exit;
+            }
+        }
         switch ($role) {
             case 'maestro':
                 $this->redirect('/maestro/dashboard');

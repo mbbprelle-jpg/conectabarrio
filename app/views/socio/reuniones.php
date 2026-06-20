@@ -12,6 +12,24 @@ $reuniones = $data['reuniones'] ?? [];
     <strong>Próxima convocatoria:</strong>
     <?php echo htmlspecialchars($proxima->titulo); ?> —
     <?php echo date('d/m/Y H:i', strtotime($proxima->fecha_reunion)); ?>
+    <?php
+    $rsvp = $proxima->rsvp_estado ?? null;
+    if ($rsvp === 'confirmado'): ?> · <span class="badge badge-success">Confirmó asistencia</span>
+    <?php elseif ($rsvp === 'rechazado'): ?> · <span class="badge badge-danger">Indicó que no asistirá</span>
+    <?php elseif ($rsvp === 'pendiente' || $rsvp === null): ?>
+    <div style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <form action="<?php echo URLROOT; ?>/socio/reunion_rsvp" method="POST" style="display:inline;">
+            <input type="hidden" name="reunion_id" value="<?php echo (int)$proxima->id; ?>">
+            <input type="hidden" name="accion" value="confirmar">
+            <button type="submit" class="btn btn-success btn-sm">Confirmar asistencia</button>
+        </form>
+        <form action="<?php echo URLROOT; ?>/socio/reunion_rsvp" method="POST" style="display:inline;">
+            <input type="hidden" name="reunion_id" value="<?php echo (int)$proxima->id; ?>">
+            <input type="hidden" name="accion" value="rechazar">
+            <button type="submit" class="btn btn-secondary btn-sm">No podré asistir</button>
+        </form>
+    </div>
+    <?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -50,6 +68,18 @@ $reuniones = $data['reuniones'] ?? [];
                         </td>
                         <td><span class="badge <?php echo $r->estado === 'realizada' ? 'badge-success' : 'badge-warning'; ?>"><?php echo htmlspecialchars($r->estado); ?></span></td>
                         <td>
+                            <?php if ($futura && ($r->estado ?? '') === 'programada'): ?>
+                                <?php $rsvp = $r->rsvp_estado ?? 'pendiente'; ?>
+                                <?php if ($rsvp === 'confirmado'): ?><span class="badge badge-success">Confirmado</span>
+                                <?php elseif ($rsvp === 'rechazado'): ?><span class="badge badge-danger">No asiste</span>
+                                <?php else: ?>
+                                <form action="<?php echo URLROOT; ?>/socio/reunion_rsvp" method="POST" style="display:inline;">
+                                    <input type="hidden" name="reunion_id" value="<?php echo (int)$r->id; ?>">
+                                    <input type="hidden" name="accion" value="confirmar">
+                                    <button class="btn btn-success btn-sm" type="submit">Confirmar</button>
+                                </form>
+                                <?php endif; ?>
+                            <?php endif; ?>
                             <?php if ($r->estado === 'realizada'): ?>
                             <a href="<?php echo URLROOT; ?>/admin/reunion_minuta/<?php echo (int)$r->id; ?>" target="_blank" class="btn btn-secondary btn-sm">Minuta</a>
                             <?php endif; ?>

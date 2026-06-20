@@ -120,6 +120,21 @@ class Membresia extends Model {
         return self::$hasPermisoReunionesColumn;
     }
 
+    private static $hasPermisoVotacionesColumn = null;
+
+    public function hasPermisoVotacionesColumn(): bool {
+        if (self::$hasPermisoVotacionesColumn === null) {
+            try {
+                $this->db->query('SELECT permiso_votaciones FROM usuario_membresias LIMIT 1');
+                $this->db->execute();
+                self::$hasPermisoVotacionesColumn = true;
+            } catch (Exception $e) {
+                self::$hasPermisoVotacionesColumn = false;
+            }
+        }
+        return self::$hasPermisoVotacionesColumn;
+    }
+
     private static $hasDocumentosJuntaColumn = null;
 
     public function hasDocumentosJuntaColumn(): bool {
@@ -293,6 +308,9 @@ class Membresia extends Model {
         if ($this->hasPermisoReunionesColumn()) {
             $sql .= ', permiso_reuniones = :permiso_reuniones';
         }
+        if ($this->hasPermisoVotacionesColumn()) {
+            $sql .= ', permiso_votaciones = :permiso_votaciones';
+        }
         $sql .= ' WHERE id = :id';
         $this->db->query($sql);
         $this->db->bind(':cargo', $data['cargo'] ?: null);
@@ -310,6 +328,9 @@ class Membresia extends Model {
         }
         if ($this->hasPermisoReunionesColumn()) {
             $this->db->bind(':permiso_reuniones', !empty($data['permiso_reuniones']) ? 1 : 0);
+        }
+        if ($this->hasPermisoVotacionesColumn()) {
+            $this->db->bind(':permiso_votaciones', !empty($data['permiso_votaciones']) ? 1 : 0);
         }
         $this->db->bind(':id', $membresiaId);
         return $this->db->execute();

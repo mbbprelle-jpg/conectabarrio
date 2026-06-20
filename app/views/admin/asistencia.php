@@ -145,7 +145,41 @@ $urlConvocar = $edit
                 Convocatoria: <?php echo date('d/m/Y H:i', strtotime($det->fecha_reunion)); ?>
                 · <?php echo count($data['convocados'] ?? []); ?> convocado(s)
                 · <strong id="cbPresentesCount"><?php echo (int)($data['presentes_count'] ?? 0); ?></strong> presentes
+                <?php if (!empty($data['rsvp_stats']) && ($data['rsvp_stats']['total'] ?? 0) > 0): ?>
+                · RSVP: <?php echo (int)$data['rsvp_stats']['confirmados']; ?> confirmados,
+                <?php echo (int)$data['rsvp_stats']['rechazados']; ?> rechazados,
+                <?php echo (int)$data['rsvp_stats']['pendientes']; ?> sin respuesta
+                <?php endif; ?>
             </p>
+
+            <?php if ($det->estado === 'programada' && !empty($data['rsvp_stats']['pendientes'])): ?>
+            <form action="<?php echo URLROOT; ?>/admin/reunion_reenviar_rsvp" method="POST" style="margin-bottom:1rem;">
+                <input type="hidden" name="reunion_id" value="<?php echo (int)$det->id; ?>">
+                <button type="submit" class="btn btn-warning btn-sm">Reenviar convocatoria a quienes no han respondido (<?php echo (int)$data['rsvp_stats']['pendientes']; ?>)</button>
+            </form>
+            <?php endif; ?>
+
+            <?php if (!empty($data['convocados'])): ?>
+            <div class="card" style="margin-bottom:1rem;padding:1rem;">
+                <h4 style="font-size:0.9rem;margin:0 0 0.75rem;">Confirmación previa de asistencia</h4>
+                <div class="table-responsive">
+                    <table class="table" style="font-size:0.85rem;">
+                        <thead><tr><th>Socio</th><th>RSVP</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($data['convocados'] as $c):
+                            $rsvp = $c->rsvp_estado ?? 'pendiente';
+                            $badge = $rsvp === 'confirmado' ? 'badge-success' : ($rsvp === 'rechazado' ? 'badge-danger' : 'badge-warning');
+                        ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($c->nombre); ?></td>
+                                <td><span class="badge <?php echo $badge; ?>"><?php echo htmlspecialchars($rsvp); ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <div class="cb-tabs cb-asistencia-mode-tabs" role="tablist">
                 <button type="button" class="cb-tab is-active" data-asist-mode="manual" role="tab">Lista manual</button>
@@ -230,6 +264,11 @@ $urlConvocar = $edit
                     <label class="form-label">Hora real de inicio (opcional)</label>
                     <input type="datetime-local" name="hora_inicio_real" class="form-control"
                         value="<?php echo !empty($det->hora_inicio_real) ? date('Y-m-d\TH:i', strtotime($det->hora_inicio_real)) : date('Y-m-d\TH:i', strtotime($det->fecha_reunion)); ?>">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Hora real de término (opcional)</label>
+                    <input type="datetime-local" name="hora_fin_real" class="form-control"
+                        value="<?php echo !empty($det->hora_fin_real) ? date('Y-m-d\TH:i', strtotime($det->hora_fin_real)) : ''; ?>">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Acuerdos, observaciones y resultados</label>

@@ -15,6 +15,7 @@ class SocioController extends Controller {
         $this->cambioModel = $this->model('SocioCambioSolicitud');
         $this->reunionConvocadoModel = $this->model('ReunionConvocado');
         $this->reunionModel = $this->model('Reunion');
+        $this->votacionModel = $this->model('Votacion');
         $this->db = new Database();
     }
 
@@ -68,6 +69,11 @@ class SocioController extends Controller {
             ]
             : ['mostrar_calendario' => false];
 
+        $votacionesPendientes = [];
+        if ($this->votacionModel->tablesExist()) {
+            $votacionesPendientes = $this->votacionModel->getActivasForUsuario($juntaId, (int)$socioId);
+        }
+
         $data = [
             'title' => 'Mi Perfil Vecinal',
             'header_title' => 'Panel de Socio Vecino',
@@ -83,6 +89,7 @@ class SocioController extends Controller {
             'uses_calles' => OrgHelper::usesCallesJurisdiccion($_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos'),
             'qr_payload' => $planTieneReuniones ? $qrPayload : null,
             'qr_migration_pending' => $planTieneReuniones && !$this->userModel->hasAsistenciaQrColumn(),
+            'votaciones_pendientes' => $votacionesPendientes,
         ];
         $data = array_merge($data, $actividades);
 
@@ -282,5 +289,92 @@ class SocioController extends Controller {
         ];
 
         $this->view('admin/comprobante_detalle', $data);
+    }
+
+    public function votaciones() {
+        $socioId = (int)$_SESSION['user_id'];
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        require_once APPROOT . '/core/AuthContext.php';
+        $pendientes = $this->votacionModel->tablesExist()
+            ? $this->votacionModel->getActivasForUsuario($juntaId, $socioId) : [];
+        $todas = $this->votacionModel->tablesExist() ? $this->votacionModel->getByJunta($juntaId) : [];
+        $this->view('socio/votaciones', [
+            'title' => 'Votaciones y encuestas',
+            'header_title' => 'Votaciones y encuestas',
+            'header_subtitle' => 'Participe en consultas activas de su organización',
+            'active_menu' => 'votaciones',
+            'pendientes' => $pendientes,
+            'historial' => $todas,
+            'is_directiva' => AuthContext::isDirectivo(),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ]);
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+    }
+
+    public function votacion_votar($id = 0) {
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $uid = (int)$_SESSION['user_id'];
+        $id = (int)$id;
+        if (!$this->votacionModel->tablesExist()) {
+            $_SESSION['error_msg'] = 'Módulo no disponible.';
+            $this->redirect('/socio/dashboard');
+            return;
+        }
+        $this->votacionModel->syncEstadosActivas();
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v) {
+            $_SESSION['error_msg'] = 'Votación no encontrada.';
+            $this->redirect('/socio/votaciones');
+            return;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+            if (!$this->votacionModel->canUserParticipate($v, $uid, $juntaId)) {
+                $_SESSION['error_msg'] = 'No puede votar en esta consulta.';
+                $this->redirect('/socio/votaciones');
+                return;
+            }
+            $opcionId = (int)($_POST['opcion_id'] ?? 0);
+            $texto = trim($_POST['respuesta_texto'] ?? '');
+            if ($v->tipo === 'votacion' && $opcionId <= 0) {
+                $_SESSION['error_msg'] = 'Seleccione una opción.';
+                $this->redirect('/socio/votacion_votar/' . $id);
+                return;
+            }
+            $this->votacionModel->registerVote($id, $uid, $opcionId > 0 ? $opcionId : null, $texto !== '' ? $texto : null);
+            $_SESSION['success_msg'] = 'Su voto fue registrado de forma confidencial.';
+            $this->redirect('/socio/votaciones');
+            return;
+        }
+        $this->view('admin/votacion_votar', [
+            'title' => 'Participar: ' . $v->titulo,
+            'header_title' => $v->titulo,
+            'header_subtitle' => 'Su voto es confidencial para el resto de la organización',
+            'active_menu' => 'votaciones',
+            'votacion' => $v,
+            'opciones' => $this->votacionModel->getOpciones($id),
+            'ya_voto' => $this->votacionModel->hasUserVoted($id, $uid),
+            'puede_votar' => $this->votacionModel->canUserParticipate($v, $uid, $juntaId),
+            'back_url' => URLROOT . '/socio/votaciones',
+        ]);
+    }
+
+    public function reunion_rsvp() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/socio/reuniones');
+            return;
+        }
+        $socioId = (int)$_SESSION['user_id'];
+        $reunionId = (int)($_POST['reunion_id'] ?? 0);
+        $accion = $_POST['accion'] ?? '';
+        $estado = $accion === 'confirmar' ? 'confirmado' : ($accion === 'rechazar' ? 'rechazado' : '');
+        if ($estado === '' || !$this->reunionConvocadoModel->isConvocado($reunionId, $socioId)) {
+            $_SESSION['error_msg'] = 'No puede responder esta convocatoria.';
+            $this->redirect('/socio/reuniones');
+            return;
+        }
+        $this->reunionConvocadoModel->updateRsvp($reunionId, $socioId, $estado);
+        $_SESSION['success_msg'] = $estado === 'confirmado' ? 'Asistencia confirmada.' : 'Respuesta registrada.';
+        $this->redirect('/socio/reuniones');
     }
 }

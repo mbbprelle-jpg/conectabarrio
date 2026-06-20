@@ -1436,6 +1436,10 @@ foreach ($data['calles'] as $calleItem) {
                     Convocar reuniones, asistencia y minutas
                 </label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                    <input type="checkbox" name="permiso_votaciones" id="delegacion_perm_votacion" value="1">
+                    Crear y gestionar votaciones y encuestas
+                </label>
+                <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
                     <input type="checkbox" name="permiso_todos" id="delegacion_perm_todos" value="1">
                     Todos los permisos (director)
                 </label>

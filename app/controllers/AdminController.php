@@ -15,6 +15,7 @@ class AdminController extends Controller {
     private $documentoCategoriaModel;
     private $reunionConvocadoModel;
     private $juntaDocumentoLegalModel;
+    private $votacionModel;
     private $db;
 
     public function __construct() {
@@ -33,6 +34,7 @@ class AdminController extends Controller {
         $this->documentoCategoriaModel = $this->model('DocumentoCategoria');
         $this->reunionConvocadoModel = $this->model('ReunionConvocado');
         $this->juntaDocumentoLegalModel = $this->model('JuntaDocumentoLegal');
+        $this->votacionModel = $this->model('Votacion');
         $this->db = new Database();
     }
 
@@ -2218,6 +2220,303 @@ class AdminController extends Controller {
         }
     }
 
+    private function requireManageVotaciones(): void {
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canManageVotaciones()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para gestionar votaciones o encuestas.';
+            $this->redirectUserHome();
+            exit;
+        }
+        if (!$this->votacionModel->tablesExist()) {
+            $_SESSION['error_msg'] = 'Ejecute la migración sql/add_votaciones_rsvp_reunion_fin.sql en la base de datos.';
+            $this->redirect('/admin/dashboard');
+            exit;
+        }
+    }
+
+    /** @return int[] */
+    private function resolveElectoresFromPost(array $post, int $juntaId): array {
+        $audiencia = $post['audiencia_tipo'] ?? 'todos_socios';
+        if ($audiencia === 'todos_socios') {
+            return array_map(static fn($m) => (int)$m->id, $this->membresiaModel->getMiembrosActivosParaConvocatoria($juntaId));
+        }
+        if ($audiencia === 'directiva') {
+            $ids = [];
+            foreach ($this->membresiaModel->getMiembrosActivosParaConvocatoria($juntaId) as $m) {
+                $cargo = strtoupper((string)($m->cargo ?? ''));
+                if (($m->rol ?? '') === 'admin' || !empty($m->permiso_todos)
+                    || in_array($cargo, ['SECRETARIO', 'TESORERO', 'DIRECTOR'], true)) {
+                    $ids[] = (int)$m->id;
+                }
+            }
+            return $ids;
+        }
+        $ids = [];
+        foreach ($post['electores'] ?? [] as $id) {
+            $ids[] = (int)$id;
+        }
+        return array_values(array_unique(array_filter($ids, static fn($id) => $id > 0)));
+    }
+
+    private function parseVotacionPost(array $post): array {
+        $inicio = trim($post['fecha_inicio'] ?? '');
+        $fin = trim($post['fecha_fin'] ?? '');
+        return [
+            'titulo' => trim($post['titulo'] ?? ''),
+            'descripcion' => trim($post['descripcion'] ?? ''),
+            'tipo' => ($post['tipo'] ?? '') === 'encuesta' ? 'encuesta' : 'votacion',
+            'audiencia_tipo' => in_array($post['audiencia_tipo'] ?? '', ['directiva', 'seleccionados', 'todos_socios'], true)
+                ? $post['audiencia_tipo'] : 'todos_socios',
+            'fecha_inicio' => $inicio !== '' ? str_replace('T', ' ', $inicio) . ':00' : '',
+            'fecha_fin' => $fin !== '' ? str_replace('T', ' ', $fin) . ':00' : '',
+            'resultados_visibilidad' => ($post['resultados_visibilidad'] ?? '') === 'todos' ? 'todos' : 'directiva',
+            'opciones' => array_filter(array_map('trim', $post['opciones'] ?? [])),
+            'publicar' => !empty($post['publicar']),
+        ];
+    }
+
+    public function reunion_reenviar_rsvp() {
+        $this->requireManageReuniones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/asistencia');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($_POST['reunion_id'] ?? 0);
+        $reunion = $this->reunionModel->getReunionByIdAndJunta($id, $juntaId);
+        if (!$reunion || $reunion->estado !== 'programada') {
+            $_SESSION['error_msg'] = 'Convocatoria no válida.';
+            $this->redirect('/admin/asistencia/' . $id);
+            return;
+        }
+        $pendientes = $this->reunionConvocadoModel->getConvocadosSinRespuesta($id, $juntaId);
+        $ids = array_map(static fn($r) => (int)$r->id, $pendientes);
+        if (empty($ids)) {
+            $_SESSION['success_msg'] = 'Todos los convocados ya respondieron.';
+            $this->redirect('/admin/asistencia/' . $id);
+            return;
+        }
+        $mailResult = $this->enviarEmailsConvocatoria($reunion, $ids, $juntaId, true);
+        $_SESSION['success_msg'] = 'Recordatorio enviado a ' . $mailResult['enviados'] . ' persona(s) sin respuesta.';
+        $this->redirect('/admin/asistencia/' . $id);
+    }
+
+    public function votaciones($id = null) {
+        $this->requireManageVotaciones();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $this->votacionModel->syncEstadosActivas();
+        $editId = $id ? (int)$id : (int)($_GET['editar'] ?? 0);
+        $data = [
+            'title' => 'Votaciones y encuestas',
+            'header_title' => 'Votaciones y encuestas',
+            'header_subtitle' => 'Consultas formales con control de electores, plazos y confidencialidad',
+            'active_menu' => 'votaciones',
+            'votaciones' => $this->votacionModel->getByJunta($juntaId),
+            'miembros' => $this->membresiaModel->getMiembrosActivosParaConvocatoria($juntaId),
+            'edit' => null,
+            'edit_opciones' => [],
+            'edit_electores' => [],
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        if ($editId > 0) {
+            $edit = $this->votacionModel->getByIdAndJunta($editId, $juntaId);
+            if ($edit && in_array($edit->estado, ['borrador', 'activa'], true)) {
+                $data['edit'] = $edit;
+                $data['edit_opciones'] = $this->votacionModel->getOpciones($editId);
+                $data['edit_electores'] = $this->votacionModel->getElectoresIds($editId);
+            }
+        }
+        $this->view('admin/votaciones', $data);
+    }
+
+    public function votacion_crear() {
+        $this->requireManageVotaciones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $parsed = $this->parseVotacionPost($this->sanitizePost());
+        if ($parsed['titulo'] === '' || $parsed['fecha_inicio'] === '' || $parsed['fecha_fin'] === '' || count($parsed['opciones']) < 2) {
+            $_SESSION['error_msg'] = 'Complete título, fechas y al menos 2 opciones.';
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $estado = $parsed['publicar'] ? 'activa' : 'borrador';
+        $vid = $this->votacionModel->create([
+            'junta_id' => $juntaId,
+            'titulo' => $parsed['titulo'],
+            'descripcion' => $parsed['descripcion'] ?: null,
+            'tipo' => $parsed['tipo'],
+            'creado_por' => (int)$_SESSION['user_id'],
+            'audiencia_tipo' => $parsed['audiencia_tipo'],
+            'fecha_inicio' => $parsed['fecha_inicio'],
+            'fecha_fin' => $parsed['fecha_fin'],
+            'resultados_visibilidad' => $parsed['resultados_visibilidad'],
+            'estado' => $estado,
+        ]);
+        if (!$vid) {
+            $_SESSION['error_msg'] = 'No se pudo crear la votación.';
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $this->votacionModel->replaceOpciones($vid, $parsed['opciones']);
+        if ($parsed['audiencia_tipo'] === 'seleccionados') {
+            $this->votacionModel->replaceElectores($vid, $this->resolveElectoresFromPost($this->sanitizePost(), $juntaId));
+        }
+        $_SESSION['success_msg'] = $estado === 'activa' ? 'Votación publicada.' : 'Borrador guardado.';
+        $this->redirect('/admin/votacion_ver/' . $vid);
+    }
+
+    public function votacion_actualizar() {
+        $this->requireManageVotaciones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $id = (int)($post['votacion_id'] ?? 0);
+        $parsed = $this->parseVotacionPost($post);
+        if (!$this->votacionModel->update($id, $juntaId, [
+            'titulo' => $parsed['titulo'],
+            'descripcion' => $parsed['descripcion'],
+            'tipo' => $parsed['tipo'],
+            'audiencia_tipo' => $parsed['audiencia_tipo'],
+            'fecha_inicio' => $parsed['fecha_inicio'],
+            'fecha_fin' => $parsed['fecha_fin'],
+            'resultados_visibilidad' => $parsed['resultados_visibilidad'],
+        ])) {
+            $_SESSION['error_msg'] = 'No se pudo actualizar.';
+            $this->redirect('/admin/votaciones?editar=' . $id);
+            return;
+        }
+        if (count($parsed['opciones']) >= 2) {
+            $this->votacionModel->replaceOpciones($id, $parsed['opciones']);
+        }
+        if ($parsed['audiencia_tipo'] === 'seleccionados') {
+            $this->votacionModel->replaceElectores($id, $this->resolveElectoresFromPost($post, $juntaId));
+        } else {
+            $this->votacionModel->replaceElectores($id, []);
+        }
+        $_SESSION['success_msg'] = 'Votación actualizada.';
+        $this->redirect('/admin/votacion_ver/' . $id);
+    }
+
+    public function votacion_ver($id = 0) {
+        $this->requireManageVotaciones();
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)$id;
+        $this->votacionModel->syncEstadosActivas();
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v) {
+            $_SESSION['error_msg'] = 'Votación no encontrada.';
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $link = URLROOT . '/votacion/l/' . $v->token_publico;
+        $data = [
+            'title' => $v->titulo,
+            'header_title' => $v->titulo,
+            'header_subtitle' => ucfirst($v->tipo) . ' · ' . ucfirst($v->estado),
+            'active_menu' => 'votaciones',
+            'votacion' => $v,
+            'opciones' => $this->votacionModel->getResultadosAgregados($id),
+            'link_publico' => $link,
+            'puede_ver_detalle' => $this->votacionModel->canViewVoterDetail($v, (int)$_SESSION['user_id'], AuthContext::isFullAdmin()),
+            'detalle_votantes' => [],
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        if ($data['puede_ver_detalle']) {
+            $data['detalle_votantes'] = $this->votacionModel->getDetalleVotantes($id, $juntaId);
+        }
+        $this->view('admin/votacion_ver', $data);
+    }
+
+    public function votacion_publicar() {
+        $this->requireManageVotaciones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($_POST['votacion_id'] ?? 0);
+        $this->votacionModel->updateEstado($id, $juntaId, 'activa');
+        $_SESSION['success_msg'] = 'Votación activada.';
+        $this->redirect('/admin/votacion_ver/' . $id);
+    }
+
+    public function votacion_cerrar() {
+        $this->requireManageVotaciones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($_POST['votacion_id'] ?? 0);
+        $this->votacionModel->updateEstado($id, $juntaId, 'cerrada');
+        $_SESSION['success_msg'] = 'Votación cerrada.';
+        $this->redirect('/admin/votacion_ver/' . $id);
+    }
+
+    public function votacion_votar($id = 0) {
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $uid = (int)$_SESSION['user_id'];
+        $id = (int)$id;
+        $this->votacionModel->syncEstadosActivas();
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v) {
+            $_SESSION['error_msg'] = 'Votación no encontrada.';
+            $this->redirectUserHome();
+            return;
+        }
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+            if (!$this->votacionModel->canUserParticipate($v, $uid, $juntaId)) {
+                $_SESSION['error_msg'] = 'No puede votar en esta consulta.';
+                $this->redirectUserHome();
+                return;
+            }
+            $opcionId = (int)($_POST['opcion_id'] ?? 0);
+            $texto = trim($_POST['respuesta_texto'] ?? '');
+            if ($v->tipo === 'encuesta' && $texto === '' && $opcionId <= 0) {
+                $_SESSION['error_msg'] = 'Indique su respuesta.';
+                $this->redirect('/admin/votacion_votar/' . $id);
+                return;
+            }
+            if ($v->tipo === 'votacion' && $opcionId <= 0) {
+                $_SESSION['error_msg'] = 'Seleccione una opción.';
+                $this->redirect('/admin/votacion_votar/' . $id);
+                return;
+            }
+            $this->votacionModel->registerVote($id, $uid, $opcionId > 0 ? $opcionId : null, $texto !== '' ? $texto : null);
+            $_SESSION['success_msg'] = 'Su voto fue registrado de forma confidencial.';
+            if (AuthContext::canManageVotaciones()) {
+                $this->redirect('/admin/votacion_ver/' . $id);
+            } else {
+                $this->redirect('/socio/votaciones');
+            }
+            return;
+        }
+        $data = [
+            'title' => 'Participar: ' . $v->titulo,
+            'header_title' => $v->titulo,
+            'header_subtitle' => 'Su voto es confidencial para el resto de la organización',
+            'active_menu' => 'votaciones',
+            'votacion' => $v,
+            'opciones' => $this->votacionModel->getOpciones($id),
+            'ya_voto' => $this->votacionModel->hasUserVoted($id, $uid),
+            'puede_votar' => $this->votacionModel->canUserParticipate($v, $uid, $juntaId),
+            'back_url' => URLROOT . '/admin/votaciones',
+        ];
+        $this->view('admin/votacion_votar', $data);
+    }
+
     /** @return int[] */
     private function resolveConvocadosFromPost(array $post, int $juntaId): array {
         $ids = [];
@@ -2237,7 +2536,7 @@ class AdminController extends Controller {
         return array_values(array_unique(array_filter($ids, static fn($id) => $id > 0)));
     }
 
-    private function enviarEmailsConvocatoria(object $reunion, array $usuarioIds, int $juntaId): array {
+    private function enviarEmailsConvocatoria(object $reunion, array $usuarioIds, int $juntaId, bool $soloSinRespuesta = false): array {
         require_once APPROOT . '/core/Mailer.php';
         require_once APPROOT . '/core/ConvocatoriaMail.php';
 
@@ -2250,13 +2549,29 @@ class AdminController extends Controller {
         $fechaFmt = date('d/m/Y \a \l\a\s H:i \h\r\s', strtotime($reunion->fecha_reunion));
         $urlApp = URLROOT . '/socio/reuniones';
         $subject = 'Convocatoria: ' . $reunion->titulo . ' — ' . $juntaNombre;
+        $hasRsvp = $this->reunionConvocadoModel->hasRsvpColumns();
 
         $enviados = 0;
         $errores = 0;
         foreach ($usuarioIds as $uid) {
+            if ($soloSinRespuesta && $hasRsvp) {
+                $estado = $this->reunionConvocadoModel->getRsvpForUsuario((int)$reunion->id, $uid);
+                if ($estado && $estado !== 'pendiente') {
+                    continue;
+                }
+            }
             $user = $this->userModel->getUserById($uid);
             if (!$user || empty($user->email) || !filter_var($user->email, FILTER_VALIDATE_EMAIL)) {
                 continue;
+            }
+            $urlConfirmar = null;
+            $urlRechazar = null;
+            if ($hasRsvp) {
+                $token = $this->reunionConvocadoModel->getRsvpToken((int)$reunion->id, $uid);
+                if ($token) {
+                    $urlConfirmar = URLROOT . '/reunion/rsvp/' . $token . '/confirmar';
+                    $urlRechazar = URLROOT . '/reunion/rsvp/' . $token . '/rechazar';
+                }
             }
             $html = ConvocatoriaMail::buildHtml(
                 $user->nombre ?? 'Socio',
@@ -2264,7 +2579,9 @@ class AdminController extends Controller {
                 $reunion->titulo,
                 $fechaFmt,
                 $temasHtml,
-                $urlApp
+                $urlApp,
+                $urlConfirmar,
+                $urlRechazar
             );
             $result = Mailer::send($user->email, $subject, $html, defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : null);
             if ($result['ok']) {
@@ -2333,6 +2650,7 @@ class AdminController extends Controller {
                     ? $this->asistenciaModel->getAsistenciaConvocadosByReunion((int)$reunionId, $juntaId)
                     : $this->asistenciaModel->getAsistenciaByReunion((int)$reunionId, $juntaId);
                 $data['presentes_count'] = $this->asistenciaModel->countPresentesByReunion((int)$reunionId);
+                $data['rsvp_stats'] = $this->reunionConvocadoModel->getRsvpStats((int)$reunionId);
             }
         }
 
@@ -2442,10 +2760,12 @@ class AdminController extends Controller {
         $post = $this->sanitizePost();
         $id = (int)($post['reunion_id'] ?? 0);
         $horaInicio = trim($post['hora_inicio_real'] ?? '');
+        $horaFin = trim($post['hora_fin_real'] ?? '');
         $horaVal = $horaInicio !== '' ? str_replace('T', ' ', $horaInicio) . ':00' : null;
+        $horaFinVal = $horaFin !== '' ? str_replace('T', ' ', $horaFin) . ':00' : null;
         $finalizar = !empty($post['finalizar_reunion']);
 
-        if (!$this->reunionModel->updateResultados($id, $juntaId, trim($post['resultados'] ?? ''), $horaVal, $finalizar)) {
+        if (!$this->reunionModel->updateResultados($id, $juntaId, trim($post['resultados'] ?? ''), $horaVal, $horaFinVal, $finalizar)) {
             $_SESSION['error_msg'] = 'No se pudieron guardar los resultados.';
             $this->redirect('/admin/asistencia/' . $id . '?tab=listado');
             return;
@@ -3309,6 +3629,7 @@ class AdminController extends Controller {
                 'permiso_flujo_caja' => !empty($post['permiso_flujo_caja']),
                 'permiso_documentos' => !empty($post['permiso_documentos']),
                 'permiso_reuniones' => !empty($post['permiso_reuniones']),
+                'permiso_votaciones' => !empty($post['permiso_votaciones']),
             ]);
             if ((int)$usuarioId === (int)$_SESSION['user_id']) {
                 AuthContext::refreshMembershipSession();

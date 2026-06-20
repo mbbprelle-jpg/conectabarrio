@@ -21,7 +21,13 @@ if (!empty($data['qr_payload'])) {
     $qr_migration_pending = $data['qr_migration_pending'] ?? false;
     require APPROOT . '/views/partials/socio_qr_asistencia.php';
 }
-?>
+
+if (!empty($data['votaciones_pendientes'])): ?>
+<div class="alert alert-info">
+    <strong>Tiene <?php echo count($data['votaciones_pendientes']); ?> votación(es) o encuesta(s) pendiente(s).</strong>
+    <a href="<?php echo URLROOT; ?>/socio/votaciones" class="btn btn-primary btn-sm" style="margin-left:0.5rem;">Participar</a>
+</div>
+<?php endif; ?>
 
 <!-- Grid de Información y Estadísticas -->
 <div class="metrics-grid">

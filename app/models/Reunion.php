@@ -102,13 +102,17 @@ class Reunion extends Model {
         return $this->db->execute();
     }
 
-    public function updateResultados(int $id, int $juntaId, string $resultados, ?string $horaInicioReal, bool $finalizar): bool {
+    public function updateResultados(int $id, int $juntaId, string $resultados, ?string $horaInicioReal, ?string $horaFinReal, bool $finalizar): bool {
         if (!$this->hasConvocatoriaColumns()) {
             return false;
         }
+        $hasFin = $this->hasHoraFinColumn();
         $sql = 'UPDATE reuniones SET resultados = :resultados';
         if ($horaInicioReal !== null) {
             $sql .= ', hora_inicio_real = :hora_inicio_real';
+        }
+        if ($horaFinReal !== null && $hasFin) {
+            $sql .= ', hora_fin_real = :hora_fin_real';
         }
         if ($finalizar) {
             $sql .= ", estado = 'realizada'";
@@ -119,9 +123,27 @@ class Reunion extends Model {
         if ($horaInicioReal !== null) {
             $this->db->bind(':hora_inicio_real', $horaInicioReal);
         }
+        if ($horaFinReal !== null && $hasFin) {
+            $this->db->bind(':hora_fin_real', $horaFinReal);
+        }
         $this->db->bind(':id', $id);
         $this->db->bind(':junta_id', $juntaId);
         return $this->db->execute();
+    }
+
+    private static $hasHoraFinColumn = null;
+
+    public function hasHoraFinColumn(): bool {
+        if (self::$hasHoraFinColumn === null) {
+            try {
+                $this->db->query('SELECT hora_fin_real FROM reuniones LIMIT 1');
+                $this->db->execute();
+                self::$hasHoraFinColumn = true;
+            } catch (Exception $e) {
+                self::$hasHoraFinColumn = false;
+            }
+        }
+        return self::$hasHoraFinColumn;
     }
 
     public function updateEstado(int $id, string $estado): bool {

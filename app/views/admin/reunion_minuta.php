@@ -23,6 +23,14 @@
 <?php
 $r = $data['reunion'];
 $inicio = !empty($r->hora_inicio_real) ? $r->hora_inicio_real : $r->fecha_reunion;
+$fin = !empty($r->hora_fin_real) ? $r->hora_fin_real : null;
+$duracion = '';
+if ($fin && strtotime($fin) > strtotime($inicio)) {
+    $mins = (int)round((strtotime($fin) - strtotime($inicio)) / 60);
+    $h = intdiv($mins, 60);
+    $m = $mins % 60;
+    $duracion = ($h > 0 ? $h . ' h ' : '') . $m . ' min';
+}
 ?>
 <div style="width:100%;max-width:720px;">
     <div class="no-print" style="display:flex;justify-content:space-between;margin-bottom:1rem;">
@@ -40,6 +48,14 @@ $inicio = !empty($r->hora_inicio_real) ? $r->hora_inicio_real : $r->fecha_reunio
             <h4>Fecha y hora de inicio</h4>
             <p style="margin:0;font-weight:600;"><?php echo date('d/m/Y \a \l\a\s H:i \h\r\s', strtotime($inicio)); ?></p>
         </div>
+
+        <?php if ($fin): ?>
+        <div class="cb-minuta-section">
+            <h4>Fecha y hora de término</h4>
+            <p style="margin:0;font-weight:600;"><?php echo date('d/m/Y \a \l\a\s H:i \h\r\s', strtotime($fin)); ?></p>
+            <?php if ($duracion): ?><p style="margin:0.35rem 0 0;font-size:0.85rem;color:var(--text-muted);">Duración: <?php echo htmlspecialchars($duracion); ?></p><?php endif; ?>
+        </div>
+        <?php endif; ?>
 
         <div class="cb-minuta-section">
             <h4>Temas tratados</h4>

@@ -7,12 +7,15 @@ class ConvocatoriaMail {
         string $titulo,
         string $fechaFmt,
         string $temasHtml,
-        string $urlApp
+        string $urlApp,
+        ?string $urlConfirmar = null,
+        ?string $urlRechazar = null
     ): string {
         $nombre = htmlspecialchars($nombreDestinatario);
         $org = htmlspecialchars($juntaNombre);
         $tit = htmlspecialchars($titulo);
         $fecha = htmlspecialchars($fechaFmt);
+        $rsvpHtml = self::rsvpButtons($urlConfirmar, $urlRechazar);
 
         return <<<HTML
 <!DOCTYPE html>
@@ -44,7 +47,8 @@ Se le convoca a la siguiente reunión de su organización:
 {$temasHtml}
 </div>
 <p style="margin:0 0 20px;color:#6b7280;font-size:13px;">También puede revisar esta convocatoria ingresando a su perfil en ConectaBarrio.</p>
-<a href="{$urlApp}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;font-size:14px;">Ver en ConectaBarrio</a>
+{$rsvpHtml}
+<a href="{$urlApp}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;font-size:14px;margin-top:12px;">Ver en ConectaBarrio</a>
 </td></tr>
 <tr><td style="padding:20px 32px;background:#f9fafb;text-align:center;border-top:1px solid #e5e7eb;">
 <p style="margin:0;color:#9ca3af;font-size:12px;">Mensaje automático de ConectaBarrio — no responda a este correo.</p>
@@ -67,5 +71,18 @@ HTML;
             $items .= '<li style="margin-bottom:6px;">' . htmlspecialchars($line) . '</li>';
         }
         return '<ol style="margin:0;padding-left:20px;">' . $items . '</ol>';
+    }
+
+    private static function rsvpButtons(?string $urlConfirmar, ?string $urlRechazar): string {
+        if (!$urlConfirmar || !$urlRechazar) {
+            return '';
+        }
+        return '<table cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr>'
+            . '<td style="padding-right:8px;"><a href="' . htmlspecialchars($urlConfirmar) . '" '
+            . 'style="display:inline-block;background:#10b981;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold;font-size:13px;">Confirmar asistencia</a></td>'
+            . '<td><a href="' . htmlspecialchars($urlRechazar) . '" '
+            . 'style="display:inline-block;background:#ef4444;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold;font-size:13px;">No podré asistir</a></td>'
+            . '</tr></table>'
+            . '<p style="margin:0 0 12px;color:#6b7280;font-size:12px;">Indique su disponibilidad antes de la reunión.</p>';
     }
 }
