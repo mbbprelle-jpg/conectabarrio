@@ -135,6 +135,18 @@
                             <td style="text-align: center; font-weight: 700; color: var(--text-main);"><?php echo htmlspecialchars($junta->total_socios); ?></td>
                             <td style="text-align: center;">
                                 <div style="display: flex; gap: 0.35rem; justify-content: center; flex-wrap: wrap;">
+                                    <a href="<?php echo URLROOT; ?>/maestro/finanzas/<?php echo (int)$junta->id; ?>"
+                                       class="btn btn-info btn-sm"
+                                       style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem; text-decoration: none;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                        Movimientos
+                                    </a>
+                                    <a href="<?php echo URLROOT; ?>/maestro/flujo_caja/<?php echo (int)$junta->id; ?>"
+                                       class="btn btn-success btn-sm"
+                                       style="font-size: 0.72rem; padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem; text-decoration: none;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                        Flujo de caja
+                                    </a>
                                     <button class="btn btn-success btn-sm btn-registrar-pago"
                                             data-id="<?php echo $junta->id; ?>"
                                             data-nombre="<?php echo htmlspecialchars($junta->nombre); ?>"

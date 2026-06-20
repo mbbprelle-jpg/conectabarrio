@@ -1,5 +1,7 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 
+<?php require APPROOT . '/views/partials/maestro_finanzas_banner.php'; ?>
+
 <?php if (!empty($data['migration_pending'])): ?>
 <div class="alert alert-warning" style="margin-bottom: 1.25rem;">
     <span>

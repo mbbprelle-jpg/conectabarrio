@@ -146,6 +146,8 @@ $sociosPickerJson = array_map(static function ($socio) {
 }
 </style>
 
+<?php require APPROOT . '/views/partials/maestro_finanzas_banner.php'; ?>
+
 <!-- Mensajes Flash de Éxito / Error -->
 <?php if (!empty($data['success'])): ?>
     <div class="alert alert-success">

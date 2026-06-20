@@ -53,6 +53,9 @@ class AdminController extends Controller {
 
     private function requireRegisterPayments() {
         require_once APPROOT . '/core/AuthContext.php';
+        if ($this->isMaestroFinanzasMode()) {
+            return;
+        }
         if (!AuthContext::canRegisterPayments()) {
             $_SESSION['error_msg'] = 'No tiene permisos para registrar pagos.';
             $this->redirect('/admin/dashboard');
@@ -62,6 +65,9 @@ class AdminController extends Controller {
 
     private function requireViewFlujoCaja() {
         require_once APPROOT . '/core/AuthContext.php';
+        if ($this->isMaestroFinanzasMode()) {
+            return;
+        }
         if (!AuthContext::canViewFlujoCaja()) {
             $_SESSION['error_msg'] = 'No tiene permisos para ver el flujo de caja anual.';
             $this->redirect('/admin/dashboard');
@@ -152,6 +158,28 @@ class AdminController extends Controller {
 
     private function esTransaccionCuota(object $tx): bool {
         return in_array($tx->categoria ?? '', ['Cuota Socio', 'Cuota Condonada'], true);
+    }
+
+    private function isMaestroFinanzasMode(): bool {
+        return ($_SESSION['user_rol'] ?? '') === 'maestro' && !empty($_SESSION['maestro_acting_junta_id']);
+    }
+
+    private function activeJuntaId(): int {
+        if ($this->isMaestroFinanzasMode()) {
+            return (int)$_SESSION['maestro_acting_junta_id'];
+        }
+        return (int)$_SESSION['user_junta_id'];
+    }
+
+    private function finanzasViewExtras(): array {
+        if (!$this->isMaestroFinanzasMode()) {
+            return ['maestro_mode' => false];
+        }
+        return [
+            'maestro_mode' => true,
+            'maestro_junta_nombre' => $_SESSION['maestro_acting_junta_nombre'] ?? 'Organización',
+            'maestro_junta_id' => (int)$_SESSION['maestro_acting_junta_id'],
+        ];
     }
 
     private function finanzasContextData(int $juntaId): array {
@@ -1491,7 +1519,7 @@ class AdminController extends Controller {
     // =========================================================================
     public function finanzas() {
         $this->requireRegisterPayments();
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         $ctx = $this->finanzasContextData($juntaId);
         $balance = $this->transaccionModel->getBalanceConsolidado($juntaId);
         if ($ctx['saldo_inicial'] !== null) {
@@ -1513,7 +1541,7 @@ class AdminController extends Controller {
             'balance' => $balance,
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
-        ], $ctx);
+        ], $ctx, $this->finanzasViewExtras());
 
         unset($_SESSION['success_msg']);
         unset($_SESSION['error_msg']);
@@ -1528,7 +1556,7 @@ class AdminController extends Controller {
             return;
         }
 
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         if (!$this->cierreModel->esPrimerCierre($juntaId)) {
             $_SESSION['error_msg'] = 'El saldo inicial ya no puede modificarse porque existe al menos un cierre mensual.';
             $this->redirect('/admin/finanzas');
@@ -1564,9 +1592,9 @@ class AdminController extends Controller {
 
     public function flujo_caja() {
         $this->requireViewFlujoCaja();
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         require_once APPROOT . '/core/AuthContext.php';
-        if (!AuthContext::isFullAdmin() && !AuthContext::isFlujoCajaEnabled()) {
+        if (!$this->isMaestroFinanzasMode() && !AuthContext::isFullAdmin() && !AuthContext::isFlujoCajaEnabled()) {
             $_SESSION['error_msg'] = 'El flujo de caja no está habilitado para su organización. El administrador debe activarlo en Socios y Ajustes.';
             $this->redirect('/admin/dashboard');
             return;
@@ -1589,7 +1617,7 @@ class AdminController extends Controller {
             $this->juntaModel->getSaldoInicial($juntaId)
         );
 
-        $data = [
+        $data = array_merge([
             'title' => 'Flujo de Caja',
             'header_title' => 'Flujo de Caja Anual',
             'header_subtitle' => 'Vista mensualizada de ingresos y egresos por concepto',
@@ -1599,10 +1627,10 @@ class AdminController extends Controller {
             'matriz' => $matriz,
             'mes_inicio' => $mesInicio,
             'saldo_inicial' => $matriz['saldo_inicial'],
-            'flujo_caja_habilitado' => AuthContext::isFlujoCajaEnabled(),
+            'flujo_caja_habilitado' => $this->isMaestroFinanzasMode() || AuthContext::isFlujoCajaEnabled(),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
-        ];
+        ], $this->finanzasViewExtras());
 
         unset($_SESSION['success_msg']);
         unset($_SESSION['error_msg']);
@@ -1612,7 +1640,7 @@ class AdminController extends Controller {
 
     public function conceptos_caja() {
         $this->requireRegisterPayments();
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
 
         if (!$this->conceptoModel->hasConceptosTable()) {
             $data = [
@@ -1636,7 +1664,7 @@ class AdminController extends Controller {
             $tab = 'ingreso';
         }
 
-        $data = [
+        $data = array_merge([
             'title' => 'Conceptos de Caja',
             'header_title' => 'Conceptos de Ingreso y Egreso',
             'header_subtitle' => 'Personalice cómo agrupa los movimientos de caja su organización',
@@ -1646,7 +1674,7 @@ class AdminController extends Controller {
             'conceptos_egreso' => $this->conceptoModel->getByJuntaWithUso($juntaId, 'egreso'),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
-        ];
+        ], $this->finanzasViewExtras());
 
         unset($_SESSION['success_msg']);
         unset($_SESSION['error_msg']);
@@ -1669,7 +1697,7 @@ class AdminController extends Controller {
         }
 
         $post = $this->sanitizePost();
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         $tipo = $post['tipo'] ?? '';
         $nombre = trim($post['nombre'] ?? '');
 
@@ -1695,7 +1723,7 @@ class AdminController extends Controller {
         }
 
         $post = $this->sanitizePost();
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         $id = (int)($post['concepto_id'] ?? 0);
         $nombre = trim($post['nombre'] ?? '');
         $activo = isset($post['activo']) && $post['activo'] === '1';
@@ -1729,7 +1757,7 @@ class AdminController extends Controller {
         }
 
         $post = $this->sanitizePost();
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         $id = (int)($post['concepto_id'] ?? 0);
 
         if ($id <= 0) {
@@ -1783,7 +1811,7 @@ class AdminController extends Controller {
             }
 
             // 1. Validar que el socio pertenece a la Junta
-            $juntaId = (int)$_SESSION['user_junta_id'];
+            $juntaId = $this->activeJuntaId();
             $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
             if (!$socio) {
                 $_SESSION['error_msg'] = 'Socio no válido.';
@@ -1815,7 +1843,7 @@ class AdminController extends Controller {
                     $mesPagado = trim($mesPagado);
                     
                     // Validar duplicado
-                    if ($this->transaccionModel->checkPagoSocio($socioId, $mesPagado, $_SESSION['user_junta_id'])) {
+                    if ($this->transaccionModel->checkPagoSocio($socioId, $mesPagado, $juntaId)) {
                         throw new Exception('El mes ' . $mesPagado . ' ya registra un pago o exención previamente para ' . $socio->nombre . '.');
                     }
 
@@ -1828,7 +1856,7 @@ class AdminController extends Controller {
                         $descripcion = 'Pago cuota correspondiente a ' . $mesPagado;
 
                         // Recuperar el valor de cuota que regía en dicho mes
-                        $quotaConfig = $this->cuotaModel->getCuotaVigente($_SESSION['user_junta_id'], $mesPagado);
+                        $quotaConfig = $this->cuotaModel->getCuotaVigente($juntaId, $mesPagado);
                         $montoCuota = $quotaConfig ? (int)$quotaConfig->monto : 0;
 
                         if ($montoCuota <= 0) {
@@ -1838,7 +1866,7 @@ class AdminController extends Controller {
 
                     // Registrar Transacción
                     $dataTransaccion = [
-                        'junta_id' => $_SESSION['user_junta_id'],
+                        'junta_id' => $juntaId,
                         'tipo' => 'ingreso',
                         'categoria' => $categoria,
                         'monto' => $montoCuota,
@@ -1877,13 +1905,13 @@ class AdminController extends Controller {
     public function get_socio_cuotas($socioId) {
         header('Content-Type: application/json');
         require_once APPROOT . '/core/AuthContext.php';
-        if (!isset($_SESSION['user_id']) || !AuthContext::canRegisterPayments()) {
+        if (!isset($_SESSION['user_id']) || (!$this->isMaestroFinanzasMode() && !AuthContext::canRegisterPayments())) {
             echo json_encode(['success' => false, 'message' => 'Acceso denegado']);
             exit;
         }
 
         // Obtener socio
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
         if (!$socio) {
             echo json_encode(['success' => false, 'message' => 'Socio no válido']);
@@ -1911,7 +1939,7 @@ class AdminController extends Controller {
             $mes = sprintf('%04d-%02d', $y, $m);
             
             // 1. Obtener la cuota que regía para ese mes
-            $cuotaConfig = $this->cuotaModel->getCuotaVigente($_SESSION['user_junta_id'], $mes);
+            $cuotaConfig = $this->cuotaModel->getCuotaVigente($juntaId, $mes);
             $monto = $cuotaConfig ? (int)$cuotaConfig->monto : 0;
             
             // 2. Verificar si está pagada o condonada
@@ -1921,7 +1949,7 @@ class AdminController extends Controller {
                         AND categoria IN ('Cuota Socio', 'Cuota Condonada') 
                         AND mes_pagado = :mes_pagado LIMIT 1");
             $db->bind(':socio_id', $socioId);
-            $db->bind(':junta_id', $_SESSION['user_junta_id']);
+            $db->bind(':junta_id', $juntaId);
             $db->bind(':mes_pagado', $mes);
             $trans = $db->single();
             
@@ -1989,7 +2017,7 @@ class AdminController extends Controller {
                 return;
             }
 
-            $juntaId = (int)$_SESSION['user_junta_id'];
+            $juntaId = $this->activeJuntaId();
             $this->conceptoModel->ensureDefaults($juntaId);
             if (!$this->conceptoModel->isConceptoValido($juntaId, $tipo, $categoria)) {
                 $_SESSION['error_msg'] = 'La categoría seleccionada no es válida para su organización.';
@@ -2006,7 +2034,7 @@ class AdminController extends Controller {
 
             // Validar que el socio pertenece a la misma junta si se especificó
             if ($socioId) {
-                $socio = $this->userModel->getSocioOperativoById((int)$socioId, (int)$_SESSION['user_junta_id']);
+                $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
                 if (!$socio) {
                     $_SESSION['error_msg'] = 'El socio seleccionado no es válido para su organización.';
                     $this->redirect('/admin/finanzas');
@@ -2015,7 +2043,7 @@ class AdminController extends Controller {
             }
 
             $dataTransaccion = [
-                'junta_id' => $_SESSION['user_junta_id'],
+                'junta_id' => $juntaId,
                 'tipo' => $tipo,
                 'categoria' => $categoria,
                 'monto' => $monto,
@@ -2043,7 +2071,7 @@ class AdminController extends Controller {
 
         $post = $this->sanitizePost();
         $id = (int)($post['transaccion_id'] ?? 0);
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         $tx = $this->transaccionModel->getTransaccionByIdAndJunta($id, $juntaId);
 
         if (!$tx) {
@@ -2174,7 +2202,7 @@ class AdminController extends Controller {
 
         $post = $this->sanitizePost();
         $id = (int)($post['transaccion_id'] ?? 0);
-        $juntaId = (int)$_SESSION['user_junta_id'];
+        $juntaId = $this->activeJuntaId();
         $tx = $this->transaccionModel->getTransaccionByIdAndJunta($id, $juntaId);
 
         if (!$tx) {
@@ -3035,9 +3063,11 @@ class AdminController extends Controller {
 
     // Visualizar recibo de pago para imprimir
     public function comprobante($id) {
+        $this->requireRegisterPayments();
         $pago = $this->transaccionModel->getComprobanteById($id);
+        $juntaId = $this->activeJuntaId();
 
-        if (!$pago || $pago->junta_id != $_SESSION['user_junta_id']) {
+        if (!$pago || (int)$pago->junta_id !== $juntaId) {
             die('Comprobante no válido o no pertenece a su Junta de Vecinos.');
         }
 

@@ -48,6 +48,8 @@ if (!empty($mesesColumna)) {
 }
 ?>
 
+<?php require APPROOT . '/views/partials/maestro_finanzas_banner.php'; ?>
+
 <?php if (!empty($data['success'])): ?>
     <div class="alert alert-success"><span><?php echo htmlspecialchars($data['success']); ?></span></div>
 <?php endif; ?>
@@ -57,7 +59,7 @@ if (!empty($mesesColumna)) {
 
 <?php
 require_once APPROOT . '/core/AuthContext.php';
-if (AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
+if (empty($data['maestro_mode']) && AuthContext::isFullAdmin() && empty($data['flujo_caja_habilitado'])):
 ?>
 <div class="alert alert-warning" style="margin-bottom: 1rem;">
     <span>

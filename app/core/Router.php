@@ -128,7 +128,14 @@ class Router {
                 $this->unauthorized();
             }
             if ($controllerClass === 'AdminController' && $userRole !== 'admin') {
-                if ($userRole === 'socio') {
+                if ($userRole === 'maestro') {
+                    require_once APPROOT . '/core/AuthContext.php';
+                    $allowedMaestro = AuthContext::adminMethodsForMaestroFinanzas();
+                    if (in_array($method, $allowedMaestro, true) && !empty($_SESSION['maestro_acting_junta_id'])) {
+                        return;
+                    }
+                    $this->unauthorized();
+                } elseif ($userRole === 'socio') {
                     if ($method === 'reunion_minuta') {
                         return;
                     }

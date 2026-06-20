@@ -701,4 +701,51 @@ class MaestroController extends Controller {
         return null;
     }
 
+    private function enterFinanzasContext(int $juntaId): ?string {
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        if (!$junta) {
+            return 'Organización no encontrada.';
+        }
+        $_SESSION['maestro_acting_junta_id'] = $juntaId;
+        $_SESSION['maestro_acting_junta_nombre'] = $junta->nombre ?? 'Organización';
+        return null;
+    }
+
+    public function finanzas($juntaId = null) {
+        $juntaId = (int)$juntaId;
+        if ($juntaId <= 0) {
+            $_SESSION['error_msg'] = 'Debe seleccionar una organización.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $err = $this->enterFinanzasContext($juntaId);
+        if ($err) {
+            $_SESSION['error_msg'] = $err;
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $this->redirect('/admin/finanzas');
+    }
+
+    public function flujo_caja($juntaId = null) {
+        $juntaId = (int)$juntaId;
+        if ($juntaId <= 0) {
+            $_SESSION['error_msg'] = 'Debe seleccionar una organización.';
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $err = $this->enterFinanzasContext($juntaId);
+        if ($err) {
+            $_SESSION['error_msg'] = $err;
+            $this->redirect('/maestro/dashboard');
+            return;
+        }
+        $this->redirect('/admin/flujo_caja');
+    }
+
+    public function finanzas_salir() {
+        unset($_SESSION['maestro_acting_junta_id'], $_SESSION['maestro_acting_junta_nombre']);
+        $this->redirect('/maestro/dashboard');
+    }
+
 }

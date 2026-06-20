@@ -16,24 +16,6 @@ if ($mostrar_calendario) {
 }
 ?>
 
-<!-- Accesos rápidos finanzas -->
-<div class="metrics-grid" style="margin-bottom:1.5rem;">
-    <a href="<?php echo URLROOT; ?>/admin/finanzas" class="card metric-card card-primary" style="text-decoration:none;color:inherit;">
-        <div class="metric-info">
-            <span class="metric-label">Movimientos</span>
-            <span class="metric-value" style="font-size:1.1rem;">Ingresos y egresos</span>
-            <span class="metric-hint">Registrar cuotas, ingresos y gastos</span>
-        </div>
-    </a>
-    <a href="<?php echo URLROOT; ?>/admin/flujo_caja" class="card metric-card card-success" style="text-decoration:none;color:inherit;">
-        <div class="metric-info">
-            <span class="metric-label">Flujo de caja</span>
-            <span class="metric-value" style="font-size:1.1rem;">Vista anual</span>
-            <span class="metric-hint">Matriz mensual por conceptos</span>
-        </div>
-    </a>
-</div>
-
 <!-- Grid de Métricas Financieras -->
 <div class="metrics-grid">
     

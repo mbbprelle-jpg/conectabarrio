@@ -264,6 +264,15 @@ class AuthContext {
         }
     }
 
+    public static function adminMethodsForMaestroFinanzas(): array {
+        return [
+            'finanzas', 'flujo_caja', 'guardar_saldo_inicial',
+            'registrar_pago_cuota', 'registrar_transaccion', 'transaccion_actualizar', 'transaccion_eliminar',
+            'get_socio_cuotas', 'conceptos_caja', 'concepto_caja', 'concepto_caja_crear',
+            'concepto_caja_actualizar', 'concepto_caja_eliminar', 'comprobante',
+        ];
+    }
+
     public static function adminMethodsForSocioDelegado() {
         $methods = [];
         if (self::canViewMapaSocios()) {
