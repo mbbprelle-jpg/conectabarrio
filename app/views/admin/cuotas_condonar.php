@@ -22,14 +22,10 @@ $fechaDefault = $fechaMax;
         ¿Cuándo usar exención masiva?
     </h3>
     <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0; line-height: 1.5;">
-        Use este módulo cuando deba eximir <strong>varios socios</strong> en <strong>varios meses</strong> a la vez — por ejemplo, si la organización inició actividades en
-        <strong><?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?></strong>
-        <?php if (!empty($data['primera_cuota_mes'])): ?>
-            pero la cuota mensual solo rige desde <strong><?php echo htmlspecialchars($data['primera_cuota_mes']); ?></strong>.
-        <?php else: ?>
-            y necesita marcar meses sin cobro.
-        <?php endif; ?>
-        Solo aparecen personas con <strong>meses pendientes de eximir</strong> en el rango elegido.
+        Exima <strong>varios socios</strong> en <strong>varios meses</strong> a la vez (monto $0).
+        El rango de meses no puede ser anterior al <strong>inicio de actividades</strong> de la organización
+        (<strong><?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?></strong>).
+        Solo aparecen personas con meses pendientes de eximir en el rango que usted elija.
     </p>
 </div>
 
@@ -42,21 +38,15 @@ $fechaDefault = $fechaMax;
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="mes_desde" class="form-label">Desde (mes) *</label>
                     <input type="month" name="mes_desde" id="mes_desde" class="form-control" required
-                        value="<?php echo htmlspecialchars($data['mes_desde_default'] ?? ''); ?>"
                         min="<?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?>">
+                    <small style="color: var(--text-muted); font-size: 0.72rem;">No anterior a <?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?>.</small>
                 </div>
                 <div class="form-group" style="margin-bottom: 0;">
                     <label for="mes_hasta" class="form-label">Hasta (mes) *</label>
                     <input type="month" name="mes_hasta" id="mes_hasta" class="form-control" required
-                        value="<?php echo htmlspecialchars($data['mes_hasta_default'] ?? ''); ?>">
+                        min="<?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?>">
                 </div>
             </div>
-
-            <?php if (!empty($data['primera_cuota_mes']) && ($data['mes_hasta_default'] ?? '') !== ($data['mes_inicio'] ?? '')): ?>
-            <button type="button" id="btn_preset_prev_cuota" class="btn btn-secondary btn-sm" style="margin-bottom: 1rem;">
-                Usar meses anteriores a la primera cuota (<?php echo htmlspecialchars($data['mes_inicio']); ?> → <?php echo htmlspecialchars($data['mes_hasta_default']); ?>)
-            </button>
-            <?php endif; ?>
 
             <div class="form-group">
                 <label for="fecha_pago" class="form-label">Fecha del registro *</label>
@@ -70,7 +60,7 @@ $fechaDefault = $fechaMax;
             <div class="form-group" style="margin-bottom: 0;">
                 <label for="justificacion" class="form-label" style="color: var(--warning);">Justificación / Motivo *</label>
                 <input type="text" name="justificacion" id="justificacion" class="form-control" required maxlength="500"
-                    placeholder="Ej: Sin cuota vigente hasta abril 2026 — periodo de arranque exento por acuerdo directiva">
+                    placeholder="Motivo de la exención">
             </div>
         </div>
 
@@ -89,10 +79,10 @@ $fechaDefault = $fechaMax;
             </div>
 
             <div id="miembros_list" style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.65rem; background: var(--bg-input);">
-                <p id="miembros_loading" style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Cargando listado…</p>
+                <p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Seleccione el rango de meses (desde y hasta) para ver los socios pendientes.</p>
             </div>
             <small id="miembros_resumen" style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.5rem;">
-                Actualice el rango de meses para refrescar el listado.
+                Inicio de actividades: <?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?>.
             </small>
         </div>
     </div>
@@ -162,7 +152,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewText = document.getElementById('preview_text');
     const btnAplicar = document.getElementById('btn_aplicar');
     const URLROOT_JS = '<?php echo URLROOT; ?>';
+    const MES_INICIO_ORG = '<?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?>';
     let loadTimer = null;
+
+    function showIdleMiembros(message) {
+        miembrosList.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">'
+            + (message || 'Seleccione el rango de meses (desde y hasta) para ver los socios pendientes.') + '</p>';
+        btnAplicar.disabled = true;
+    }
 
     function getVisibleRows() {
         return Array.from(miembrosList.querySelectorAll('.cb-cond-miembro-row:not(.is-hidden)'));
@@ -228,6 +225,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadMiembros() {
+        if (!mesDesde.value || !mesHasta.value) {
+            showIdleMiembros();
+            return;
+        }
+        if (mesDesde.value < MES_INICIO_ORG) {
+            showIdleMiembros('El mes «desde» no puede ser anterior al inicio de actividades (' + MES_INICIO_ORG + ').');
+            miembrosResumen.textContent = 'Inicio de actividades: ' + MES_INICIO_ORG + '.';
+            return;
+        }
+        if (mesDesde.value > mesHasta.value) {
+            showIdleMiembros('El mes «desde» no puede ser posterior al mes «hasta».');
+            return;
+        }
+
         const body = new FormData();
         body.append('mes_desde', mesDesde.value);
         body.append('mes_hasta', mesHasta.value);
@@ -258,6 +269,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function scheduleLoadMiembros() {
         clearTimeout(loadTimer);
+        previewBox.style.display = 'none';
+        if (!mesDesde.value || !mesHasta.value) {
+            showIdleMiembros();
+            miembrosResumen.textContent = 'Inicio de actividades: ' + MES_INICIO_ORG + '.';
+            return;
+        }
         loadTimer = setTimeout(loadMiembros, 280);
     }
 
@@ -325,12 +342,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateAplicarState();
     });
 
-    document.getElementById('btn_preset_prev_cuota')?.addEventListener('click', () => {
-        mesDesde.value = '<?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?>';
-        mesHasta.value = '<?php echo htmlspecialchars($data['mes_hasta_default'] ?? ''); ?>';
-        scheduleLoadMiembros();
-    });
-
     form?.addEventListener('submit', function(e) {
         if (!getSelectedMemberIds().length) {
             e.preventDefault();
@@ -351,8 +362,6 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
         }
     });
-
-    loadMiembros();
 });
 </script>
 

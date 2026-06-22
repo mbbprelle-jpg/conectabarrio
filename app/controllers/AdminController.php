@@ -2005,20 +2005,6 @@ class AdminController extends Controller {
         $juntaId = $this->activeJuntaId();
         $rango = $this->cierreModel->getRangoFechasPermitidas($juntaId);
         $mesInicio = $rango['mes_inicio'];
-        $historialCuotas = $this->cuotaModel->getHistoryByJunta($juntaId);
-        $primeraCuotaMes = null;
-        if (!empty($historialCuotas)) {
-            $primeraCuotaMes = $historialCuotas[count($historialCuotas) - 1]->mes_inicio;
-        }
-        $mesHastaSugerido = $mesInicio;
-        if ($primeraCuotaMes && $primeraCuotaMes > $mesInicio) {
-            $dt = new DateTime($primeraCuotaMes . '-01');
-            $dt->modify('-1 month');
-            $mesHastaSugerido = $dt->format('Y-m');
-        }
-        if ($mesHastaSugerido < $mesInicio) {
-            $mesHastaSugerido = $mesInicio;
-        }
 
         $data = array_merge([
             'title' => 'Exención masiva de cuotas',
@@ -2026,9 +2012,6 @@ class AdminController extends Controller {
             'header_subtitle' => 'Registre exenciones para varios socios y meses a la vez (monto $0)',
             'active_menu' => 'cuotas_condonar',
             'mes_inicio' => $mesInicio,
-            'primera_cuota_mes' => $primeraCuotaMes,
-            'mes_desde_default' => $mesInicio,
-            'mes_hasta_default' => $mesHastaSugerido,
             'rango_fechas' => $rango,
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
