@@ -268,7 +268,7 @@ class AuthContext {
         return [
             'finanzas', 'flujo_caja', 'guardar_saldo_inicial',
             'registrar_pago_cuota', 'registrar_transaccion', 'transaccion_actualizar', 'transaccion_eliminar',
-            'get_socio_cuotas', 'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar',
+            'get_socio_cuotas', 'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar', 'cuotas_condonar_miembros',
             'conceptos_caja', 'concepto_caja', 'concepto_caja_crear',
             'concepto_caja_actualizar', 'concepto_caja_eliminar', 'comprobante',
         ];
@@ -285,7 +285,7 @@ class AuthContext {
         if (self::canRegisterPayments()) {
             $methods = array_merge($methods, [
                 'finanzas', 'registrar_pago_cuota', 'registrar_transaccion', 'transaccion_actualizar', 'transaccion_eliminar', 'get_socio_cuotas',
-                'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar',
+                'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar', 'cuotas_condonar_miembros',
                 'guardar_saldo_inicial', 'conceptos_caja', 'concepto_caja', 'concepto_caja_crear',
                 'concepto_caja_actualizar', 'concepto_caja_eliminar',
             ]);

@@ -1,26 +1,10 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 
 <?php
-function cbCondonarMiembroLabel($m) {
-    $nombre = trim(implode(' ', array_filter([
-        $m->nombre ?? '',
-        $m->apellido_paterno ?? '',
-        $m->apellido_materno ?? '',
-    ], static fn($p) => trim((string)$p) !== '')));
-    if (!empty($m->rut)) {
-        $nombre .= ' — ' . $m->rut;
-    }
-    if (($m->rol ?? '') === 'admin') {
-        $nombre .= ' (Administrador)';
-    }
-    return $nombre;
-}
-
 $rango = $data['rango_fechas'] ?? ['min' => date('Y-m-d'), 'max' => date('Y-m-d')];
 $fechaMin = $rango['min'];
 $fechaMax = $rango['max'];
 $fechaDefault = $fechaMax;
-$miembros = $data['miembros'] ?? [];
 ?>
 
 <?php require APPROOT . '/views/partials/maestro_finanzas_banner.php'; ?>
@@ -45,7 +29,7 @@ $miembros = $data['miembros'] ?? [];
         <?php else: ?>
             y necesita marcar meses sin cobro.
         <?php endif; ?>
-        Para un solo socio, siga usando <a href="<?php echo URLROOT; ?>/admin/finanzas" style="color: var(--primary);">Movimientos → Registrar cuota</a>.
+        Solo aparecen personas con <strong>meses pendientes de eximir</strong> en el rango elegido.
     </p>
 </div>
 
@@ -91,28 +75,24 @@ $miembros = $data['miembros'] ?? [];
         </div>
 
         <div class="card card-success">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                <h3 class="card-title" style="margin: 0;">Socios y administradores</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                <h3 class="card-title" style="margin: 0;">Pendientes de eximir</h3>
                 <div style="display: flex; gap: 0.35rem;">
-                    <button type="button" id="btn_sel_todos" class="btn btn-secondary btn-sm">Todos</button>
+                    <button type="button" id="btn_sel_todos" class="btn btn-secondary btn-sm">Todos visibles</button>
                     <button type="button" id="btn_sel_ninguno" class="btn btn-secondary btn-sm">Ninguno</button>
                 </div>
             </div>
 
-            <div id="miembros_list" style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.65rem; background: var(--bg-input);">
-                <?php if (empty($miembros)): ?>
-                    <p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">No hay socios ni administradores activos.</p>
-                <?php else: ?>
-                    <?php foreach ($miembros as $m): ?>
-                        <label class="cb-cond-miembro-row">
-                            <input type="checkbox" name="miembros[]" value="<?php echo (int)$m->id; ?>" class="cb-miembro-check" checked>
-                            <span><?php echo htmlspecialchars(cbCondonarMiembroLabel($m)); ?></span>
-                        </label>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+                <label for="buscar_miembro" class="form-label">Buscar socio</label>
+                <input type="search" id="buscar_miembro" class="form-control" placeholder="Nombre, apellido o RUT…" autocomplete="off">
             </div>
-            <small style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.5rem;">
-                <?php echo count($miembros); ?> persona(s) en el padrón de cuotas.
+
+            <div id="miembros_list" style="max-height: 320px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.65rem; background: var(--bg-input);">
+                <p id="miembros_loading" style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Cargando listado…</p>
+            </div>
+            <small id="miembros_resumen" style="color: var(--text-muted); font-size: 0.72rem; display: block; margin-top: 0.5rem;">
+                Actualice el rango de meses para refrescar el listado.
             </small>
         </div>
     </div>
@@ -125,7 +105,7 @@ $miembros = $data['miembros'] ?? [];
         <a href="<?php echo URLROOT; ?>/admin/finanzas" class="btn btn-secondary">← Volver a Movimientos</a>
         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
             <button type="button" id="btn_preview" class="btn btn-secondary">Vista previa</button>
-            <button type="submit" id="btn_aplicar" class="btn btn-warning" <?php echo empty($miembros) ? 'disabled' : ''; ?>>
+            <button type="submit" id="btn_aplicar" class="btn btn-warning" disabled>
                 Aplicar exención masiva
             </button>
         </div>
@@ -146,9 +126,27 @@ $miembros = $data['miembros'] ?? [];
 .cb-cond-miembro-row:hover {
     background: rgba(255, 255, 255, 0.04);
 }
+.cb-cond-miembro-row.is-hidden {
+    display: none;
+}
 .cb-cond-miembro-row input {
     margin-top: 0.2rem;
     flex-shrink: 0;
+}
+.cb-cond-pend-badge {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--warning);
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.cb-cond-miembro-text {
+    flex: 1;
+    min-width: 0;
 }
 </style>
 
@@ -157,19 +155,117 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('formCondonarMasivo');
     const mesDesde = document.getElementById('mes_desde');
     const mesHasta = document.getElementById('mes_hasta');
+    const miembrosList = document.getElementById('miembros_list');
+    const miembrosResumen = document.getElementById('miembros_resumen');
+    const buscarInput = document.getElementById('buscar_miembro');
     const previewBox = document.getElementById('preview_box');
     const previewText = document.getElementById('preview_text');
+    const btnAplicar = document.getElementById('btn_aplicar');
     const URLROOT_JS = '<?php echo URLROOT; ?>';
+    let loadTimer = null;
+
+    function getVisibleRows() {
+        return Array.from(miembrosList.querySelectorAll('.cb-cond-miembro-row:not(.is-hidden)'));
+    }
 
     function getSelectedMemberIds() {
-        return Array.from(document.querySelectorAll('.cb-miembro-check:checked')).map(cb => cb.value);
+        return Array.from(miembrosList.querySelectorAll('.cb-miembro-check:checked')).map(cb => cb.value);
+    }
+
+    function updateAplicarState() {
+        const hasPending = miembrosList.querySelector('.cb-miembro-check') !== null;
+        const hasSelected = getSelectedMemberIds().length > 0;
+        btnAplicar.disabled = !hasPending || !hasSelected;
+    }
+
+    function applySearchFilter() {
+        const q = (buscarInput?.value || '').trim().toLowerCase();
+        miembrosList.querySelectorAll('.cb-cond-miembro-row').forEach(row => {
+            const key = row.dataset.search || '';
+            row.classList.toggle('is-hidden', q !== '' && !key.includes(q));
+        });
+    }
+
+    function renderMiembros(miembros, meta) {
+        if (!miembros.length) {
+            miembrosList.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">No hay socios con meses pendientes de eximir en este rango.'
+                + (meta.ya_resueltos > 0 ? '<br><span style="font-size:0.78rem;">' + meta.ya_resueltos + ' persona(s) ya están al día (pagadas o exentas).</span>' : '')
+                + '</p>';
+            miembrosResumen.textContent = '0 pendientes en el rango seleccionado.';
+            updateAplicarState();
+            return;
+        }
+
+        miembrosList.innerHTML = miembros.map(m => `
+            <label class="cb-cond-miembro-row" data-search="${escapeAttr(m.search)}">
+                <input type="checkbox" name="miembros[]" value="${m.id}" class="cb-miembro-check" checked>
+                <span class="cb-cond-miembro-text">${escapeHtml(m.label)}</span>
+                <span class="cb-cond-pend-badge">${m.pendientes} mes${m.pendientes === 1 ? '' : 'es'}</span>
+            </label>
+        `).join('');
+
+        miembrosResumen.textContent = meta.total_pendientes + ' pendiente(s) de ' + meta.total_padron
+            + ' en el padrón'
+            + (meta.ya_resueltos > 0 ? ' · ' + meta.ya_resueltos + ' ya resuelto(s) en este periodo' : '')
+            + '.';
+
+        miembrosList.querySelectorAll('.cb-miembro-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+                previewBox.style.display = 'none';
+                updateAplicarState();
+            });
+        });
+
+        applySearchFilter();
+        updateAplicarState();
+    }
+
+    function escapeHtml(str) {
+        return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function escapeAttr(str) {
+        return escapeHtml(str).replace(/'/g, '&#39;');
+    }
+
+    function loadMiembros() {
+        const body = new FormData();
+        body.append('mes_desde', mesDesde.value);
+        body.append('mes_hasta', mesHasta.value);
+
+        miembrosList.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Cargando listado…</p>';
+        previewBox.style.display = 'none';
+        btnAplicar.disabled = true;
+
+        fetch(URLROOT_JS + '/admin/cuotas_condonar_miembros', {
+            method: 'POST',
+            body,
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                miembrosList.innerHTML = '<p style="color: var(--danger); text-align: center; font-size: 0.85rem; margin: 1rem 0;">' + escapeHtml(data.message || 'Error al cargar') + '</p>';
+                miembrosResumen.textContent = '—';
+                return;
+            }
+            renderMiembros(data.miembros || [], data);
+        })
+        .catch(() => {
+            miembrosList.innerHTML = '<p style="color: var(--danger); text-align: center; font-size: 0.85rem; margin: 1rem 0;">Error de conexión al cargar socios.</p>';
+        });
+    }
+
+    function scheduleLoadMiembros() {
+        clearTimeout(loadTimer);
+        loadTimer = setTimeout(loadMiembros, 280);
     }
 
     function runPreview() {
         const ids = getSelectedMemberIds();
         if (!ids.length) {
             previewBox.style.display = 'block';
-            previewText.textContent = 'Seleccione al menos un socio o administrador.';
+            previewText.textContent = 'Seleccione al menos un socio con meses pendientes.';
             previewBox.className = 'alert alert-warning';
             return;
         }
@@ -196,11 +292,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             const p = data.preview;
-            previewBox.className = 'alert alert-info';
-            previewText.textContent =
-                'Se registrarán ' + p.crear + ' exenciones (' + p.miembros + ' persona(s) × ' + p.meses.length + ' mes(es)). ' +
-                (p.omitidos_ya_registrados ? p.omitidos_ya_registrados + ' ya pagadas o exentas. ' : '') +
-                (p.omitidos_cerrados ? p.omitidos_cerrados + ' en meses cerrados (omitidas).' : '');
+            previewBox.className = p.crear > 0 ? 'alert alert-info' : 'alert alert-warning';
+            previewText.textContent = p.crear > 0
+                ? ('Se registrarán ' + p.crear + ' exenciones (' + p.miembros + ' persona(s) × ' + p.meses.length + ' mes(es) en el rango).'
+                    + (p.omitidos_ya_registrados ? ' ' + p.omitidos_ya_registrados + ' ya resueltas se omiten.' : '')
+                    + (p.omitidos_cerrados ? ' ' + p.omitidos_cerrados + ' en meses cerrados.' : ''))
+                : 'Ninguna exención nueva en la selección actual. Cambie el rango de meses o espere a que aparezcan pendientes.';
         })
         .catch(() => {
             previewBox.className = 'alert alert-danger';
@@ -208,32 +305,36 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    mesDesde?.addEventListener('change', scheduleLoadMiembros);
+    mesHasta?.addEventListener('change', scheduleLoadMiembros);
+    buscarInput?.addEventListener('input', applySearchFilter);
+
     document.getElementById('btn_preview')?.addEventListener('click', runPreview);
-    mesDesde?.addEventListener('change', () => { previewBox.style.display = 'none'; });
-    mesHasta?.addEventListener('change', () => { previewBox.style.display = 'none'; });
-    document.querySelectorAll('.cb-miembro-check').forEach(cb => {
-        cb.addEventListener('change', () => { previewBox.style.display = 'none'; });
-    });
 
     document.getElementById('btn_sel_todos')?.addEventListener('click', () => {
-        document.querySelectorAll('.cb-miembro-check').forEach(cb => { cb.checked = true; });
+        getVisibleRows().forEach(row => {
+            const cb = row.querySelector('.cb-miembro-check');
+            if (cb) cb.checked = true;
+        });
         previewBox.style.display = 'none';
+        updateAplicarState();
     });
     document.getElementById('btn_sel_ninguno')?.addEventListener('click', () => {
-        document.querySelectorAll('.cb-miembro-check').forEach(cb => { cb.checked = false; });
+        miembrosList.querySelectorAll('.cb-miembro-check').forEach(cb => { cb.checked = false; });
         previewBox.style.display = 'none';
+        updateAplicarState();
     });
 
     document.getElementById('btn_preset_prev_cuota')?.addEventListener('click', () => {
         mesDesde.value = '<?php echo htmlspecialchars($data['mes_inicio'] ?? ''); ?>';
         mesHasta.value = '<?php echo htmlspecialchars($data['mes_hasta_default'] ?? ''); ?>';
-        previewBox.style.display = 'none';
+        scheduleLoadMiembros();
     });
 
     form?.addEventListener('submit', function(e) {
         if (!getSelectedMemberIds().length) {
             e.preventDefault();
-            alert('Seleccione al menos un socio o administrador.');
+            alert('No hay socios seleccionados con meses pendientes en este rango.');
             return;
         }
         if (!document.getElementById('justificacion').value.trim()) {
@@ -245,11 +346,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const count = crear ? parseInt(crear[1], 10) : null;
         const msg = count !== null && count > 0
             ? '¿Confirma registrar ' + count + ' exenciones de cuota?'
-            : '¿Confirma aplicar la exención masiva? Los meses ya pagados o cerrados se omitirán.';
+            : '¿Confirma aplicar la exención masiva para los socios seleccionados?';
         if (!confirm(msg)) {
             e.preventDefault();
         }
     });
+
+    loadMiembros();
 });
 </script>
 

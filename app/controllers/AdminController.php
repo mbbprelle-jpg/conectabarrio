@@ -203,6 +203,62 @@ class AdminController extends Controller {
         ];
     }
 
+    private function formatMiembroCuotaLabel(object $m): string {
+        $nombre = trim(implode(' ', array_filter([
+            $m->nombre ?? '',
+            $m->apellido_paterno ?? '',
+            $m->apellido_materno ?? '',
+        ], static fn($p) => trim((string)$p) !== '')));
+        if (!empty($m->rut)) {
+            $nombre .= ' — ' . $m->rut;
+        }
+        if (($m->rol ?? '') === 'admin') {
+            $nombre .= ' (Administrador)';
+        }
+        return $nombre;
+    }
+
+    private function miembroCuotaSearchKey(object $m): string {
+        $full = trim(implode(' ', array_filter([
+            $m->nombre ?? '',
+            $m->apellido_paterno ?? '',
+            $m->apellido_materno ?? '',
+            $m->rut ?? '',
+        ], static fn($p) => trim((string)$p) !== '')));
+        return mb_strtolower($full, 'UTF-8');
+    }
+
+    /** @return array<int, array{id:int,label:string,search:string,pendientes:int,meses_abiertos:int}> */
+    private function miembrosPendientesCondonar(int $juntaId, array $meses): array {
+        $mesesAbiertos = array_values(array_filter(
+            $meses,
+            fn($m) => !$this->cierreModel->checkCierreExist($juntaId, $m)
+        ));
+        if (empty($mesesAbiertos)) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($this->userModel->getMiembrosCuotaByJunta($juntaId) as $m) {
+            $pendientes = 0;
+            foreach ($mesesAbiertos as $mes) {
+                if (!$this->transaccionModel->checkPagoSocio((int)$m->id, $mes, $juntaId)) {
+                    $pendientes++;
+                }
+            }
+            if ($pendientes > 0) {
+                $result[] = [
+                    'id' => (int)$m->id,
+                    'label' => $this->formatMiembroCuotaLabel($m),
+                    'search' => $this->miembroCuotaSearchKey($m),
+                    'pendientes' => $pendientes,
+                    'meses_abiertos' => count($mesesAbiertos),
+                ];
+            }
+        }
+        return $result;
+    }
+
     private function isMaestroFinanzasMode(): bool {
         return ($_SESSION['user_rol'] ?? '') === 'maestro' && !empty($_SESSION['maestro_acting_junta_id']);
     }
@@ -1969,7 +2025,6 @@ class AdminController extends Controller {
             'header_title' => 'Condonar / Eximir Cuotas en Masa',
             'header_subtitle' => 'Registre exenciones para varios socios y meses a la vez (monto $0)',
             'active_menu' => 'cuotas_condonar',
-            'miembros' => $this->userModel->getMiembrosCuotaByJunta($juntaId),
             'mes_inicio' => $mesInicio,
             'primera_cuota_mes' => $primeraCuotaMes,
             'mes_desde_default' => $mesInicio,
@@ -1981,6 +2036,46 @@ class AdminController extends Controller {
 
         unset($_SESSION['success_msg'], $_SESSION['error_msg']);
         $this->view('admin/cuotas_condonar', $data);
+    }
+
+    public function cuotas_condonar_miembros() {
+        header('Content-Type: application/json');
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Método no permitido']);
+            exit;
+        }
+
+        $post = $this->sanitizePost();
+        $juntaId = $this->activeJuntaId();
+        $mesDesde = trim($post['mes_desde'] ?? '');
+        $mesHasta = trim($post['mes_hasta'] ?? '');
+        $meses = $this->generarListaMeses($mesDesde, $mesHasta);
+        if (empty($meses)) {
+            echo json_encode(['success' => false, 'message' => 'Indique un rango de meses válido.']);
+            exit;
+        }
+
+        $mesInicio = $this->cierreModel->getMesInicioJunta($juntaId);
+        if ($mesDesde < $mesInicio) {
+            echo json_encode(['success' => false, 'message' => 'El rango no puede comenzar antes del inicio de actividades (' . $mesInicio . ').']);
+            exit;
+        }
+
+        $pendientes = $this->miembrosPendientesCondonar($juntaId, $meses);
+        $totalPadron = count($this->userModel->getMiembrosCuotaByJunta($juntaId));
+        $mesesAbiertos = count(array_filter($meses, fn($m) => !$this->cierreModel->checkCierreExist($juntaId, $m)));
+
+        echo json_encode([
+            'success' => true,
+            'miembros' => $pendientes,
+            'total_padron' => $totalPadron,
+            'total_pendientes' => count($pendientes),
+            'ya_resueltos' => max(0, $totalPadron - count($pendientes)),
+            'meses_rango' => count($meses),
+            'meses_abiertos' => $mesesAbiertos,
+        ]);
+        exit;
     }
 
     public function cuotas_condonar_preview() {
@@ -2084,7 +2179,12 @@ class AdminController extends Controller {
 
         $eval = $this->evaluarCondonacionMasiva($juntaId, $miembroIds, $meses);
         if ($eval['crear'] === 0) {
-            $_SESSION['error_msg'] = 'No hay exenciones por registrar: todos los meses seleccionados ya están pagados, exentos o pertenecen a periodos cerrados.';
+            $pendientesEnRango = $this->miembrosPendientesCondonar($juntaId, $meses);
+            if (empty($pendientesEnRango)) {
+                $_SESSION['error_msg'] = 'En el rango ' . $mesDesde . ' a ' . $mesHasta . ' no queda ningún mes por eximir: todos los socios ya están pagados, exentos o los meses están cerrados.';
+            } else {
+                $_SESSION['error_msg'] = 'No se registró ninguna exención. Verifique el rango de meses y que el listado muestre socios con cuotas pendientes (actualice las fechas si cambió el periodo).';
+            }
             $this->redirect('/admin/cuotas_condonar');
             return;
         }
