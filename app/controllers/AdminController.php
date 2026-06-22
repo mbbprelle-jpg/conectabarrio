@@ -1536,7 +1536,7 @@ class AdminController extends Controller {
             'header_subtitle' => 'Registre recaudación de cuotas, otros ingresos y gastos generales de la junta',
             'active_menu' => 'finanzas',
             'conceptos_migration_pending' => !$this->conceptoModel->hasConceptosTable(),
-            'socios' => $this->userModel->getSociosOperativosByJunta($juntaId),
+            'socios' => $this->userModel->getMiembrosCuotaByJunta($juntaId),
             'transacciones' => $this->transaccionModel->getTransaccionesByJunta($juntaId),
             'balance' => $balance,
             'success' => $_SESSION['success_msg'] ?? '',
@@ -1812,7 +1812,7 @@ class AdminController extends Controller {
 
             // 1. Validar que el socio pertenece a la Junta
             $juntaId = $this->activeJuntaId();
-            $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
+            $socio = $this->userModel->getMiembroCuotaById((int)$socioId, $juntaId);
             if (!$socio) {
                 $_SESSION['error_msg'] = 'Socio no válido.';
                 $this->redirect('/admin/finanzas');
@@ -1910,16 +1910,16 @@ class AdminController extends Controller {
             exit;
         }
 
-        // Obtener socio
+        // Obtener socio o administrador
         $juntaId = $this->activeJuntaId();
-        $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
+        $socio = $this->userModel->getMiembroCuotaById((int)$socioId, $juntaId);
         if (!$socio) {
             echo json_encode(['success' => false, 'message' => 'Socio no válido']);
             exit;
         }
 
-        // Determinar mes de inicio
-        $startMonth = !empty($socio->fecha_inicio) ? substr($socio->fecha_inicio, 0, 7) : '2026-01';
+        // Mes de inicio de actividades de la organización (control de cuotas)
+        $startMonth = $this->cierreModel->getMesInicioJunta($juntaId);
         $currentMonthStr = date('Y-m');
 
         // Generar lista de meses desde inicio hasta el año actual + 1 año
@@ -1991,7 +1991,9 @@ class AdminController extends Controller {
                 'id' => $socio->id,
                 'nombre' => $socio->nombre,
                 'fecha_inicio' => $socio->fecha_inicio,
+                'mes_inicio_actividades' => $startMonth,
                 'prevalidar' => ($socio->status ?? '') === 'prevalidar',
+                'es_admin' => ($socio->rol ?? '') === 'admin',
             ],
             'meses' => $meses
         ]);
@@ -2034,7 +2036,7 @@ class AdminController extends Controller {
 
             // Validar que el socio pertenece a la misma junta si se especificó
             if ($socioId) {
-                $socio = $this->userModel->getSocioOperativoById((int)$socioId, $juntaId);
+                $socio = $this->userModel->getMiembroCuotaById((int)$socioId, $juntaId);
                 if (!$socio) {
                     $_SESSION['error_msg'] = 'El socio seleccionado no es válido para su organización.';
                     $this->redirect('/admin/finanzas');
@@ -2166,7 +2168,7 @@ class AdminController extends Controller {
             }
 
             if ($socioId) {
-                $socio = $this->userModel->getSocioOperativoById($socioId, $juntaId);
+                $socio = $this->userModel->getMiembroCuotaById($socioId, $juntaId);
                 if (!$socio) {
                     $_SESSION['error_msg'] = 'El socio seleccionado no es válido.';
                     $this->redirect('/admin/finanzas');

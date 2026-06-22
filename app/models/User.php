@@ -416,6 +416,43 @@ class User extends Model {
         return $this->db->single();
     }
 
+    /** Socios operativos + administradores activos (cobro de cuotas en finanzas). */
+    public function getMiembrosCuotaByJunta($juntaId) {
+        $byId = [];
+        foreach ($this->getSociosOperativosByJunta($juntaId) as $m) {
+            $byId[(int)$m->id] = $m;
+        }
+        foreach ($this->getAdminsByJunta($juntaId) as $admin) {
+            $byId[(int)$admin->id] = $admin;
+        }
+        $list = array_values($byId);
+        usort($list, static function ($a, $b) {
+            $cmp = strcasecmp($a->apellido_paterno ?? '', $b->apellido_paterno ?? '');
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            $cmp = strcasecmp($a->nombre ?? '', $b->nombre ?? '');
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            return strcasecmp($a->apellido_materno ?? '', $b->apellido_materno ?? '');
+        });
+        return $list;
+    }
+
+    public function getMiembroCuotaById($userId, $juntaId) {
+        $socio = $this->getSocioOperativoById($userId, $juntaId);
+        if ($socio) {
+            return $socio;
+        }
+        foreach ($this->getAdminsByJunta($juntaId) as $admin) {
+            if ((int)$admin->id === (int)$userId) {
+                return $admin;
+            }
+        }
+        return null;
+    }
+
     public function needsAccountCompletion($user): bool {
         if (!$user) {
             return false;

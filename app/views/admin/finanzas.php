@@ -18,6 +18,9 @@ function cbFinanzasSocioLabel($socio) {
     if (($socio->status ?? '') === 'prevalidar') {
         $label .= ' (Alta provisional)';
     }
+    if (($socio->rol ?? '') === 'admin') {
+        $label .= ' (Administrador)';
+    }
     return $label;
 }
 
