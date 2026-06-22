@@ -177,16 +177,12 @@ class AdminController extends Controller {
 
     /** @param int[] $miembroIds */
     private function evaluarCondonacionMasiva(int $juntaId, array $miembroIds, array $meses): array {
+        $registrados = $this->transaccionModel->mapCuotasRegistradasEnMeses($juntaId, $meses);
         $crear = 0;
-        $omitidosCerrados = 0;
         $omitidosRegistrados = 0;
         foreach ($miembroIds as $mid) {
             foreach ($meses as $mes) {
-                if ($this->cierreModel->checkCierreExist($juntaId, $mes)) {
-                    $omitidosCerrados++;
-                    continue;
-                }
-                if ($this->transaccionModel->checkPagoSocio($mid, $mes, $juntaId)) {
+                if (isset($registrados[(int)$mid . '|' . $mes])) {
                     $omitidosRegistrados++;
                     continue;
                 }
@@ -195,7 +191,7 @@ class AdminController extends Controller {
         }
         return [
             'crear' => $crear,
-            'omitidos_cerrados' => $omitidosCerrados,
+            'omitidos_cerrados' => 0,
             'omitidos_ya_registrados' => $omitidosRegistrados,
             'total_pares' => count($miembroIds) * count($meses),
             'meses' => $meses,
@@ -228,31 +224,29 @@ class AdminController extends Controller {
         return mb_strtolower($full, 'UTF-8');
     }
 
-    /** @return array<int, array{id:int,label:string,search:string,pendientes:int,meses_abiertos:int}> */
+    /** @return array<int, array{id:int,label:string,search:string,pendientes:int,meses_rango:int}> */
     private function miembrosPendientesCondonar(int $juntaId, array $meses): array {
-        $mesesAbiertos = array_values(array_filter(
-            $meses,
-            fn($m) => !$this->cierreModel->checkCierreExist($juntaId, $m)
-        ));
-        if (empty($mesesAbiertos)) {
+        if (empty($meses)) {
             return [];
         }
 
+        $registrados = $this->transaccionModel->mapCuotasRegistradasEnMeses($juntaId, $meses);
         $result = [];
         foreach ($this->userModel->getMiembrosCuotaByJunta($juntaId) as $m) {
+            $mid = (int)$m->id;
             $pendientes = 0;
-            foreach ($mesesAbiertos as $mes) {
-                if (!$this->transaccionModel->checkPagoSocio((int)$m->id, $mes, $juntaId)) {
+            foreach ($meses as $mes) {
+                if (!isset($registrados[$mid . '|' . $mes])) {
                     $pendientes++;
                 }
             }
             if ($pendientes > 0) {
                 $result[] = [
-                    'id' => (int)$m->id,
+                    'id' => $mid,
                     'label' => $this->formatMiembroCuotaLabel($m),
                     'search' => $this->miembroCuotaSearchKey($m),
                     'pendientes' => $pendientes,
-                    'meses_abiertos' => count($mesesAbiertos),
+                    'meses_rango' => count($meses),
                 ];
             }
         }
@@ -2047,7 +2041,6 @@ class AdminController extends Controller {
 
         $pendientes = $this->miembrosPendientesCondonar($juntaId, $meses);
         $totalPadron = count($this->userModel->getMiembrosCuotaByJunta($juntaId));
-        $mesesAbiertos = count(array_filter($meses, fn($m) => !$this->cierreModel->checkCierreExist($juntaId, $m)));
 
         echo json_encode([
             'success' => true,
@@ -2056,7 +2049,6 @@ class AdminController extends Controller {
             'total_pendientes' => count($pendientes),
             'ya_resueltos' => max(0, $totalPadron - count($pendientes)),
             'meses_rango' => count($meses),
-            'meses_abiertos' => $mesesAbiertos,
         ]);
         exit;
     }
@@ -2164,7 +2156,7 @@ class AdminController extends Controller {
         if ($eval['crear'] === 0) {
             $pendientesEnRango = $this->miembrosPendientesCondonar($juntaId, $meses);
             if (empty($pendientesEnRango)) {
-                $_SESSION['error_msg'] = 'En el rango ' . $mesDesde . ' a ' . $mesHasta . ' no queda ningún mes por eximir: todos los socios ya están pagados, exentos o los meses están cerrados.';
+                $_SESSION['error_msg'] = 'En el rango ' . $mesDesde . ' a ' . $mesHasta . ' todos los socios ya tienen pago o exención registrada para cada mes.';
             } else {
                 $_SESSION['error_msg'] = 'No se registró ninguna exención. Verifique el rango de meses y que el listado muestre socios con cuotas pendientes (actualice las fechas si cambió el periodo).';
             }
@@ -2174,13 +2166,11 @@ class AdminController extends Controller {
 
         try {
             $this->db->beginTransaction();
+            $registrados = $this->transaccionModel->mapCuotasRegistradasEnMeses($juntaId, $meses);
             $creados = 0;
             foreach ($miembroIds as $mid) {
                 foreach ($meses as $mes) {
-                    if ($this->cierreModel->checkCierreExist($juntaId, $mes)) {
-                        continue;
-                    }
-                    if ($this->transaccionModel->checkPagoSocio($mid, $mes, $juntaId)) {
+                    if (isset($registrados[(int)$mid . '|' . $mes])) {
                         continue;
                     }
                     $ok = $this->transaccionModel->createTransaccion([
@@ -2197,15 +2187,16 @@ class AdminController extends Controller {
                     if (!$ok) {
                         throw new Exception('Error al registrar exención para el mes ' . $mes . '.');
                     }
+                    $registrados[(int)$mid . '|' . $mes] = true;
                     $creados++;
                 }
             }
             $this->db->commit();
 
             $msg = 'Se registraron ' . $creados . ' exenciones de cuota correctamente.';
-            $omitidos = $eval['omitidos_ya_registrados'] + $eval['omitidos_cerrados'];
+            $omitidos = $eval['omitidos_ya_registrados'];
             if ($omitidos > 0) {
-                $msg .= ' (' . $omitidos . ' combinaciones socio/mes se omitieron por ya estar resueltas o por mes cerrado.)';
+                $msg .= ' (' . $omitidos . ' combinaciones socio/mes ya estaban pagadas o exentas y se omitieron.)';
             }
             $_SESSION['success_msg'] = $msg;
         } catch (Exception $e) {

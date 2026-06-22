@@ -40,6 +40,36 @@ class Transaccion extends Model {
         return $this->db->single() ? true : false;
     }
 
+    /**
+     * Mapa socio_id|mes_pagado de cuotas ya registradas o exentas en el rango.
+     * @return array<string, true>
+     */
+    public function mapCuotasRegistradasEnMeses(int $juntaId, array $meses): array {
+        if (empty($meses)) {
+            return [];
+        }
+        $holders = [];
+        foreach ($meses as $i => $mes) {
+            $holders[] = ':mes_' . $i;
+        }
+        $this->db->query("SELECT socio_id, mes_pagado FROM transacciones
+            WHERE junta_id = :junta_id
+            AND categoria IN ('Cuota Socio', 'Cuota Condonada')
+            AND mes_pagado IN (" . implode(', ', $holders) . ")
+            AND socio_id IS NOT NULL");
+        $this->db->bind(':junta_id', $juntaId);
+        foreach ($meses as $i => $mes) {
+            $this->db->bind(':mes_' . $i, $mes);
+        }
+        $map = [];
+        foreach ($this->db->resultSet() as $row) {
+            if (!empty($row->socio_id) && !empty($row->mes_pagado)) {
+                $map[(int)$row->socio_id . '|' . $row->mes_pagado] = true;
+            }
+        }
+        return $map;
+    }
+
     public static function socioNombreCompleto($row): string {
         $parts = array_filter([
             trim($row->socio_nombre ?? ''),

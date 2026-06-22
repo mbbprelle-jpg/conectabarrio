@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderMiembros(miembros, meta) {
         if (!miembros.length) {
             miembrosList.innerHTML = '<p style="color: var(--text-muted); text-align: center; font-size: 0.85rem; margin: 1rem 0;">No hay socios con meses pendientes de eximir en este rango.'
-                + (meta.ya_resueltos > 0 ? '<br><span style="font-size:0.78rem;">' + meta.ya_resueltos + ' persona(s) ya están al día (pagadas o exentas).</span>' : '')
+                + (meta.ya_resueltos > 0 ? '<br><span style="font-size:0.78rem;">' + meta.ya_resueltos + ' persona(s) ya tienen todos los meses del rango pagados o exentos.</span>' : '')
                 + '</p>';
             miembrosResumen.textContent = '0 pendientes en el rango seleccionado.';
             updateAplicarState();
@@ -312,9 +312,8 @@ document.addEventListener('DOMContentLoaded', function() {
             previewBox.className = p.crear > 0 ? 'alert alert-info' : 'alert alert-warning';
             previewText.textContent = p.crear > 0
                 ? ('Se registrarán ' + p.crear + ' exenciones (' + p.miembros + ' persona(s) × ' + p.meses.length + ' mes(es) en el rango).'
-                    + (p.omitidos_ya_registrados ? ' ' + p.omitidos_ya_registrados + ' ya resueltas se omiten.' : '')
-                    + (p.omitidos_cerrados ? ' ' + p.omitidos_cerrados + ' en meses cerrados.' : ''))
-                : 'Ninguna exención nueva en la selección actual. Cambie el rango de meses o espere a que aparezcan pendientes.';
+                    + (p.omitidos_ya_registrados ? ' ' + p.omitidos_ya_registrados + ' ya pagadas o exentas se omiten.' : ''))
+                : 'Ninguna exención nueva en la selección actual.';
         })
         .catch(() => {
             previewBox.className = 'alert alert-danger';
