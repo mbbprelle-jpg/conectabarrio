@@ -9,6 +9,7 @@
     </div>
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
         <a href="<?php echo URLROOT; ?>/admin/finanzas" class="btn btn-secondary btn-sm">Movimientos</a>
+        <a href="<?php echo URLROOT; ?>/admin/cuotas_condonar" class="btn btn-secondary btn-sm">Exención masiva</a>
         <a href="<?php echo URLROOT; ?>/admin/flujo_caja" class="btn btn-secondary btn-sm">Flujo de caja</a>
         <a href="<?php echo URLROOT; ?>/admin/conceptos_caja" class="btn btn-secondary btn-sm">Conceptos</a>
         <a href="<?php echo URLROOT; ?>/maestro/finanzas_salir" class="btn btn-primary btn-sm">Volver al portal maestro</a>

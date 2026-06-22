@@ -231,10 +231,15 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
         
         <!-- CARD 1: REGISTRAR RECAUDACIÓN CUOTA SOCIO -->
         <div class="card card-success">
-            <h3 class="card-title">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;">
+                <h3 class="card-title" style="margin: 0;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                 Registrar Pago de Cuota Socio
-            </h3>
+                </h3>
+                <a href="<?php echo URLROOT; ?>/admin/cuotas_condonar" class="btn btn-warning btn-sm" style="font-size: 0.72rem; white-space: nowrap;">
+                    Exención masiva
+                </a>
+            </div>
 
             <form action="<?php echo URLROOT; ?>/admin/registrar_pago_cuota" method="POST">
                 

@@ -160,6 +160,49 @@ class AdminController extends Controller {
         return in_array($tx->categoria ?? '', ['Cuota Socio', 'Cuota Condonada'], true);
     }
 
+    /** @return string[] Meses YYYY-MM desde $desde hasta $hasta inclusive. */
+    private function generarListaMeses(string $desde, string $hasta): array {
+        if (!preg_match('/^\d{4}-\d{2}$/', $desde) || !preg_match('/^\d{4}-\d{2}$/', $hasta) || $desde > $hasta) {
+            return [];
+        }
+        $meses = [];
+        $dt = new DateTime($desde . '-01');
+        $end = new DateTime($hasta . '-01');
+        while ($dt <= $end) {
+            $meses[] = $dt->format('Y-m');
+            $dt->modify('+1 month');
+        }
+        return $meses;
+    }
+
+    /** @param int[] $miembroIds */
+    private function evaluarCondonacionMasiva(int $juntaId, array $miembroIds, array $meses): array {
+        $crear = 0;
+        $omitidosCerrados = 0;
+        $omitidosRegistrados = 0;
+        foreach ($miembroIds as $mid) {
+            foreach ($meses as $mes) {
+                if ($this->cierreModel->checkCierreExist($juntaId, $mes)) {
+                    $omitidosCerrados++;
+                    continue;
+                }
+                if ($this->transaccionModel->checkPagoSocio($mid, $mes, $juntaId)) {
+                    $omitidosRegistrados++;
+                    continue;
+                }
+                $crear++;
+            }
+        }
+        return [
+            'crear' => $crear,
+            'omitidos_cerrados' => $omitidosCerrados,
+            'omitidos_ya_registrados' => $omitidosRegistrados,
+            'total_pares' => count($miembroIds) * count($meses),
+            'meses' => $meses,
+            'miembros' => count($miembroIds),
+        ];
+    }
+
     private function isMaestroFinanzasMode(): bool {
         return ($_SESSION['user_rol'] ?? '') === 'maestro' && !empty($_SESSION['maestro_acting_junta_id']);
     }
@@ -1899,6 +1942,195 @@ class AdminController extends Controller {
             }
         }
         $this->redirect('/admin/finanzas');
+    }
+
+    public function cuotas_condonar() {
+        $this->requireRegisterPayments();
+        $juntaId = $this->activeJuntaId();
+        $rango = $this->cierreModel->getRangoFechasPermitidas($juntaId);
+        $mesInicio = $rango['mes_inicio'];
+        $historialCuotas = $this->cuotaModel->getHistoryByJunta($juntaId);
+        $primeraCuotaMes = null;
+        if (!empty($historialCuotas)) {
+            $primeraCuotaMes = $historialCuotas[count($historialCuotas) - 1]->mes_inicio;
+        }
+        $mesHastaSugerido = $mesInicio;
+        if ($primeraCuotaMes && $primeraCuotaMes > $mesInicio) {
+            $dt = new DateTime($primeraCuotaMes . '-01');
+            $dt->modify('-1 month');
+            $mesHastaSugerido = $dt->format('Y-m');
+        }
+        if ($mesHastaSugerido < $mesInicio) {
+            $mesHastaSugerido = $mesInicio;
+        }
+
+        $data = array_merge([
+            'title' => 'Exención masiva de cuotas',
+            'header_title' => 'Condonar / Eximir Cuotas en Masa',
+            'header_subtitle' => 'Registre exenciones para varios socios y meses a la vez (monto $0)',
+            'active_menu' => 'cuotas_condonar',
+            'miembros' => $this->userModel->getMiembrosCuotaByJunta($juntaId),
+            'mes_inicio' => $mesInicio,
+            'primera_cuota_mes' => $primeraCuotaMes,
+            'mes_desde_default' => $mesInicio,
+            'mes_hasta_default' => $mesHastaSugerido,
+            'rango_fechas' => $rango,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ], $this->finanzasViewExtras());
+
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/cuotas_condonar', $data);
+    }
+
+    public function cuotas_condonar_preview() {
+        header('Content-Type: application/json');
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            echo json_encode(['success' => false, 'message' => 'Método no permitido']);
+            exit;
+        }
+
+        $post = $this->sanitizePost();
+        $juntaId = $this->activeJuntaId();
+        $mesDesde = trim($post['mes_desde'] ?? '');
+        $mesHasta = trim($post['mes_hasta'] ?? '');
+        $meses = $this->generarListaMeses($mesDesde, $mesHasta);
+        if (empty($meses)) {
+            echo json_encode(['success' => false, 'message' => 'Indique un rango de meses válido (desde / hasta).']);
+            exit;
+        }
+
+        $mesInicio = $this->cierreModel->getMesInicioJunta($juntaId);
+        if ($mesDesde < $mesInicio) {
+            echo json_encode(['success' => false, 'message' => 'El rango no puede comenzar antes del inicio de actividades (' . $mesInicio . ').']);
+            exit;
+        }
+
+        $miembroIds = array_map('intval', $post['miembros'] ?? []);
+        $miembroIds = array_values(array_filter($miembroIds, static fn($id) => $id > 0));
+        if (empty($miembroIds)) {
+            echo json_encode(['success' => false, 'message' => 'Seleccione al menos un socio o administrador.']);
+            exit;
+        }
+
+        $validIds = array_map(static fn($m) => (int)$m->id, $this->userModel->getMiembrosCuotaByJunta($juntaId));
+        $miembroIds = array_values(array_intersect($miembroIds, $validIds));
+        if (empty($miembroIds)) {
+            echo json_encode(['success' => false, 'message' => 'Ningún miembro seleccionado es válido para esta organización.']);
+            exit;
+        }
+
+        $eval = $this->evaluarCondonacionMasiva($juntaId, $miembroIds, $meses);
+        echo json_encode([
+            'success' => true,
+            'preview' => $eval,
+            'mes_desde' => $mesDesde,
+            'mes_hasta' => $mesHasta,
+        ]);
+        exit;
+    }
+
+    public function cuotas_condonar_aplicar() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/cuotas_condonar');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $juntaId = $this->activeJuntaId();
+        $mesDesde = trim($post['mes_desde'] ?? '');
+        $mesHasta = trim($post['mes_hasta'] ?? '');
+        $justificacion = trim($post['justificacion'] ?? '');
+        $fechaPago = $post['fecha_pago'] ?? date('Y-m-d');
+
+        if ($justificacion === '') {
+            $_SESSION['error_msg'] = 'Debe indicar la justificación o motivo de la exención masiva.';
+            $this->redirect('/admin/cuotas_condonar');
+            return;
+        }
+
+        $meses = $this->generarListaMeses($mesDesde, $mesHasta);
+        if (empty($meses)) {
+            $_SESSION['error_msg'] = 'Indique un rango de meses válido.';
+            $this->redirect('/admin/cuotas_condonar');
+            return;
+        }
+
+        $mesInicio = $this->cierreModel->getMesInicioJunta($juntaId);
+        if ($mesDesde < $mesInicio) {
+            $_SESSION['error_msg'] = 'El rango no puede comenzar antes del inicio de actividades (' . $mesInicio . ').';
+            $this->redirect('/admin/cuotas_condonar');
+            return;
+        }
+
+        $fechaError = $this->validarFechaFinanzas($juntaId, $fechaPago);
+        if ($fechaError) {
+            $_SESSION['error_msg'] = $fechaError;
+            $this->redirect('/admin/cuotas_condonar');
+            return;
+        }
+
+        $miembroIds = array_map('intval', $post['miembros'] ?? []);
+        $miembroIds = array_values(array_filter($miembroIds, static fn($id) => $id > 0));
+        $validIds = array_map(static fn($m) => (int)$m->id, $this->userModel->getMiembrosCuotaByJunta($juntaId));
+        $miembroIds = array_values(array_intersect($miembroIds, $validIds));
+        if (empty($miembroIds)) {
+            $_SESSION['error_msg'] = 'Seleccione al menos un socio o administrador.';
+            $this->redirect('/admin/cuotas_condonar');
+            return;
+        }
+
+        $eval = $this->evaluarCondonacionMasiva($juntaId, $miembroIds, $meses);
+        if ($eval['crear'] === 0) {
+            $_SESSION['error_msg'] = 'No hay exenciones por registrar: todos los meses seleccionados ya están pagados, exentos o pertenecen a periodos cerrados.';
+            $this->redirect('/admin/cuotas_condonar');
+            return;
+        }
+
+        try {
+            $this->db->beginTransaction();
+            $creados = 0;
+            foreach ($miembroIds as $mid) {
+                foreach ($meses as $mes) {
+                    if ($this->cierreModel->checkCierreExist($juntaId, $mes)) {
+                        continue;
+                    }
+                    if ($this->transaccionModel->checkPagoSocio($mid, $mes, $juntaId)) {
+                        continue;
+                    }
+                    $ok = $this->transaccionModel->createTransaccion([
+                        'junta_id' => $juntaId,
+                        'tipo' => 'ingreso',
+                        'categoria' => 'Cuota Condonada',
+                        'monto' => 0,
+                        'descripcion' => $justificacion,
+                        'fecha' => $fechaPago,
+                        'socio_id' => $mid,
+                        'mes_pagado' => $mes,
+                        'registrado_por' => $_SESSION['user_id'],
+                    ]);
+                    if (!$ok) {
+                        throw new Exception('Error al registrar exención para el mes ' . $mes . '.');
+                    }
+                    $creados++;
+                }
+            }
+            $this->db->commit();
+
+            $msg = 'Se registraron ' . $creados . ' exenciones de cuota correctamente.';
+            $omitidos = $eval['omitidos_ya_registrados'] + $eval['omitidos_cerrados'];
+            if ($omitidos > 0) {
+                $msg .= ' (' . $omitidos . ' combinaciones socio/mes se omitieron por ya estar resueltas o por mes cerrado.)';
+            }
+            $_SESSION['success_msg'] = $msg;
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            $_SESSION['error_msg'] = 'Operación cancelada: ' . $e->getMessage();
+        }
+
+        $this->redirect('/admin/cuotas_condonar');
     }
 
     // Obtener los meses pendientes, futuros y pagados de un socio (AJAX JSON)
