@@ -12,7 +12,7 @@ scratch/
 storage/documentos/*
 !storage/documentos/.gitkeep
 
-# Videos pesados (superan el limite de 100 MB de GitHub). Servir comprimido o desde YouTube/Drive en produccion.
+# Videos muy pesados (superan 100 MB de GitHub). El tutorial usa tutorial-instalar-app.mpeg (~92 MB).
 public/media/*.mp4
 
 # Configuración de editores de código

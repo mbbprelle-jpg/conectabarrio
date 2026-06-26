@@ -1,9 +1,9 @@
 <?php
 $img = URLROOT . '/img/landing_bg.png';
 $tutorialImg = URLROOT . '/img/tutorial-instalar-app.jpg';
-// Video tutorial. El archivo local public/media/*.mp4 esta en .gitignore (supera 100 MB de GitHub).
-// Para produccion: deja un MP4 comprimido aqui, o pega una URL de YouTube/Drive en $tutorialVideoEmbed.
-$tutorialVideo = URLROOT . '/media/tutorial-instalar-app.mp4';
+// Video tutorial (~92 MB, bajo el limite de 100 MB de GitHub).
+// Alternativa: pega una URL de YouTube/Drive en $tutorialVideoEmbed (tiene prioridad).
+$tutorialVideo = URLROOT . '/media/tutorial-instalar-app.mpeg';
 $tutorialVideoEmbed = ''; // Ej: 'https://www.youtube.com/embed/XXXXXXXXXXX' (si se define, tiene prioridad)
 require_once APPROOT . '/views/layouts/header.php';
 ?>
@@ -389,7 +389,7 @@ require_once APPROOT . '/views/layouts/header.php';
         </div>
         <?php else: ?>
         <video id="presVideoPlayer" controls preload="none" playsinline>
-            <source src="<?php echo htmlspecialchars($tutorialVideo, ENT_QUOTES); ?>" type="video/mp4">
+            <source src="<?php echo htmlspecialchars($tutorialVideo, ENT_QUOTES); ?>" type="video/mpeg">
             Tu navegador no soporta la reproducción de video.
         </video>
         <?php endif; ?>
