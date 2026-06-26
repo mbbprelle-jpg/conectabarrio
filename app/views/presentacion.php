@@ -292,7 +292,60 @@ require_once APPROOT . '/views/layouts/header.php';
                 </div>
             </section>
 
-            <!-- 12. Cierre -->
+            <!-- 12. Planes y ofertas -->
+            <section class="pres-slide">
+                <div class="pres-slide-bg" style="background-image:url('<?php echo $img; ?>');"></div>
+                <div class="pres-slide-inner">
+                    <span class="pres-slide-num">Lámina 12 · Planes</span>
+                    <h2 class="pres-h2">Planes ConectaBarrio</h2>
+                    <p class="pres-lead">Elige el plan según el tamaño de tu organización. Paga el año completo y accede a un valor preferencial respecto al precio mensual.</p>
+                    <div class="pres-plans">
+                        <div class="pres-plan-card">
+                            <span class="pres-plan-name">Valor 1</span>
+                            <span class="pres-plan-users">Hasta 50 usuarios</span>
+                            <div class="pres-plan-month">
+                                <span class="pres-plan-price">$7.990</span>
+                                <span class="pres-plan-period">mensual</span>
+                            </div>
+                            <div class="pres-plan-offer">
+                                <span class="pres-plan-badge">Oferta anual</span>
+                                <span class="pres-plan-annual-old">$95.880</span>
+                                <span class="pres-plan-annual">$90.000</span>
+                            </div>
+                        </div>
+                        <div class="pres-plan-card pres-plan-card--featured">
+                            <span class="pres-plan-tag">Más elegido</span>
+                            <span class="pres-plan-name">Valor 2</span>
+                            <span class="pres-plan-users">Hasta 100 usuarios</span>
+                            <div class="pres-plan-month">
+                                <span class="pres-plan-price">$11.990</span>
+                                <span class="pres-plan-period">mensual</span>
+                            </div>
+                            <div class="pres-plan-offer">
+                                <span class="pres-plan-badge">Oferta anual</span>
+                                <span class="pres-plan-annual-old">$143.880</span>
+                                <span class="pres-plan-annual">$130.000</span>
+                            </div>
+                        </div>
+                        <div class="pres-plan-card">
+                            <span class="pres-plan-name">Valor 3</span>
+                            <span class="pres-plan-users">Usuarios ilimitados</span>
+                            <div class="pres-plan-month">
+                                <span class="pres-plan-price">$14.990</span>
+                                <span class="pres-plan-period">mensual</span>
+                            </div>
+                            <div class="pres-plan-offer">
+                                <span class="pres-plan-badge">Oferta anual</span>
+                                <span class="pres-plan-annual-old">$179.880</span>
+                                <span class="pres-plan-annual">$160.000</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="pres-plans-note">Valores en pesos chilenos (CLP). Ofertas anuales por tiempo limitado.</p>
+                </div>
+            </section>
+
+            <!-- 13. Cierre -->
             <section class="pres-slide pres-slide--cover">
                 <div class="pres-slide-bg" style="background-image:url('<?php echo $img; ?>');"></div>
                 <div class="pres-slide-inner pres-cta">
@@ -318,7 +371,7 @@ require_once APPROOT . '/views/layouts/header.php';
             <svg viewBox="0 0 24 24" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div class="pres-dots" id="presDots"></div>
-        <span class="pres-counter" id="presCounter">1 / 12</span>
+        <span class="pres-counter" id="presCounter">1 / 13</span>
         <button type="button" class="pres-nav-btn" id="presNext" aria-label="Lámina siguiente">
             <svg viewBox="0 0 24 24" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
