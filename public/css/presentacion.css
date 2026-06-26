@@ -536,3 +536,135 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* --- Lámina: instalar en el teléfono --- */
+.pres-install-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+.pres-install-img {
+    display: block;
+    width: 100%;
+    max-width: 880px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+    background: #fff;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.pres-install-img:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.pres-install-img img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.pres-video-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.8rem 1.6rem;
+    font-weight: 600;
+}
+
+.pres-video-btn svg {
+    flex-shrink: 0;
+}
+
+/* --- Modal de video --- */
+.pres-video-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.pres-video-modal.is-open {
+    display: flex;
+}
+
+.pres-video-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(3, 7, 18, 0.88);
+    backdrop-filter: blur(6px);
+}
+
+.pres-video-dialog {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 900px;
+    background: #0b1220;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+
+.pres-video-dialog video,
+.pres-video-embed {
+    display: block;
+    width: 100%;
+}
+
+.pres-video-dialog video {
+    max-height: 80vh;
+    background: #000;
+}
+
+.pres-video-embed {
+    position: relative;
+    padding-top: 56.25%;
+}
+
+.pres-video-embed iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.pres-video-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.6rem;
+    z-index: 2;
+    width: 2.2rem;
+    height: 2.2rem;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.pres-video-close:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+@media (max-width: 960px) {
+    .pres-install-img {
+        max-width: 100%;
+    }
+}

@@ -12,6 +12,9 @@ scratch/
 storage/documentos/*
 !storage/documentos/.gitkeep
 
+# Videos pesados (superan el limite de 100 MB de GitHub). Servir comprimido o desde YouTube/Drive en produccion.
+public/media/*.mp4
+
 # Configuración de editores de código
 .vscode/
 .idea/

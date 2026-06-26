@@ -63,6 +63,8 @@
     if (btnNext) btnNext.addEventListener('click', next);
 
     document.addEventListener('keydown', function (e) {
+        var vm = document.getElementById('presVideoModal');
+        if (vm && vm.classList.contains('is-open')) return;
         if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
             e.preventDefault();
             next();
@@ -102,4 +104,44 @@
 
     buildDots();
     goTo(0);
+
+    // --- Modal de video tutorial ---
+    var videoModal = document.getElementById('presVideoModal');
+    var videoOpen = document.getElementById('presVideoOpen');
+    var videoClose = document.getElementById('presVideoClose');
+    var videoPlayer = document.getElementById('presVideoPlayer');
+    var videoIframe = document.getElementById('presVideoIframe');
+
+    function openVideo() {
+        if (!videoModal) return;
+        videoModal.classList.add('is-open');
+        videoModal.setAttribute('aria-hidden', 'false');
+        if (videoIframe && videoIframe.dataset.src) {
+            videoIframe.src = videoIframe.dataset.src;
+        }
+        if (videoPlayer) {
+            try { videoPlayer.play(); } catch (err) {}
+        }
+    }
+
+    function closeVideo() {
+        if (!videoModal) return;
+        videoModal.classList.remove('is-open');
+        videoModal.setAttribute('aria-hidden', 'true');
+        if (videoPlayer) videoPlayer.pause();
+        if (videoIframe) videoIframe.src = '';
+    }
+
+    if (videoOpen) videoOpen.addEventListener('click', openVideo);
+    if (videoClose) videoClose.addEventListener('click', closeVideo);
+    if (videoModal) {
+        videoModal.addEventListener('click', function (e) {
+            if (e.target && e.target.getAttribute('data-close')) closeVideo();
+        });
+    }
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && videoModal && videoModal.classList.contains('is-open')) {
+            closeVideo();
+        }
+    });
 })();
