@@ -1,6 +1,7 @@
 <?php
 $img = URLROOT . '/img/landing_bg.png';
 $tutorialImg = URLROOT . '/img/tutorial-instalar-app.jpg';
+$planesImg = URLROOT . '/img/planes-conectabarrio.jpg';
 // Video tutorial (~92 MB, bajo el limite de 100 MB de GitHub).
 // Alternativa: pega una URL de YouTube/Drive en $tutorialVideoEmbed (tiene prioridad).
 $tutorialVideo = URLROOT . '/media/tutorial-instalar-app.mpeg';
@@ -299,49 +300,11 @@ require_once APPROOT . '/views/layouts/header.php';
                     <span class="pres-slide-num">Lámina 12 · Planes</span>
                     <h2 class="pres-h2">Planes ConectaBarrio</h2>
                     <p class="pres-lead">Elige el plan según el tamaño de tu organización. Paga el año completo y accede a un valor preferencial respecto al precio mensual.</p>
-                    <div class="pres-plans">
-                        <div class="pres-plan-card">
-                            <span class="pres-plan-name">Valor 1</span>
-                            <span class="pres-plan-users">Hasta 50 usuarios</span>
-                            <div class="pres-plan-month">
-                                <span class="pres-plan-price">$7.990</span>
-                                <span class="pres-plan-period">mensual</span>
-                            </div>
-                            <div class="pres-plan-offer">
-                                <span class="pres-plan-badge">Oferta anual</span>
-                                <span class="pres-plan-annual-old">$95.880</span>
-                                <span class="pres-plan-annual">$90.000</span>
-                            </div>
-                        </div>
-                        <div class="pres-plan-card pres-plan-card--featured">
-                            <span class="pres-plan-tag">Más elegido</span>
-                            <span class="pres-plan-name">Valor 2</span>
-                            <span class="pres-plan-users">Hasta 100 usuarios</span>
-                            <div class="pres-plan-month">
-                                <span class="pres-plan-price">$11.990</span>
-                                <span class="pres-plan-period">mensual</span>
-                            </div>
-                            <div class="pres-plan-offer">
-                                <span class="pres-plan-badge">Oferta anual</span>
-                                <span class="pres-plan-annual-old">$143.880</span>
-                                <span class="pres-plan-annual">$130.000</span>
-                            </div>
-                        </div>
-                        <div class="pres-plan-card">
-                            <span class="pres-plan-name">Valor 3</span>
-                            <span class="pres-plan-users">Usuarios ilimitados</span>
-                            <div class="pres-plan-month">
-                                <span class="pres-plan-price">$14.990</span>
-                                <span class="pres-plan-period">mensual</span>
-                            </div>
-                            <div class="pres-plan-offer">
-                                <span class="pres-plan-badge">Oferta anual</span>
-                                <span class="pres-plan-annual-old">$179.880</span>
-                                <span class="pres-plan-annual">$160.000</span>
-                            </div>
-                        </div>
+                    <div class="pres-plans-img-wrap">
+                        <a href="<?php echo $planesImg; ?>" target="_blank" rel="noopener" class="pres-plans-img" title="Abrir imagen en tamaño completo">
+                            <img src="<?php echo $planesImg; ?>" alt="Planes y ofertas ConectaBarrio: Valor 1, Valor 2 y Valor 3 con precios mensuales y anuales" loading="lazy">
+                        </a>
                     </div>
-                    <p class="pres-plans-note">Valores en pesos chilenos (CLP). Ofertas anuales por tiempo limitado.</p>
                 </div>
             </section>
 
