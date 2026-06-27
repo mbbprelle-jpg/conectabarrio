@@ -673,19 +673,21 @@
 .pres-plans-img-wrap {
     display: flex;
     justify-content: center;
+    align-items: center;
     margin-top: 1.5rem;
+    width: 100%;
 }
 
 .pres-plans-img {
-    display: block;
-    width: 100%;
-    max-width: 900px;
+    display: inline-block;
+    max-width: 100%;
     border-radius: 16px;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
     background: #fff;
     transition: transform 0.25s ease, box-shadow 0.25s ease;
+    line-height: 0;
 }
 
 .pres-plans-img:hover {
@@ -695,12 +697,15 @@
 
 .pres-plans-img img {
     display: block;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     height: auto;
+    max-height: 62vh;
 }
 
 @media (max-width: 960px) {
-    .pres-plans-img {
-        max-width: 100%;
+    .pres-plans-img img {
+        max-height: none;
+        width: 100%;
     }
 }
