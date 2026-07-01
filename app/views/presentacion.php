@@ -2,10 +2,11 @@
 $img = URLROOT . '/img/landing_bg.png';
 $tutorialImg = URLROOT . '/img/tutorial-instalar-app.jpg';
 $planesImg = URLROOT . '/img/planes-conectabarrio.jpg';
-// Video tutorial (~92 MB, bajo el limite de 100 MB de GitHub).
-// Alternativa: pega una URL de YouTube/Drive en $tutorialVideoEmbed (tiene prioridad).
-$tutorialVideo = URLROOT . '/media/tutorial-instalar-app.mpeg';
-$tutorialVideoEmbed = ''; // Ej: 'https://www.youtube.com/embed/XXXXXXXXXXX' (si se define, tiene prioridad)
+// Video demo (~9 MB, WebM). Se sirve desde el servidor, sin YouTube.
+// Alternativa: pega una URL embebida en $demoVideoEmbed (tiene prioridad).
+$demoVideo = URLROOT . '/media/demo-conectabarrio.webm';
+$demoVideoMime = 'video/webm';
+$demoVideoEmbed = ''; // Ej: 'https://www.youtube.com/embed/XXXXXXXXXXX'
 require_once APPROOT . '/views/layouts/header.php';
 ?>
 <link rel="stylesheet" href="<?php echo URLROOT; ?>/css/presentacion.css?v=<?php echo time(); ?>">
@@ -283,10 +284,10 @@ require_once APPROOT . '/views/layouts/header.php';
                         <a href="<?php echo $tutorialImg; ?>" target="_blank" rel="noopener" class="pres-install-img" title="Abrir imagen en tamaño completo">
                             <img src="<?php echo $tutorialImg; ?>" alt="Pasos para agregar ConectaBarrio a la pantalla principal del teléfono en Android e iPhone" loading="lazy">
                         </a>
-                        <?php if ($tutorialVideoEmbed !== '' || $tutorialVideo !== ''): ?>
+                        <?php if ($demoVideoEmbed !== '' || $demoVideo !== ''): ?>
                         <button type="button" class="btn btn-primary pres-video-btn" id="presVideoOpen">
                             <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
-                            Ver video tutorial
+                            Ver video Demo
                         </button>
                         <?php endif; ?>
                     </div>
@@ -341,18 +342,18 @@ require_once APPROOT . '/views/layouts/header.php';
     </nav>
 </div>
 
-<?php if ($tutorialVideoEmbed !== '' || $tutorialVideo !== ''): ?>
+<?php if ($demoVideoEmbed !== '' || $demoVideo !== ''): ?>
 <div class="pres-video-modal" id="presVideoModal" aria-hidden="true">
     <div class="pres-video-backdrop" data-close="1"></div>
-    <div class="pres-video-dialog" role="dialog" aria-modal="true" aria-label="Video tutorial: instalar ConectaBarrio en el teléfono">
+    <div class="pres-video-dialog" role="dialog" aria-modal="true" aria-label="Video demo ConectaBarrio">
         <button type="button" class="pres-video-close" id="presVideoClose" aria-label="Cerrar video">&times;</button>
-        <?php if ($tutorialVideoEmbed !== ''): ?>
+        <?php if ($demoVideoEmbed !== ''): ?>
         <div class="pres-video-embed">
-            <iframe id="presVideoIframe" data-src="<?php echo htmlspecialchars($tutorialVideoEmbed, ENT_QUOTES); ?>" src="" title="Video tutorial ConectaBarrio" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <iframe id="presVideoIframe" data-src="<?php echo htmlspecialchars($demoVideoEmbed, ENT_QUOTES); ?>" src="" title="Video demo ConectaBarrio" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
         </div>
         <?php else: ?>
         <video id="presVideoPlayer" controls preload="none" playsinline>
-            <source src="<?php echo htmlspecialchars($tutorialVideo, ENT_QUOTES); ?>" type="video/mpeg">
+            <source src="<?php echo htmlspecialchars($demoVideo, ENT_QUOTES); ?>" type="<?php echo htmlspecialchars($demoVideoMime, ENT_QUOTES); ?>">
             Tu navegador no soporta la reproducción de video.
         </video>
         <?php endif; ?>

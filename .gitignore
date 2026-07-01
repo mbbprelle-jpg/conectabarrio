@@ -12,8 +12,9 @@ scratch/
 storage/documentos/*
 !storage/documentos/.gitkeep
 
-# Videos muy pesados (superan 100 MB de GitHub). El tutorial usa tutorial-instalar-app.mpeg (~92 MB).
+# Videos muy pesados (superan 100 MB de GitHub). El demo usa demo-conectabarrio.webm (~9 MB).
 public/media/*.mp4
+public/media/*.mpeg
 
 # Configuración de editores de código
 .vscode/
