@@ -478,4 +478,95 @@ class Transaccion extends Model {
         }
         return $this->db->resultSet();
     }
+
+    /**
+     * Reporte de movimientos con filtros y datos del socio (RUT/nombre) para cuotas.
+     *
+     * @param array{fecha_desde?:string,fecha_hasta?:string,tipo?:string,categoria?:string} $filters
+     * @return array{rows: array, totales: array{ingresos:int,egresos:int,neto:int,cuotas:int,cantidad:int}}
+     */
+    public function getReporteMovimientos(int $juntaId, array $filters = []): array {
+        $where = ['t.junta_id = :junta_id'];
+        $binds = [':junta_id' => $juntaId];
+
+        $fechaDesde = trim((string)($filters['fecha_desde'] ?? ''));
+        $fechaHasta = trim((string)($filters['fecha_hasta'] ?? ''));
+        $tipo = trim((string)($filters['tipo'] ?? ''));
+        $categoria = trim((string)($filters['categoria'] ?? ''));
+
+        if ($fechaDesde !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaDesde)) {
+            $where[] = 't.fecha >= :fecha_desde';
+            $binds[':fecha_desde'] = $fechaDesde;
+        }
+        if ($fechaHasta !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaHasta)) {
+            $where[] = 't.fecha <= :fecha_hasta';
+            $binds[':fecha_hasta'] = $fechaHasta;
+        }
+        if (in_array($tipo, ['ingreso', 'egreso'], true)) {
+            $where[] = 't.tipo = :tipo';
+            $binds[':tipo'] = $tipo;
+        }
+        if ($categoria !== '') {
+            $where[] = 't.categoria = :categoria';
+            $binds[':categoria'] = $categoria;
+        }
+
+        $sqlWhere = implode(' AND ', $where);
+
+        $this->db->query("SELECT t.*,
+            u.nombre AS socio_nombre,
+            u.apellido_paterno AS socio_apellido_paterno,
+            u.apellido_materno AS socio_apellido_materno,
+            u.rut AS socio_rut,
+            r.nombre AS admin_nombre,
+            r.apellido_paterno AS admin_apellido_paterno
+            FROM transacciones t
+            LEFT JOIN usuarios u ON t.socio_id = u.id
+            LEFT JOIN usuarios r ON t.registrado_por = r.id
+            WHERE {$sqlWhere}
+            ORDER BY t.fecha ASC, t.id ASC");
+        foreach ($binds as $key => $val) {
+            $this->db->bind($key, $val);
+        }
+        $rows = $this->db->resultSet();
+
+        $ingresos = 0;
+        $egresos = 0;
+        $cuotas = 0;
+        foreach ($rows as $row) {
+            $monto = (int)($row->monto ?? 0);
+            if (($row->tipo ?? '') === 'ingreso') {
+                $ingresos += $monto;
+                if (($row->categoria ?? '') === 'Cuota Socio') {
+                    $cuotas += $monto;
+                }
+            } elseif (($row->tipo ?? '') === 'egreso') {
+                $egresos += $monto;
+            }
+        }
+
+        return [
+            'rows' => $rows,
+            'totales' => [
+                'ingresos' => $ingresos,
+                'egresos' => $egresos,
+                'neto' => $ingresos - $egresos,
+                'cuotas' => $cuotas,
+                'cantidad' => count($rows),
+            ],
+        ];
+    }
+
+    /** Categorías distintas usadas en movimientos de la junta (para filtro del reporte). */
+    public function getCategoriasUsadas(int $juntaId): array {
+        $this->db->query("SELECT DISTINCT categoria FROM transacciones
+            WHERE junta_id = :junta_id AND categoria IS NOT NULL AND categoria <> ''
+            ORDER BY categoria ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        $out = [];
+        foreach ($this->db->resultSet() as $row) {
+            $out[] = $row->categoria;
+        }
+        return $out;
+    }
 }

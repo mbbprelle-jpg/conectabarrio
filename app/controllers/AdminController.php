@@ -1731,6 +1731,124 @@ class AdminController extends Controller {
         $this->view('admin/flujo_caja', $data);
     }
 
+    /**
+     * Reporte verificable de ingresos y egresos.
+     * En pagos de cuota muestra RUT y nombre completo del socio.
+     */
+    public function reporte_movimientos() {
+        $this->requireRegisterPayments();
+        $juntaId = $this->activeJuntaId();
+
+        $fechaDesde = trim((string)($_GET['desde'] ?? ''));
+        $fechaHasta = trim((string)($_GET['hasta'] ?? ''));
+        $tipo = trim((string)($_GET['tipo'] ?? ''));
+        $categoria = trim((string)($_GET['categoria'] ?? ''));
+        $export = trim((string)($_GET['export'] ?? ''));
+
+        // Por defecto: mes actual (facilita verificación periódica)
+        if ($fechaDesde === '' && $fechaHasta === '' && $tipo === '' && $categoria === '' && !isset($_GET['todos'])) {
+            $fechaDesde = date('Y-m-01');
+            $fechaHasta = date('Y-m-t');
+        }
+
+        if ($fechaDesde !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaDesde)) {
+            $fechaDesde = '';
+        }
+        if ($fechaHasta !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaHasta)) {
+            $fechaHasta = '';
+        }
+        if (!in_array($tipo, ['', 'ingreso', 'egreso'], true)) {
+            $tipo = '';
+        }
+
+        $filters = [
+            'fecha_desde' => $fechaDesde,
+            'fecha_hasta' => $fechaHasta,
+            'tipo' => $tipo,
+            'categoria' => $categoria,
+        ];
+
+        $reporte = $this->transaccionModel->getReporteMovimientos($juntaId, $filters);
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+
+        if ($export === 'csv') {
+            $this->exportReporteMovimientosCsv($junta, $reporte['rows']);
+            return;
+        }
+
+        $data = array_merge([
+            'title' => 'Reporte de Movimientos',
+            'header_title' => 'Reporte de Ingresos y Egresos',
+            'header_subtitle' => 'Verifique montos por periodo. En cuotas se muestra RUT y nombre del socio.',
+            'active_menu' => 'reporte_movimientos',
+            'junta' => $junta,
+            'movimientos' => $reporte['rows'],
+            'totales' => $reporte['totales'],
+            'filtros' => [
+                'desde' => $fechaDesde,
+                'hasta' => $fechaHasta,
+                'tipo' => $tipo,
+                'categoria' => $categoria,
+            ],
+            'categorias' => $this->transaccionModel->getCategoriasUsadas($juntaId),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ], $this->finanzasViewExtras());
+
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/reporte_movimientos', $data);
+    }
+
+    private function exportReporteMovimientosCsv($junta, array $rows): void {
+        $nombreOrg = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string)($junta->nombre ?? 'organizacion'));
+        $filename = 'reporte_movimientos_' . $nombreOrg . '_' . date('Ymd_His') . '.csv';
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $out = fopen('php://output', 'w');
+        // BOM para Excel en Windows
+        fwrite($out, "\xEF\xBB\xBF");
+
+        fputcsv($out, [
+            'Fecha',
+            'Tipo',
+            'Categoría',
+            'Descripción',
+            'RUT socio',
+            'Nombre socio',
+            'Mes pagado',
+            'Monto',
+            'Registrado por',
+        ], ';');
+
+        foreach ($rows as $t) {
+            $esCuota = in_array($t->categoria ?? '', ['Cuota Socio', 'Cuota Condonada'], true);
+            $nombreSocio = '';
+            $rutSocio = '';
+            if ($esCuota || !empty($t->socio_id)) {
+                $nombreSocio = Transaccion::socioNombreCompleto($t);
+                $rutSocio = (string)($t->socio_rut ?? '');
+            }
+            fputcsv($out, [
+                $t->fecha ?? '',
+                $t->tipo ?? '',
+                $t->categoria ?? '',
+                $t->descripcion ?? '',
+                $rutSocio,
+                $nombreSocio,
+                $t->mes_pagado ?? '',
+                (int)($t->monto ?? 0),
+                trim(($t->admin_nombre ?? '') . ' ' . ($t->admin_apellido_paterno ?? '')),
+            ], ';');
+        }
+
+        fclose($out);
+        exit;
+    }
+
     public function conceptos_caja() {
         $this->requireRegisterPayments();
         $juntaId = $this->activeJuntaId();
