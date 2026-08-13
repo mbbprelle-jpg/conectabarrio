@@ -164,10 +164,11 @@
 </div>
 
 <!-- Modal de Autenticación (Glassmorphism Premium) -->
-<div class="auth-modal-overlay <?php echo !empty($data['error']) ? 'active' : ''; ?>"
+<?php $openLoginModal = !empty($data['error']) || !empty($data['success']); ?>
+<div class="auth-modal-overlay <?php echo $openLoginModal ? 'active' : ''; ?>"
      id="authModalOverlay"
-     <?php echo empty($data['error']) ? 'inert' : ''; ?>
-     aria-hidden="<?php echo empty($data['error']) ? 'true' : 'false'; ?>">
+     <?php echo $openLoginModal ? '' : 'inert'; ?>
+     aria-hidden="<?php echo $openLoginModal ? 'false' : 'true'; ?>">
     <div class="auth-modal login-card">
         <!-- Botón de Cerrar (solo X) -->
         <button class="modal-close" id="modalCloseBtn">
@@ -187,7 +188,11 @@
             <p>Acceso Seguro al Portal Vecinal</p>
         </div>
 
-        <!-- Alertas de Error -->
+        <?php if (!empty($data['success'])): ?>
+            <div class="alert alert-success" style="margin-bottom: 1.25rem;">
+                <span><?php echo htmlspecialchars($data['success']); ?></span>
+            </div>
+        <?php endif; ?>
         <?php if (!empty($data['error'])): ?>
             <div class="alert alert-danger" style="margin-bottom: 1.25rem;">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -215,11 +220,11 @@
                        autocapitalize="off"
                        autocorrect="off"
                        spellcheck="false"
-                       <?php echo !empty($data['error']) ? 'autofocus' : 'tabindex="-1"'; ?>>
+                       <?php echo $openLoginModal ? 'autofocus' : 'tabindex="-1"'; ?>>
             </div>
 
             <div class="form-group" id="loginPasswordMount">
-                <?php if (!empty($data['error'])): ?>
+                <?php if ($openLoginModal): ?>
                 <label for="password" class="form-label">Contraseña</label>
                 <div class="password-input-wrap">
                     <input type="password"
