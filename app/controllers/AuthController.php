@@ -42,6 +42,7 @@ class AuthController extends Controller {
                 'title' => 'Iniciar Sesión',
                 'rut_or_email' => $rutOrEmail,
                 'error' => '',
+                'success' => '',
                 'public_layout' => true,
             ];
 
