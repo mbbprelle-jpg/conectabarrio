@@ -21,6 +21,15 @@
         <div class="alert alert-success" style="margin-bottom: 1.25rem;">
             <span><?php echo htmlspecialchars($data['success']); ?></span>
         </div>
+        <p style="text-align:center; color:var(--text-muted); font-size:0.85rem;">Redirigiendo al portal…</p>
+        <script>
+            setTimeout(function () {
+                window.location.href = '<?php echo URLROOT; ?>/<?php
+                    $rol = $_SESSION['user_rol'] ?? 'socio';
+                    echo $rol === 'maestro' ? 'maestro/dashboard' : ($rol === 'admin' ? 'admin/dashboard' : 'socio/dashboard');
+                ?>';
+            }, 1200);
+        </script>
     <?php else: ?>
         <form action="<?php echo URLROOT; ?>/auth/resetPassword" method="POST" autocomplete="off">
             <div class="form-group">

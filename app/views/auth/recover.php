@@ -9,10 +9,6 @@
             <div class="alert alert-danger" style="margin-bottom:1.25rem;">
                 <span><?php echo htmlspecialchars($data['error']); ?></span>
             </div>
-        <?php elseif (!empty($data['success'])): ?>
-            <div class="alert alert-success" style="margin-bottom:1.25rem;">
-                <span><?php echo htmlspecialchars($data['success']); ?></span>
-            </div>
         <?php endif; ?>
         <form action="<?php echo URLROOT; ?>/auth/recover" method="POST">
             <div class="form-group">
@@ -23,6 +19,9 @@
                 Enviar clave temporal
             </button>
         </form>
+        <div style="text-align:center; margin-top:1.25rem;">
+            <a href="<?php echo URLROOT; ?>/auth/login" class="link-underline link-primary" style="font-size:0.9rem;">Volver al inicio de sesión</a>
+        </div>
     </section>
 </div>
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>

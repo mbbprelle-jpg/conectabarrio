@@ -484,11 +484,11 @@ class AuthController extends Controller {
 
             $result = $this->userModel->changePasswordWithCurrent($_SESSION['user_id'], $current, $newPass);
             if ($result['ok']) {
-                $viewData['success'] = 'Su contraseña fue actualizada correctamente.';
-                $viewData['error'] = '';
-            } else {
-                $viewData['error'] = $result['error'] ?? 'No se pudo cambiar la contraseña.';
+                $_SESSION['success_msg'] = 'Su contraseña fue actualizada correctamente.';
+                $this->redirectByRole($_SESSION['user_rol'] ?? 'socio');
+                return;
             }
+            $viewData['error'] = $result['error'] ?? 'No se pudo cambiar la contraseña.';
         }
 
         $this->view('auth/change_password', $viewData);
