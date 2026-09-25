@@ -97,6 +97,7 @@ class PublicoController extends Controller {
         $nombre = mb_strtoupper(trim((string)($post['nombre'] ?? '')), 'UTF-8');
         $telefono = SocioInput::normalizeTelefono($post['telefono'] ?? '');
         $calleId = !empty($post['calle_id']) ? (int)$post['calle_id'] : null;
+        $numeroCasa = trim((string)($post['numero_casa'] ?? ''));
         $direccionTexto = trim((string)($post['direccion_texto'] ?? ''));
 
         $registraHijos = !empty($post['registra_hijos']);
@@ -114,8 +115,31 @@ class PublicoController extends Controller {
             $error = 'Ingrese un teléfono válido de 9 dígitos (ej: 950001071 → se guardará como +56950001071).';
         } elseif ($usesCalles && (empty($calleId) || empty($calles))) {
             $error = 'Seleccione una dirección del listado.';
+        } elseif ($numeroCasa === '') {
+            $error = 'Ingrese el número de la dirección.';
         } elseif (!$usesCalles && $direccionTexto === '') {
             $error = 'Ingrese la dirección.';
+        }
+
+        // Guardar dirección completa: calle/texto + número
+        $direccionCompleta = '';
+        if ($error === '') {
+            if ($usesCalles) {
+                $calleNombre = '';
+                foreach ($calles as $c) {
+                    if ((int)$c->id === (int)$calleId) {
+                        $calleNombre = trim((string)$c->nombre);
+                        break;
+                    }
+                }
+                if ($calleNombre === '') {
+                    $error = 'La calle seleccionada no es válida.';
+                } else {
+                    $direccionCompleta = $calleNombre . ' N° ' . $numeroCasa;
+                }
+            } else {
+                $direccionCompleta = $direccionTexto . ' N° ' . $numeroCasa;
+            }
         }
 
         $personas = [];
@@ -142,7 +166,7 @@ class PublicoController extends Controller {
             'rut' => $rut,
             'nombre' => $nombre,
             'calle_id' => $usesCalles ? $calleId : null,
-            'direccion_texto' => $usesCalles ? null : $direccionTexto,
+            'direccion_texto' => $direccionCompleta,
             'telefono' => $telefono,
             'registra_hijos' => $registraHijos,
             'registra_discapacidad' => $registraDisc,

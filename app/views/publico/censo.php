@@ -24,18 +24,66 @@ $callesPickerJson = array_map(static function ($c) {
 }, $calles);
 ?>
 <style>
-.censo-wrap { max-width: 720px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-.censo-card { background: var(--bg-card, #111827); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.25rem 1.35rem; }
-.censo-grid-row { display: grid; grid-template-columns: 1.1fr 1.4fr 1fr 0.7fr auto; gap: 0.45rem; margin-bottom: 0.45rem; align-items: end; }
-@media (max-width: 720px) {
-  .censo-grid-row { grid-template-columns: 1fr; }
+.censo-wrap { max-width: 980px; margin: 0 auto; padding: 1.25rem 1rem 3rem; width: 100%; box-sizing: border-box; }
+.censo-card { background: var(--bg-card, #111827); border: 1px solid var(--border-color); border-radius: 14px; padding: 1.35rem 1.5rem; overflow: hidden; }
+.censo-addr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 160px);
+  gap: 0.75rem;
+  align-items: start;
+}
+.censo-people-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.75rem; }
+.censo-grid-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  box-sizing: border-box;
+}
+.censo-person-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.censo-person-head strong {
+  font-size: 0.86rem;
+  color: var(--text-main);
+}
+.censo-person-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 0.75rem;
+  align-items: start;
+}
+.censo-person-fields .form-group { margin: 0; min-width: 0; }
+.censo-person-fields .form-control,
+.censo-person-fields select.form-control {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 640px) {
+  .censo-addr-row { grid-template-columns: 1fr; }
+  .censo-person-fields { grid-template-columns: 1fr; }
 }
 .censo-section { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px dashed rgba(255,255,255,0.12); }
 .censo-toggle-box { display: none; margin-top: 0.75rem; }
 .censo-toggle-box.open { display: block; }
 .cb-rut-chile.is-invalid,
 .cb-edad-censo.is-invalid { border-color: var(--danger, #ef4444) !important; }
-.cb-field-hint { display: block; margin-top: 0.25rem; font-size: 0.72rem; color: var(--text-muted); }
+.cb-field-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+  min-height: 1.1em;
+}
 .cb-field-hint.is-error { color: var(--danger, #ef4444); }
 
 .censo-intro-overlay {
@@ -256,26 +304,36 @@ $callesPickerJson = array_map(static function ($c) {
                            value="<?php echo htmlspecialchars($old['nombre'] ?? ''); ?>">
                 </div>
 
-                <?php if ($usesCalles): ?>
-                <div class="form-group">
-                    <label class="form-label" for="calle_input">Dirección (calle) *</label>
-                    <div class="cb-socio-picker" id="picker_calle" data-required="1" data-placeholder="Escriba para buscar la calle…">
-                        <input type="hidden" name="calle_id" id="calle_id" value="<?php echo $calleSeleccionadaId > 0 ? $calleSeleccionadaId : ''; ?>" required>
-                        <input type="text" class="form-control cb-socio-picker-input" id="calle_input" autocomplete="off"
-                               placeholder="Escriba para buscar la calle…"
-                               value="<?php echo htmlspecialchars($calleSeleccionadaLabel); ?>">
-                        <button type="button" class="cb-socio-picker-clear" title="Quitar calle" <?php echo $calleSeleccionadaId > 0 ? '' : 'hidden'; ?> aria-label="Quitar calle">&times;</button>
-                        <ul class="cb-socio-picker-list" hidden></ul>
+                <div class="censo-addr-row">
+                    <?php if ($usesCalles): ?>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="calle_input">Dirección (calle) *</label>
+                        <div class="cb-socio-picker" id="picker_calle" data-required="1" data-placeholder="Escriba para buscar la calle…">
+                            <input type="hidden" name="calle_id" id="calle_id" value="<?php echo $calleSeleccionadaId > 0 ? $calleSeleccionadaId : ''; ?>" required>
+                            <input type="text" class="form-control cb-socio-picker-input" id="calle_input" autocomplete="off"
+                                   placeholder="Escriba para buscar la calle…"
+                                   value="<?php echo htmlspecialchars($calleSeleccionadaLabel); ?>">
+                            <button type="button" class="cb-socio-picker-clear" title="Quitar calle" <?php echo $calleSeleccionadaId > 0 ? '' : 'hidden'; ?> aria-label="Quitar calle">&times;</button>
+                            <ul class="cb-socio-picker-list" hidden></ul>
+                        </div>
+                        <small class="cb-field-hint">Escriba parte del nombre para acotar el listado.</small>
                     </div>
-                    <small class="cb-field-hint">Escriba parte del nombre para acotar el listado.</small>
+                    <?php else: ?>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="direccion_texto">Dirección *</label>
+                        <input type="text" name="direccion_texto" id="direccion_texto" class="form-control" required
+                               value="<?php echo htmlspecialchars($old['direccion_texto'] ?? ''); ?>">
+                    </div>
+                    <?php endif; ?>
+
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" for="numero_casa">Número *</label>
+                        <input type="text" name="numero_casa" id="numero_casa" class="form-control" required
+                               maxlength="40" placeholder="Ej: 1234"
+                               value="<?php echo htmlspecialchars($old['numero_casa'] ?? ''); ?>">
+                        <small class="cb-field-hint">Calle + N°</small>
+                    </div>
                 </div>
-                <?php else: ?>
-                <div class="form-group">
-                    <label class="form-label" for="direccion_texto">Dirección *</label>
-                    <input type="text" name="direccion_texto" id="direccion_texto" class="form-control" required
-                           value="<?php echo htmlspecialchars($old['direccion_texto'] ?? ''); ?>">
-                </div>
-                <?php endif; ?>
 
                 <?php
                 $id = 'telefono';
@@ -295,7 +353,7 @@ $callesPickerJson = array_map(static function ($c) {
                         Hijos (0 a 8 años)
                     </label>
                     <div id="boxHijos" class="censo-toggle-box <?php echo !empty($old['registra_hijos']) ? 'open' : ''; ?>">
-                        <div id="gridHijos"></div>
+                        <div id="gridHijos" class="censo-people-list"></div>
                         <button type="button" class="btn btn-secondary btn-sm" id="btnAddHijo">+ Agregar hijo</button>
                     </div>
 
@@ -305,7 +363,7 @@ $callesPickerJson = array_map(static function ($c) {
                         Persona con discapacidad (0 a 18 años)
                     </label>
                     <div id="boxDisc" class="censo-toggle-box <?php echo !empty($old['registra_discapacidad']) ? 'open' : ''; ?>">
-                        <div id="gridDisc"></div>
+                        <div id="gridDisc" class="censo-people-list"></div>
                         <button type="button" class="btn btn-secondary btn-sm" id="btnAddDisc">+ Agregar persona</button>
                     </div>
 
@@ -577,21 +635,39 @@ $callesPickerJson = array_map(static function ($c) {
     function addRow(container, prefix, maxEdad, prefill) {
         prefill = prefill || {};
         var label = prefix === 'hijo' ? 'Hijo' : 'Persona';
+        var n = (container.querySelectorAll('.censo-grid-row').length || 0) + 1;
         var row = document.createElement('div');
         row.className = 'censo-grid-row';
         row.innerHTML =
-            '<div class="form-group" style="margin:0;"><label class="form-label">RUT</label>' +
-            '<input type="text" name="' + prefix + '_rut[]" class="form-control cb-rut-chile" maxlength="12" required placeholder="11111111-1" value="' + (prefill.rut || '') + '"></div>' +
-            '<div class="form-group" style="margin:0;"><label class="form-label">Nombre completo</label>' +
-            '<input type="text" name="' + prefix + '_nombre[]" class="form-control cb-uppercase" required value="' + (prefill.nombre || '') + '"></div>' +
-            '<div class="form-group" style="margin:0;"><label class="form-label">Sexo</label>' + sexoSelect(prefix + '_sexo[]', prefill.sexo) + '</div>' +
-            '<div class="form-group" style="margin:0;"><label class="form-label">Edad</label>' +
-            '<input type="number" name="' + prefix + '_edad[]" class="form-control cb-edad-censo" min="0" max="' + maxEdad + '" step="1" required value="' + (prefill.edad || '') + '"></div>' +
-            '<button type="button" class="btn btn-danger btn-sm" style="margin-bottom:0.1rem;" onclick="this.parentNode.remove()">Quitar</button>';
+            '<div class="censo-person-head">' +
+                '<strong>' + label + ' #' + n + '</strong>' +
+                '<button type="button" class="btn btn-danger btn-sm censo-person-remove">Quitar</button>' +
+            '</div>' +
+            '<div class="censo-person-fields">' +
+                '<div class="form-group"><label class="form-label">RUT</label>' +
+                '<input type="text" name="' + prefix + '_rut[]" class="form-control cb-rut-chile" maxlength="12" required placeholder="11111111-1" value="' + (prefill.rut || '') + '"></div>' +
+                '<div class="form-group"><label class="form-label">Nombre completo</label>' +
+                '<input type="text" name="' + prefix + '_nombre[]" class="form-control cb-uppercase" required value="' + (prefill.nombre || '') + '"></div>' +
+                '<div class="form-group"><label class="form-label">Sexo</label>' + sexoSelect(prefix + '_sexo[]', prefill.sexo) + '</div>' +
+                '<div class="form-group"><label class="form-label">Edad (0–' + maxEdad + ')</label>' +
+                '<input type="number" name="' + prefix + '_edad[]" class="form-control cb-edad-censo" min="0" max="' + maxEdad + '" step="1" required value="' + (prefill.edad || '') + '"></div>' +
+            '</div>';
         container.appendChild(row);
+        row.querySelector('.censo-person-remove')?.addEventListener('click', function () {
+            row.remove();
+            renumberPeople(container, label);
+        });
         bindRutInput(row.querySelector('.cb-rut-chile'));
         bindUppercase(row.querySelector('.cb-uppercase'));
         bindEdadInput(row.querySelector('.cb-edad-censo'), maxEdad, label);
+    }
+
+    function renumberPeople(container, label) {
+        if (!container) return;
+        container.querySelectorAll('.censo-grid-row').forEach(function (row, idx) {
+            var title = row.querySelector('.censo-person-head strong');
+            if (title) title.textContent = label + ' #' + (idx + 1);
+        });
     }
 
     function bindToggle(chkId, boxId, onOpen) {
@@ -771,6 +847,12 @@ $callesPickerJson = array_map(static function ($c) {
         if (calleId && !calleId.value) {
             errors.push('Seleccione una calle del listado (escriba para buscar).');
             calleId.setCustomValidity('Seleccione una calle');
+        }
+
+        var numeroCasa = document.getElementById('numero_casa');
+        if (!numeroCasa || !String(numeroCasa.value || '').trim()) {
+            errors.push('Ingrese el número de la dirección.');
+            if (numeroCasa) numeroCasa.focus();
         }
 
         var chkH = document.getElementById('chkHijos');

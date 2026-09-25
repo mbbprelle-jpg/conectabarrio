@@ -121,7 +121,7 @@
                                 <td><?php echo htmlspecialchars($r->nombre); ?></td>
                                 <td><?php echo htmlspecialchars($r->telefono); ?></td>
                                 <td style="font-size:0.8rem;">
-                                    <?php echo htmlspecialchars($r->calle_nombre ?: ($r->direccion_texto ?? '—')); ?>
+                                    <?php echo htmlspecialchars($r->direccion_texto ?: ($r->calle_nombre ?? '—')); ?>
                                 </td>
                                 <td style="font-size:0.75rem;">
                                     <?php
@@ -152,7 +152,7 @@
             <p style="font-size:0.88rem; margin:0 0 0.75rem;">
                 <strong>RUT:</strong> <?php echo htmlspecialchars($d->rut); ?> ·
                 <strong>Tel:</strong> <?php echo htmlspecialchars($d->telefono); ?> ·
-                <strong>Dir:</strong> <?php echo htmlspecialchars($d->calle_nombre ?: ($d->direccion_texto ?? '—')); ?>
+                <strong>Dir:</strong> <?php echo htmlspecialchars($d->direccion_texto ?: ($d->calle_nombre ?? '—')); ?>
             </p>
             <?php if (empty($data['personas'])): ?>
                 <p style="color:var(--text-muted);">Sin personas asociadas (solo adulto).</p>
