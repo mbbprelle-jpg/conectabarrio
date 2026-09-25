@@ -271,7 +271,7 @@ class AuthContext {
             'get_socio_cuotas', 'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar', 'cuotas_condonar_miembros',
             'conceptos_caja', 'concepto_caja', 'concepto_caja_crear',
             'concepto_caja_actualizar', 'concepto_caja_eliminar', 'comprobante',
-            'reporte_movimientos',
+            'reporte_movimientos', 'traspasar_cuotas', 'traspasar_cuotas_aplicar',
         ];
     }
 
@@ -281,7 +281,7 @@ class AuthContext {
             $methods[] = 'mapa_socios';
         }
         if (self::canManageSocios()) {
-            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_actualizar', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion', 'generar_invitacion', 'invitacion_revocar', 'socio_pendiente_actualizar', 'socio_pendiente_aprobar', 'socio_pendiente_rechazar', 'socio_importar_validar', 'socio_importar_confirmar', 'socio_importar_chunk', 'socio_prevalidar_actualizar', 'socio_prevalidar_aprobar', 'socio_prevalidar_eliminar', 'cambio_aprobar', 'cambio_rechazar', 'cambio_actualizar']);
+            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_actualizar', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion', 'generar_invitacion', 'invitacion_revocar', 'socio_pendiente_actualizar', 'socio_pendiente_aprobar', 'socio_pendiente_rechazar', 'socio_importar_validar', 'socio_importar_confirmar', 'socio_importar_chunk', 'socio_prevalidar_actualizar', 'socio_prevalidar_aprobar', 'socio_prevalidar_eliminar', 'cambio_aprobar', 'cambio_rechazar', 'cambio_actualizar', 'censo_familiar']);
         }
         if (self::canRegisterPayments()) {
             $methods = array_merge($methods, [
@@ -289,7 +289,7 @@ class AuthContext {
                 'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar', 'cuotas_condonar_miembros',
                 'guardar_saldo_inicial', 'conceptos_caja', 'concepto_caja', 'concepto_caja_crear',
                 'concepto_caja_actualizar', 'concepto_caja_eliminar',
-                'reporte_movimientos',
+                'reporte_movimientos', 'traspasar_cuotas', 'traspasar_cuotas_aplicar',
             ]);
         }
         if (self::canViewFlujoCaja()) {

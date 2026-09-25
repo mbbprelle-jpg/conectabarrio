@@ -155,6 +155,98 @@ class Transaccion extends Model {
         return (bool)$this->db->single();
     }
 
+    /** Cuotas (pagadas o condonadas) de un socio, para traspaso. */
+    public function getCuotasBySocioJunta(int $socioId, int $juntaId): array {
+        $this->db->query("SELECT t.*,
+            u.nombre AS socio_nombre,
+            u.apellido_paterno AS socio_apellido_paterno,
+            u.apellido_materno AS socio_apellido_materno,
+            u.rut AS socio_rut
+            FROM transacciones t
+            LEFT JOIN usuarios u ON t.socio_id = u.id
+            WHERE t.junta_id = :junta_id
+            AND t.socio_id = :socio_id
+            AND t.categoria IN ('Cuota Socio', 'Cuota Condonada')
+            ORDER BY t.mes_pagado ASC, t.id ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        $this->db->bind(':socio_id', $socioId);
+        return $this->db->resultSet();
+    }
+
+    /**
+     * Traspasar cuotas a otro socio sin cambiar fecha/monto (no altera cierres contables).
+     * @param int[] $transaccionIds
+     * @return array{ok:bool,error?:string,traspasadas?:int}
+     */
+    public function traspasarCuotasASocio(int $juntaId, array $transaccionIds, int $socioDestinoId, string $motivo, int $operadorId): array {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $transaccionIds))));
+        if (empty($ids)) {
+            return ['ok' => false, 'error' => 'Seleccione al menos una cuota a traspasar.'];
+        }
+        if ($socioDestinoId <= 0) {
+            return ['ok' => false, 'error' => 'Debe indicar el socio de destino.'];
+        }
+
+        $holders = [];
+        foreach ($ids as $i => $id) {
+            $holders[] = ':id_' . $i;
+        }
+        $this->db->query("SELECT id, socio_id, mes_pagado, categoria, descripcion
+            FROM transacciones
+            WHERE junta_id = :junta_id
+            AND id IN (" . implode(', ', $holders) . ")
+            AND categoria IN ('Cuota Socio', 'Cuota Condonada')");
+        $this->db->bind(':junta_id', $juntaId);
+        foreach ($ids as $i => $id) {
+            $this->db->bind(':id_' . $i, $id);
+        }
+        $rows = $this->db->resultSet();
+        if (count($rows) !== count($ids)) {
+            return ['ok' => false, 'error' => 'Una o más cuotas no existen o no pertenecen a esta organización.'];
+        }
+
+        $origenId = (int)$rows[0]->socio_id;
+        if ($origenId === $socioDestinoId) {
+            return ['ok' => false, 'error' => 'El socio de origen y destino deben ser distintos.'];
+        }
+        foreach ($rows as $row) {
+            if ((int)$row->socio_id !== $origenId) {
+                return ['ok' => false, 'error' => 'Todas las cuotas deben pertenecer al mismo socio de origen.'];
+            }
+            if ($this->checkPagoSocioExcluding($socioDestinoId, (string)$row->mes_pagado, $juntaId, (int)$row->id)) {
+                return ['ok' => false, 'error' => 'El socio destino ya tiene registrada la cuota del mes ' . $row->mes_pagado . '.'];
+            }
+        }
+
+        $notaBase = ' [Traspaso ' . date('Y-m-d H:i') . ' socio #' . $origenId . ' → #' . $socioDestinoId;
+        if (trim($motivo) !== '') {
+            $notaBase .= ' · ' . trim($motivo);
+        }
+        $notaBase .= ' · op#' . $operadorId . ']';
+
+        $ok = 0;
+        foreach ($rows as $row) {
+            $desc = trim((string)($row->descripcion ?? ''));
+            $nuevaDesc = $desc !== '' ? ($desc . $notaBase) : trim($notaBase);
+            $this->db->query("UPDATE transacciones SET
+                socio_id = :destino,
+                descripcion = :descripcion
+                WHERE id = :id AND junta_id = :junta_id");
+            $this->db->bind(':destino', $socioDestinoId);
+            $this->db->bind(':descripcion', $nuevaDesc);
+            $this->db->bind(':id', (int)$row->id);
+            $this->db->bind(':junta_id', $juntaId);
+            if ($this->db->execute()) {
+                $ok++;
+            }
+        }
+
+        if ($ok === 0) {
+            return ['ok' => false, 'error' => 'No se pudo traspasar ninguna cuota.'];
+        }
+        return ['ok' => true, 'traspasadas' => $ok];
+    }
+
     // Obtener los pagos realizados por un socio en una organización
     public function getPagosBySocio($socioId, $juntaId = null) {
         $sql = "SELECT t.*, r.nombre as admin_nombre 

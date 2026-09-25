@@ -1849,6 +1849,148 @@ class AdminController extends Controller {
         exit;
     }
 
+    /**
+     * Traspasar cuotas de un socio a otro (incluye meses cerrados).
+     * Solo cambia socio_id; mantiene fecha/monto/mes_pagado para no alterar cierres.
+     */
+    public function traspasar_cuotas() {
+        $this->requireRegisterPayments();
+        $juntaId = $this->activeJuntaId();
+        $socios = $this->userModel->getMiembrosCuotaByJunta($juntaId);
+
+        $origenId = isset($_GET['origen']) ? (int)$_GET['origen'] : 0;
+        $cuotasOrigen = $origenId > 0
+            ? $this->transaccionModel->getCuotasBySocioJunta($origenId, $juntaId)
+            : [];
+
+        $data = array_merge([
+            'title' => 'Traspasar cuotas',
+            'header_title' => 'Traspasar cuotas entre socios',
+            'header_subtitle' => 'Corrija asignaciones erróneas sin alterar los montos ni los cierres mensuales.',
+            'active_menu' => 'traspasar_cuotas',
+            'socios' => $socios,
+            'origen_id' => $origenId,
+            'cuotas_origen' => $cuotasOrigen,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ], $this->finanzasViewExtras());
+
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/traspasar_cuotas', $data);
+    }
+
+    /**
+     * Panel del censo / registro familiar público: link y listado de respuestas.
+     */
+    public function censo_familiar() {
+        $this->requireManageSocios();
+        $juntaId = $this->activeJuntaId();
+        $censoModel = $this->model('CensoFamiliar');
+
+        if (!$censoModel->hasTables()) {
+            $data = array_merge([
+                'title' => 'Registro familiar',
+                'header_title' => 'Registro familiar (público)',
+                'header_subtitle' => 'Migración SQL pendiente',
+                'active_menu' => 'censo_familiar',
+                'migration_pending' => true,
+                'link' => null,
+                'registros' => [],
+                'success' => '',
+                'error' => 'Ejecute el script sql/add_censo_familiar.sql en la base de datos y vuelva a intentar.',
+            ], $this->finanzasViewExtras());
+            $this->view('admin/censo_familiar', $data);
+            return;
+        }
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['accion'] ?? '') === 'generar_link') {
+            $link = $censoModel->getOrCreateLink($juntaId, (int)($_SESSION['user_id'] ?? 0));
+            if ($link) {
+                $_SESSION['success_msg'] = 'Link público listo para compartir.';
+            } else {
+                $_SESSION['error_msg'] = 'No se pudo generar el link.';
+            }
+            $this->redirect('/admin/censo_familiar');
+            return;
+        }
+
+        $link = $censoModel->getOrCreateLink($juntaId, (int)($_SESSION['user_id'] ?? 0));
+        $registros = $censoModel->listByJunta($juntaId);
+        $detalleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $detalle = null;
+        $personas = [];
+        if ($detalleId > 0) {
+            $detalle = $censoModel->getRegistroDetalle($detalleId, $juntaId);
+            if ($detalle) {
+                $personas = $censoModel->getPersonasByRegistro($detalleId);
+            }
+        }
+
+        $data = array_merge([
+            'title' => 'Registro familiar',
+            'header_title' => 'Registro familiar (público)',
+            'header_subtitle' => 'Link público para padres/adultos, hijos, discapacidad y embarazo',
+            'active_menu' => 'censo_familiar',
+            'migration_pending' => false,
+            'link' => $link,
+            'registros' => $registros,
+            'detalle' => $detalle,
+            'personas' => $personas,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ], $this->finanzasViewExtras());
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/censo_familiar', $data);
+    }
+
+    public function traspasar_cuotas_aplicar() {
+        $this->requireRegisterPayments();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/traspasar_cuotas');
+            return;
+        }
+
+        $post = $this->sanitizePost();
+        $juntaId = $this->activeJuntaId();
+        $origenId = (int)($post['origen_id'] ?? 0);
+        $destinoId = (int)($post['destino_id'] ?? 0);
+        $motivo = trim((string)($post['motivo'] ?? ''));
+        $ids = $post['cuota_ids'] ?? [];
+        if (!is_array($ids)) {
+            $ids = [];
+        }
+
+        if ($origenId <= 0 || $destinoId <= 0) {
+            $_SESSION['error_msg'] = 'Seleccione socio de origen y socio de destino.';
+            $this->redirect('/admin/traspasar_cuotas?origen=' . $origenId);
+            return;
+        }
+
+        $destino = $this->userModel->getMiembroCuotaById($destinoId, $juntaId);
+        if (!$destino) {
+            $_SESSION['error_msg'] = 'El socio de destino no pertenece a esta organización.';
+            $this->redirect('/admin/traspasar_cuotas?origen=' . $origenId);
+            return;
+        }
+
+        $result = $this->transaccionModel->traspasarCuotasASocio(
+            $juntaId,
+            $ids,
+            $destinoId,
+            $motivo,
+            (int)($_SESSION['user_id'] ?? 0)
+        );
+
+        if ($result['ok']) {
+            $_SESSION['success_msg'] = 'Se traspasaron ' . (int)$result['traspasadas'] . ' cuota(s) correctamente. Los montos y cierres no se modificaron.';
+            $this->redirect('/admin/traspasar_cuotas?origen=' . $destinoId);
+            return;
+        }
+
+        $_SESSION['error_msg'] = $result['error'] ?? 'No se pudo completar el traspaso.';
+        $this->redirect('/admin/traspasar_cuotas?origen=' . $origenId);
+    }
+
     public function conceptos_caja() {
         $this->requireRegisterPayments();
         $juntaId = $this->activeJuntaId();
