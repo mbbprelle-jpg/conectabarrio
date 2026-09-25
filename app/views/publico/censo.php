@@ -149,6 +149,57 @@ $callesPickerJson = array_map(static function ($c) {
   padding: 0.75rem 1.25rem;
   font-weight: 600;
 }
+.censo-org-banner {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 2px solid rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+.censo-org-banner-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+  margin-bottom: 0.35rem;
+}
+.censo-org-banner-name {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  line-height: 1.3;
+  color: var(--text-main);
+  font-weight: 700;
+}
+.censo-intro-org {
+  margin: 0 0 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 2px solid rgba(56, 189, 248, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.15);
+  text-align: center;
+}
+.censo-intro-org-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+  margin-bottom: 0.4rem;
+}
+.censo-intro-org-name {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: 1.12rem;
+  line-height: 1.3;
+  color: #fff;
+  font-weight: 700;
+}
 </style>
 
 <div class="censo-wrap">
@@ -169,9 +220,13 @@ $callesPickerJson = array_map(static function ($c) {
         <?php elseif (!$link): ?>
             <div class="alert alert-danger"><span><?php echo htmlspecialchars($data['error'] ?? 'Enlace no válido'); ?></span></div>
         <?php else: ?>
-            <h1 style="font-family:var(--font-heading); font-size:1.35rem; margin:0 0 0.35rem;">
+            <h1 style="font-family:var(--font-heading); font-size:1.35rem; margin:0 0 0.65rem;">
                 Registro para juguetes de Navidad 2026
             </h1>
+            <div class="censo-org-banner" role="note">
+                <span class="censo-org-banner-label">Este formulario solo aplica para</span>
+                <span class="censo-org-banner-name">Junta de Vecinos N° 136 Valle de Peñaflor</span>
+            </div>
             <p style="color:var(--text-muted); font-size:0.88rem; margin:0 0 1rem;">
                 Complete los datos del adulto responsable y luego inscriba a quienes correspondan (hijos, discapacidad o embarazo).
                 Plazo: hasta el 12 de octubre de 2026 a las 23:59.
@@ -310,10 +365,15 @@ $callesPickerJson = array_map(static function ($c) {
     <div class="censo-intro-box">
         <div class="censo-intro-badge">Municipalidad de Peñaflor</div>
         <h2 id="censoIntroTitle" class="censo-intro-title">Registro para juguetes de Navidad 2026</h2>
+        <div class="censo-intro-org" role="note">
+            <span class="censo-intro-org-label">Este formulario solo aplica para la organización</span>
+            <span class="censo-intro-org-name">Junta de Vecinos N° 136 Valle de Peñaflor</span>
+        </div>
         <p class="censo-intro-lead">
             La Municipalidad de Peñaflor, a través de las organizaciones sociales,
             está recopilando la información de niños, niñas y jóvenes de nuestra comunidad
             para entregarles un presente en esta Navidad.
+            Si usted no pertenece a esta junta, no utilice este formulario.
         </p>
         <div class="censo-intro-plazo">
             <div aria-hidden="true" style="flex-shrink:0; width:28px; height:28px; color:#f0c674; margin-top:0.1rem;">
