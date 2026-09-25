@@ -2085,6 +2085,7 @@ html {
     font-size: 0.9rem;
     line-height: 1.55;
     margin: 0 0 1.5rem;
+    white-space: pre-line;
 }
 
 .cb-confirm-actions {

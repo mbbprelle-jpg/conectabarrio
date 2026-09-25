@@ -64,7 +64,15 @@ class AuthContext {
         // Incluye padrón de socios, calles de jurisdicción, cuotas e invitaciones.
         if (self::isFullAdmin()) return true;
         if (!empty($_SESSION['permiso_todos'])) return true;
-        return !empty($_SESSION['permiso_gestion_socios']);
+        if (!empty($_SESSION['permiso_gestion_socios'])) return true;
+        // Cargo Secretario/Presidente implica gestión de padrón (aunque falte el flag en BD).
+        $cargo = self::sessionCargo();
+        return in_array($cargo, ['SECRETARIO', 'PRESIDENTE'], true);
+    }
+
+    /** Cargo normalizado de la membresía activa (ej. SECRETARIO). */
+    public static function sessionCargo(): string {
+        return strtoupper(trim((string)($_SESSION['user_cargo'] ?? '')));
     }
 
     public static function canRegisterPayments() {
@@ -119,11 +127,10 @@ class AuthContext {
         if (!empty($_SESSION['permiso_todos'])) {
             return true;
         }
-        $cargo = strtoupper((string)($_SESSION['user_cargo'] ?? ''));
-        return in_array($cargo, ['PRESIDENTE', 'SECRETARIO', 'TESORERO', 'DIRECTOR'], true);
+        return in_array(self::sessionCargo(), ['PRESIDENTE', 'SECRETARIO', 'TESORERO', 'DIRECTOR'], true);
     }
 
-    /** Ver avance del registro familiar público (admin, presidente y directiva). */
+    /** Ver avance del registro familiar público (admin, presidente, secretario y directiva). */
     public static function canViewCensoFamiliar(): bool {
         if (self::isFullAdmin()) {
             return true;
@@ -134,12 +141,16 @@ class AuthContext {
         if (self::canManageSocios()) {
             return true;
         }
+        // Directiva completa (secretario, tesorero, director, presidente).
         return self::isDirectivo();
     }
 
-    /** Gestionar link del censo (generar/copiar): admin o quien gestiona socios. */
+    /** Gestionar link del censo (generar/copiar): admin, gestión de socios o directiva. */
     public static function canManageCensoFamiliar(): bool {
-        return self::canManageSocios();
+        if (self::canManageSocios()) {
+            return true;
+        }
+        return self::isDirectivo();
     }
 
     public static function canViewDocumentos(): bool {
@@ -300,8 +311,9 @@ class AuthContext {
             $methods[] = 'mapa_socios';
         }
         if (self::canManageSocios()) {
-            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_actualizar', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion', 'generar_invitacion', 'invitacion_revocar', 'socio_pendiente_actualizar', 'socio_pendiente_aprobar', 'socio_pendiente_rechazar', 'socio_importar_validar', 'socio_importar_confirmar', 'socio_importar_chunk', 'socio_prevalidar_actualizar', 'socio_prevalidar_aprobar', 'socio_prevalidar_eliminar', 'cambio_aprobar', 'cambio_rechazar', 'cambio_actualizar', 'censo_familiar']);
-        } elseif (self::canViewCensoFamiliar()) {
+            $methods = array_merge($methods, ['socios', 'socio_crear', 'socio_actualizar', 'socio_reset_password', 'socio_eliminar', 'socio_reactivar', 'calle_crear', 'calle_eliminar', 'cuota_ajustar', 'socio_delegacion', 'generar_invitacion', 'invitacion_revocar', 'socio_pendiente_actualizar', 'socio_pendiente_aprobar', 'socio_pendiente_rechazar', 'socio_importar_validar', 'socio_importar_confirmar', 'socio_importar_chunk', 'socio_prevalidar_actualizar', 'socio_prevalidar_aprobar', 'socio_prevalidar_eliminar', 'cambio_aprobar', 'cambio_rechazar', 'cambio_actualizar']);
+        }
+        if (self::canViewCensoFamiliar()) {
             $methods[] = 'censo_familiar';
         }
         if (self::canRegisterPayments()) {

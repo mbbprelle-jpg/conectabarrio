@@ -33,7 +33,7 @@
             <?php endif; ?>
         </p>
         <p style="margin:0.5rem 0 0; font-size:0.8rem; color:var(--text-muted);">
-            Todos los registros de este formulario quedan asociados a esta junta. El administrador y el presidente/directiva pueden ver el avance aquí.
+            Todos los registros de este formulario quedan asociados a esta junta. El administrador, el presidente, el secretario y la directiva pueden ver el avance aquí.
         </p>
     </div>
 

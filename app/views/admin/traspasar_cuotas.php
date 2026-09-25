@@ -88,8 +88,7 @@ $sociosPickerJson = array_map(static function ($socio) {
     <?php elseif (empty($cuotas)): ?>
         <p style="color:var(--text-muted); margin:0;">Este socio no tiene cuotas registradas para traspasar.</p>
     <?php else: ?>
-        <form method="post" action="<?php echo URLROOT; ?>/admin/traspasar_cuotas_aplicar" id="formTraspaso"
-              onsubmit="return confirmTraspaso();">
+        <form method="post" action="<?php echo URLROOT; ?>/admin/traspasar_cuotas_aplicar" id="formTraspaso">
             <input type="hidden" name="origen_id" value="<?php echo $origenId; ?>">
 
             <div class="form-group">
@@ -438,29 +437,64 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    window.confirmTraspaso = function () {
-        const destino = document.getElementById('destino_id');
-        const checks = document.querySelectorAll('.cuota-check:checked');
-        if (!destino || !destino.value) {
-            alert('Seleccione el socio de destino escribiendo su nombre o RUT.');
-            return false;
-        }
-        if (!checks.length) {
-            alert('Seleccione al menos una cuota (mes) a traspasar.');
-            return false;
-        }
-        if (!lastMapaOk) {
-            alert('Revise la vista previa: no se puede traspasar con el mapeo actual.');
-            return false;
-        }
-        const mapa = document.getElementById('previewMapa');
-        const resumen = mapa ? mapa.innerText.replace(/\s+/g, ' ').trim() : '';
-        return confirm(
-            '¿Confirma el traspaso?\n\nLas cuotas se abonarán a los meses pendientes del destino:\n' +
-            resumen +
-            '\n\nMontos y fechas contables no cambian.'
-        );
-    };
+    const formTraspaso = document.getElementById('formTraspaso');
+    if (formTraspaso) {
+        formTraspaso.addEventListener('submit', function (e) {
+            if (formTraspaso.dataset.confirmed === '1') {
+                return;
+            }
+            e.preventDefault();
+
+            const destino = document.getElementById('destino_id');
+            const checks = document.querySelectorAll('.cuota-check:checked');
+            if (!destino || !destino.value) {
+                alert('Seleccione el socio de destino escribiendo su nombre o RUT.');
+                return;
+            }
+            if (!checks.length) {
+                alert('Seleccione al menos una cuota (mes) a traspasar.');
+                return;
+            }
+            if (!lastMapaOk) {
+                alert('Revise la vista previa: no se puede traspasar con el mapeo actual.');
+                return;
+            }
+
+            const seleccion = selectedCuotas();
+            const mapaLines = Array.from(document.querySelectorAll('#previewMapa > div')).map(function (row) {
+                return row.innerText.replace(/\s+/g, ' ').trim();
+            }).filter(Boolean);
+            const destinoLabel = (document.getElementById('destino_input') || {}).value || 'el socio destino';
+            const message = 'Se traspasarán ' + seleccion.length + ' cuota(s) a:\n'
+                + destinoLabel
+                + '\n\nAbono a meses pendientes:\n'
+                + (mapaLines.length ? mapaLines.join('\n') : '—')
+                + '\n\nMontos y fechas contables no cambian.';
+
+            const submitForm = function () {
+                formTraspaso.dataset.confirmed = '1';
+                if (typeof formTraspaso.requestSubmit === 'function') {
+                    formTraspaso.requestSubmit();
+                } else {
+                    formTraspaso.submit();
+                }
+            };
+
+            if (typeof window.cbOpenConfirm === 'function') {
+                window.cbOpenConfirm({
+                    title: 'Confirmar traspaso de cuotas',
+                    message: message,
+                    variant: 'warning',
+                    confirmLabel: 'Traspasar',
+                    onConfirm: submitForm
+                });
+            } else {
+                if (window.confirm(message.replace(/\n/g, ' '))) {
+                    submitForm();
+                }
+            }
+        });
+    }
 });
 </script>
 
