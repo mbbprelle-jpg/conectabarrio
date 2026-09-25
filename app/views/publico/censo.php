@@ -170,10 +170,11 @@ $callesPickerJson = array_map(static function ($c) {
             <div class="alert alert-danger"><span><?php echo htmlspecialchars($data['error'] ?? 'Enlace no válido'); ?></span></div>
         <?php else: ?>
             <h1 style="font-family:var(--font-heading); font-size:1.35rem; margin:0 0 0.35rem;">
-                <?php echo htmlspecialchars($link->titulo ?: 'Registro familiar'); ?>
+                Registro para juguetes de Navidad 2026
             </h1>
             <p style="color:var(--text-muted); font-size:0.88rem; margin:0 0 1rem;">
-                Complete los datos del padre o adulto responsable. Luego podrá registrar hijos, personas con discapacidad o embarazo.
+                Complete los datos del adulto responsable y luego inscriba a quienes correspondan (hijos, discapacidad o embarazo).
+                Plazo: hasta el 12 de octubre de 2026 a las 23:59.
             </p>
 
             <?php if (!empty($data['error'])): ?>
@@ -305,8 +306,59 @@ $callesPickerJson = array_map(static function ($c) {
 </div>
 
 <?php if ($link && empty($data['success'])): ?>
+<div id="censoIntroModal" class="censo-intro-overlay is-open" role="dialog" aria-modal="true" aria-labelledby="censoIntroTitle">
+    <div class="censo-intro-box">
+        <div class="censo-intro-badge">Municipalidad de Peñaflor</div>
+        <h2 id="censoIntroTitle" class="censo-intro-title">Registro para juguetes de Navidad 2026</h2>
+        <p class="censo-intro-lead">
+            La Municipalidad de Peñaflor, a través de las organizaciones sociales,
+            está recopilando la información de niños, niñas y jóvenes de nuestra comunidad
+            para entregarles un presente en esta Navidad.
+        </p>
+        <div class="censo-intro-plazo">
+            <div aria-hidden="true" style="flex-shrink:0; width:28px; height:28px; color:#f0c674; margin-top:0.1rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+            <div>
+                <strong>Plazo de inscripción</strong>
+                <span>Hasta el <strong style="color:var(--text-main);">12 de octubre de 2026</strong>, a las 23:59:59.
+                Después de esa hora no se recibirán más registros por este formulario.</span>
+            </div>
+        </div>
+        <p class="censo-intro-who">¿Quiénes pueden ser inscritos?</p>
+        <ul class="censo-intro-list">
+            <li>Niños y niñas de <strong>0 a 8 años</strong>, residentes en el sector correspondiente de la organización.</li>
+            <li>Personas con discapacidad de hasta <strong>18 años</strong>.</li>
+            <li>Madres embarazadas cuya fecha estimada de parto sea en <strong>diciembre de 2026</strong>.</li>
+            <li>Personas cuya ficha del Registro Social de Hogares pertenezca a la <strong>comuna de Peñaflor</strong>.</li>
+        </ul>
+        <div class="censo-intro-actions">
+            <button type="button" class="btn btn-primary" id="censoIntroOk">Entendido</button>
+        </div>
+    </div>
+</div>
 <script>
 (function () {
+    var intro = document.getElementById('censoIntroModal');
+    var introOk = document.getElementById('censoIntroOk');
+    function closeIntro() {
+        if (!intro) return;
+        intro.classList.remove('is-open');
+        intro.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        var first = document.getElementById('rut');
+        if (first) first.focus();
+    }
+    if (intro) {
+        document.body.style.overflow = 'hidden';
+        intro.setAttribute('aria-hidden', 'false');
+        if (introOk) {
+            introOk.focus();
+            introOk.addEventListener('click', closeIntro);
+        }
+        // Solo se cierra con «Entendido» (no con clic fuera ni Escape).
+    }
+
     var CALLES = <?php echo json_encode($callesPickerJson, JSON_UNESCAPED_UNICODE); ?>;
     var HOY = <?php echo json_encode($hoy); ?>;
     var MAX_PARTO = <?php echo json_encode($maxParto); ?>;

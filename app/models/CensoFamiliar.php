@@ -19,7 +19,7 @@ class CensoFamiliar extends Model {
         }
         $token = bin2hex(random_bytes(24));
         $this->db->query("INSERT INTO censo_links (junta_id, token, activo, titulo, created_by)
-            VALUES (:junta_id, :token, 1, 'Registro familiar', :created_by)");
+            VALUES (:junta_id, :token, 1, 'Registro para juguetes de Navidad 2026', :created_by)");
         $this->db->bind(':junta_id', $juntaId);
         $this->db->bind(':token', $token);
         $this->db->bind(':created_by', $createdBy > 0 ? $createdBy : null);
