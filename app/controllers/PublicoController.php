@@ -1,11 +1,43 @@
 <?php
 class PublicoController extends Controller {
+    /** Junta destino del registro familiar público (configurada para esta campaña). */
+    public const CENSO_JUNTA_ID = 6;
+
     private $censoModel;
     private $db;
 
     public function __construct() {
         $this->censoModel = $this->model('CensoFamiliar');
         $this->db = new Database();
+    }
+
+    /**
+     * Atajo fijo para la junta 6: /publico/registro_familiar
+     * Crea el link si no existe y muestra el formulario.
+     */
+    public function registro_familiar() {
+        if (!$this->censoModel->hasTables()) {
+            $this->view('publico/censo', [
+                'title' => 'Registro no disponible',
+                'public_layout' => true,
+                'error' => 'El formulario aún no está habilitado. Contacte a la directiva.',
+                'link' => null,
+            ]);
+            return;
+        }
+        $link = $this->censoModel->getOrCreateLink(self::CENSO_JUNTA_ID, 0);
+        if (!$link) {
+            $this->view('publico/censo', [
+                'title' => 'Registro no disponible',
+                'public_layout' => true,
+                'error' => 'No se pudo abrir el formulario de la junta. Contacte a la directiva.',
+                'link' => null,
+            ]);
+            return;
+        }
+        // Releer con datos de junta
+        $link = $this->censoModel->getValidLinkByToken($link->token);
+        $this->renderForm($link, '', '', []);
     }
 
     /** GET /publico/censo/{token} */

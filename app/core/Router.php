@@ -85,7 +85,7 @@ class Router {
             'PresentacionController' => ['index'],
             'ReunionRsvpController' => ['responder'],
             'VotacionLinkController' => ['ingresar'],
-            'PublicoController' => ['censo', 'censo_guardar'],
+            'PublicoController' => ['censo', 'censo_guardar', 'registro_familiar'],
         ];
 
         // Si la ruta no es pública y el usuario no está logueado, forzar login

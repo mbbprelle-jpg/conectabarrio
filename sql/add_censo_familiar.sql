@@ -1,5 +1,6 @@
 -- Censo / registro público familiar (padres, hijos, discapacidad, embarazo)
 -- Ejecutar una vez en la base de datos de producción.
+-- Los registros se asocian a juntas_vecinos.id (campaña actual: junta id = 6).
 
 CREATE TABLE IF NOT EXISTS censo_links (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -48,3 +49,10 @@ CREATE TABLE IF NOT EXISTS censo_personas (
     CONSTRAINT fk_censo_personas_registro
         FOREIGN KEY (registro_id) REFERENCES censo_registros(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Link público inicial para la junta 6 (atajo: /publico/registro_familiar)
+INSERT INTO censo_links (junta_id, token, activo, titulo)
+SELECT 6, REPLACE(UUID(), '-', ''), 1, 'Registro familiar'
+FROM DUAL
+WHERE EXISTS (SELECT 1 FROM juntas_vecinos WHERE id = 6)
+  AND NOT EXISTS (SELECT 1 FROM censo_links WHERE junta_id = 6 AND activo = 1);

@@ -174,11 +174,21 @@ class Transaccion extends Model {
     }
 
     /**
-     * Traspasar cuotas a otro socio sin cambiar fecha/monto (no altera cierres contables).
+     * Traspasar cuotas a otro socio.
+     * Mantiene fecha/monto (no altera cierres). Puede reasignar mes_pagado al mes destino.
+     *
      * @param int[] $transaccionIds
+     * @param array<int,string> $mesRemap mapa transaccion_id => mes_pagado destino (YYYY-MM)
      * @return array{ok:bool,error?:string,traspasadas?:int}
      */
-    public function traspasarCuotasASocio(int $juntaId, array $transaccionIds, int $socioDestinoId, string $motivo, int $operadorId): array {
+    public function traspasarCuotasASocio(
+        int $juntaId,
+        array $transaccionIds,
+        int $socioDestinoId,
+        string $motivo,
+        int $operadorId,
+        array $mesRemap = []
+    ): array {
         $ids = array_values(array_unique(array_filter(array_map('intval', $transaccionIds))));
         if (empty($ids)) {
             return ['ok' => false, 'error' => 'Seleccione al menos una cuota a traspasar.'];
@@ -191,11 +201,12 @@ class Transaccion extends Model {
         foreach ($ids as $i => $id) {
             $holders[] = ':id_' . $i;
         }
-        $this->db->query("SELECT id, socio_id, mes_pagado, categoria, descripcion
+        $this->db->query("SELECT id, socio_id, mes_pagado, categoria, descripcion, monto, fecha
             FROM transacciones
             WHERE junta_id = :junta_id
             AND id IN (" . implode(', ', $holders) . ")
-            AND categoria IN ('Cuota Socio', 'Cuota Condonada')");
+            AND categoria IN ('Cuota Socio', 'Cuota Condonada')
+            ORDER BY mes_pagado ASC, id ASC");
         $this->db->bind(':junta_id', $juntaId);
         foreach ($ids as $i => $id) {
             $this->db->bind(':id_' . $i, $id);
@@ -209,30 +220,54 @@ class Transaccion extends Model {
         if ($origenId === $socioDestinoId) {
             return ['ok' => false, 'error' => 'El socio de origen y destino deben ser distintos.'];
         }
+
         foreach ($rows as $row) {
             if ((int)$row->socio_id !== $origenId) {
                 return ['ok' => false, 'error' => 'Todas las cuotas deben pertenecer al mismo socio de origen.'];
             }
-            if ($this->checkPagoSocioExcluding($socioDestinoId, (string)$row->mes_pagado, $juntaId, (int)$row->id)) {
-                return ['ok' => false, 'error' => 'El socio destino ya tiene registrada la cuota del mes ' . $row->mes_pagado . '.'];
+            $tid = (int)$row->id;
+            $mesDestino = trim((string)($mesRemap[$tid] ?? $mesRemap[(string)$tid] ?? $row->mes_pagado));
+            if (!preg_match('/^\d{4}-\d{2}$/', $mesDestino)) {
+                return ['ok' => false, 'error' => 'Mes destino inválido para la cuota ' . ($row->mes_pagado ?? '') . '.'];
             }
+            if ($this->checkPagoSocioExcluding($socioDestinoId, $mesDestino, $juntaId, $tid)) {
+                return ['ok' => false, 'error' => 'El socio destino ya tiene registrada la cuota del mes ' . $mesDestino . '.'];
+            }
+            $row->_mes_destino = $mesDestino;
         }
 
-        $notaBase = ' [Traspaso ' . date('Y-m-d H:i') . ' socio #' . $origenId . ' → #' . $socioDestinoId;
-        if (trim($motivo) !== '') {
-            $notaBase .= ' · ' . trim($motivo);
+        // Evitar que dos cuotas del mismo lote apunten al mismo mes destino
+        $mesesUsados = [];
+        foreach ($rows as $row) {
+            $md = $row->_mes_destino;
+            if (isset($mesesUsados[$md])) {
+                return ['ok' => false, 'error' => 'Hay un conflicto: más de una cuota apunta al mes ' . $md . '.'];
+            }
+            $mesesUsados[$md] = true;
         }
-        $notaBase .= ' · op#' . $operadorId . ']';
 
         $ok = 0;
         foreach ($rows as $row) {
+            $mesOrigen = (string)$row->mes_pagado;
+            $mesDestino = (string)$row->_mes_destino;
+            $nota = ' [Traspaso ' . date('Y-m-d H:i')
+                . ' #' . $origenId . '→#' . $socioDestinoId
+                . ' · ' . $mesOrigen . '→' . $mesDestino;
+            if (trim($motivo) !== '') {
+                $nota .= ' · ' . trim($motivo);
+            }
+            $nota .= ' · op#' . $operadorId . ']';
+
             $desc = trim((string)($row->descripcion ?? ''));
-            $nuevaDesc = $desc !== '' ? ($desc . $notaBase) : trim($notaBase);
+            $nuevaDesc = $desc !== '' ? ($desc . $nota) : trim($nota);
+
             $this->db->query("UPDATE transacciones SET
                 socio_id = :destino,
+                mes_pagado = :mes_pagado,
                 descripcion = :descripcion
                 WHERE id = :id AND junta_id = :junta_id");
             $this->db->bind(':destino', $socioDestinoId);
+            $this->db->bind(':mes_pagado', $mesDestino);
             $this->db->bind(':descripcion', $nuevaDesc);
             $this->db->bind(':id', (int)$row->id);
             $this->db->bind(':junta_id', $juntaId);

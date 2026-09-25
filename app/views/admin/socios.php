@@ -1408,6 +1408,7 @@ foreach ($data['calles'] as $calleItem) {
                 <label class="form-label">Cargo en la directiva</label>
                 <select name="cargo" id="delegacion_cargo" class="form-control">
                     <option value="">Sin cargo</option>
+                    <option value="PRESIDENTE">Presidente</option>
                     <option value="SECRETARIO">Secretario</option>
                     <option value="TESORERO">Tesorero</option>
                     <option value="DIRECTOR">Director</option>

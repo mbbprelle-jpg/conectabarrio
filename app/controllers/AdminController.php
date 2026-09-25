@@ -175,6 +175,32 @@ class AdminController extends Controller {
         return $meses;
     }
 
+    /**
+     * Meses que se pueden abonar a un socio: primero pendientes (hasta mes actual),
+     * luego futuros. Orden cronológico.
+     *
+     * @return string[] YYYY-MM
+     */
+    private function getMesesAbonablesSocio(int $socioId, int $juntaId): array {
+        $startMonth = $this->cierreModel->getMesInicioJunta($juntaId);
+        $currentMonthStr = date('Y-m');
+        $endMonth = date('Y-m', strtotime('+12 months'));
+
+        $pendientes = [];
+        $futuros = [];
+        foreach ($this->generarListaMeses($startMonth, $endMonth) as $mes) {
+            if ($this->transaccionModel->checkPagoSocio($socioId, $mes, $juntaId)) {
+                continue;
+            }
+            if ($mes <= $currentMonthStr) {
+                $pendientes[] = $mes;
+            } else {
+                $futuros[] = $mes;
+            }
+        }
+        return array_values(array_merge($pendientes, $futuros));
+    }
+
     /** @param int[] $miembroIds */
     private function evaluarCondonacionMasiva(int $juntaId, array $miembroIds, array $meses): array {
         $registrados = $this->transaccionModel->mapCuotasRegistradasEnMeses($juntaId, $meses);
@@ -1866,7 +1892,7 @@ class AdminController extends Controller {
         $data = array_merge([
             'title' => 'Traspasar cuotas',
             'header_title' => 'Traspasar cuotas entre socios',
-            'header_subtitle' => 'Corrija asignaciones erróneas sin alterar los montos ni los cierres mensuales.',
+            'header_subtitle' => 'Reasigne pagos al socio correcto abonando sus meses pendientes, sin alterar montos ni cierres.',
             'active_menu' => 'traspasar_cuotas',
             'socios' => $socios,
             'origen_id' => $origenId,
@@ -1881,11 +1907,21 @@ class AdminController extends Controller {
 
     /**
      * Panel del censo / registro familiar público: link y listado de respuestas.
+     * Los registros quedan asociados a la junta activa (ej. junta id 6).
+     * Admin y presidente/directiva pueden ver el avance.
      */
     public function censo_familiar() {
-        $this->requireManageSocios();
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canViewCensoFamiliar()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para ver el registro familiar.';
+            $this->redirect('/admin/dashboard');
+            return;
+        }
+
         $juntaId = $this->activeJuntaId();
         $censoModel = $this->model('CensoFamiliar');
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        $puedeGestionar = AuthContext::canManageCensoFamiliar();
 
         if (!$censoModel->hasTables()) {
             $data = array_merge([
@@ -1894,8 +1930,11 @@ class AdminController extends Controller {
                 'header_subtitle' => 'Migración SQL pendiente',
                 'active_menu' => 'censo_familiar',
                 'migration_pending' => true,
+                'junta' => $junta,
                 'link' => null,
                 'registros' => [],
+                'resumen' => [],
+                'puede_gestionar' => $puedeGestionar,
                 'success' => '',
                 'error' => 'Ejecute el script sql/add_censo_familiar.sql en la base de datos y vuelva a intentar.',
             ], $this->finanzasViewExtras());
@@ -1903,10 +1942,10 @@ class AdminController extends Controller {
             return;
         }
 
-        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['accion'] ?? '') === 'generar_link') {
+        if ($puedeGestionar && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_POST['accion'] ?? '') === 'generar_link') {
             $link = $censoModel->getOrCreateLink($juntaId, (int)($_SESSION['user_id'] ?? 0));
             if ($link) {
-                $_SESSION['success_msg'] = 'Link público listo para compartir.';
+                $_SESSION['success_msg'] = 'Link público listo para compartir (asociado a esta junta).';
             } else {
                 $_SESSION['error_msg'] = 'No se pudo generar el link.';
             }
@@ -1916,6 +1955,7 @@ class AdminController extends Controller {
 
         $link = $censoModel->getOrCreateLink($juntaId, (int)($_SESSION['user_id'] ?? 0));
         $registros = $censoModel->listByJunta($juntaId);
+        $resumen = $censoModel->getResumenJunta($juntaId);
         $detalleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         $detalle = null;
         $personas = [];
@@ -1929,13 +1969,16 @@ class AdminController extends Controller {
         $data = array_merge([
             'title' => 'Registro familiar',
             'header_title' => 'Registro familiar (público)',
-            'header_subtitle' => 'Link público para padres/adultos, hijos, discapacidad y embarazo',
+            'header_subtitle' => 'Avance del registro asociado a ' . ($junta->nombre ?? ('junta #' . $juntaId)),
             'active_menu' => 'censo_familiar',
             'migration_pending' => false,
+            'junta' => $junta,
             'link' => $link,
             'registros' => $registros,
+            'resumen' => $resumen,
             'detalle' => $detalle,
             'personas' => $personas,
+            'puede_gestionar' => $puedeGestionar,
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
         ], $this->finanzasViewExtras());
@@ -1959,6 +2002,7 @@ class AdminController extends Controller {
         if (!is_array($ids)) {
             $ids = [];
         }
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
 
         if ($origenId <= 0 || $destinoId <= 0) {
             $_SESSION['error_msg'] = 'Seleccione socio de origen y socio de destino.';
@@ -1973,16 +2017,60 @@ class AdminController extends Controller {
             return;
         }
 
+        if (empty($ids)) {
+            $_SESSION['error_msg'] = 'Seleccione al menos una cuota a traspasar.';
+            $this->redirect('/admin/traspasar_cuotas?origen=' . $origenId);
+            return;
+        }
+
+        // Ordenar por mes_pagado del origen y mapear a meses pendientes/futuros del destino
+        $cuotasOrigen = $this->transaccionModel->getCuotasBySocioJunta($origenId, $juntaId);
+        $porId = [];
+        foreach ($cuotasOrigen as $c) {
+            $porId[(int)$c->id] = $c;
+        }
+        $idsOrdenados = $ids;
+        usort($idsOrdenados, static function ($a, $b) use ($porId) {
+            $ma = (string)($porId[$a]->mes_pagado ?? '');
+            $mb = (string)($porId[$b]->mes_pagado ?? '');
+            if ($ma === $mb) {
+                return $a <=> $b;
+            }
+            return $ma <=> $mb;
+        });
+
+        $mesesAbonar = $this->getMesesAbonablesSocio($destinoId, $juntaId);
+        if (count($mesesAbonar) < count($idsOrdenados)) {
+            $_SESSION['error_msg'] = 'El socio destino no tiene suficientes meses pendientes o futuros para abonar '
+                . count($idsOrdenados) . ' cuota(s). Solo hay ' . count($mesesAbonar) . ' disponible(s).';
+            $this->redirect('/admin/traspasar_cuotas?origen=' . $origenId);
+            return;
+        }
+
+        $mesRemap = [];
+        foreach ($idsOrdenados as $i => $tid) {
+            $mesRemap[$tid] = $mesesAbonar[$i];
+        }
+
         $result = $this->transaccionModel->traspasarCuotasASocio(
             $juntaId,
-            $ids,
+            $idsOrdenados,
             $destinoId,
             $motivo,
-            (int)($_SESSION['user_id'] ?? 0)
+            (int)($_SESSION['user_id'] ?? 0),
+            $mesRemap
         );
 
         if ($result['ok']) {
-            $_SESSION['success_msg'] = 'Se traspasaron ' . (int)$result['traspasadas'] . ' cuota(s) correctamente. Los montos y cierres no se modificaron.';
+            $mapaTxt = [];
+            foreach ($idsOrdenados as $tid) {
+                $origenMes = (string)($porId[$tid]->mes_pagado ?? '?');
+                $mapaTxt[] = $origenMes . '→' . $mesRemap[$tid];
+            }
+            $_SESSION['success_msg'] = 'Se traspasaron ' . (int)$result['traspasadas']
+                . ' cuota(s) al socio destino abonando sus meses pendientes. '
+                . 'Mapeo: ' . implode(', ', $mapaTxt)
+                . '. Montos y fechas contables (cierres) no se modificaron.';
             $this->redirect('/admin/traspasar_cuotas?origen=' . $destinoId);
             return;
         }
@@ -4212,7 +4300,7 @@ class AdminController extends Controller {
                 return;
             }
             $cargo = $post['cargo'] ?? '';
-            $validCargos = ['', 'SECRETARIO', 'TESORERO', 'DIRECTOR'];
+            $validCargos = ['', 'PRESIDENTE', 'SECRETARIO', 'TESORERO', 'DIRECTOR'];
             if (!in_array($cargo, $validCargos, true)) {
                 $_SESSION['error_msg'] = 'Cargo inválido.';
                 $this->redirect('/admin/socios');

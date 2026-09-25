@@ -136,4 +136,36 @@ class CensoFamiliar extends Model {
         $row = $this->db->single();
         return $row ?: null;
     }
+
+    public function getResumenJunta(int $juntaId): array {
+        $this->db->query("SELECT
+            COUNT(*) AS total_registros,
+            SUM(registra_hijos) AS con_hijos,
+            SUM(registra_discapacidad) AS con_discapacidad,
+            SUM(registra_embarazo) AS con_embarazo
+            FROM censo_registros WHERE junta_id = :junta_id");
+        $this->db->bind(':junta_id', $juntaId);
+        $row = $this->db->single();
+
+        $this->db->query("SELECT p.tipo, COUNT(*) AS total
+            FROM censo_personas p
+            INNER JOIN censo_registros r ON r.id = p.registro_id
+            WHERE r.junta_id = :junta_id
+            GROUP BY p.tipo");
+        $this->db->bind(':junta_id', $juntaId);
+        $byTipo = ['hijo' => 0, 'discapacidad' => 0, 'embarazo' => 0];
+        foreach ($this->db->resultSet() as $t) {
+            $byTipo[$t->tipo] = (int)$t->total;
+        }
+
+        return [
+            'total_registros' => (int)($row->total_registros ?? 0),
+            'con_hijos' => (int)($row->con_hijos ?? 0),
+            'con_discapacidad' => (int)($row->con_discapacidad ?? 0),
+            'con_embarazo' => (int)($row->con_embarazo ?? 0),
+            'total_hijos' => $byTipo['hijo'],
+            'total_discapacidad' => $byTipo['discapacidad'],
+            'total_embarazo' => $byTipo['embarazo'],
+        ];
+    }
 }
