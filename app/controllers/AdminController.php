@@ -1912,9 +1912,10 @@ class AdminController extends Controller {
      */
     public function censo_familiar() {
         require_once APPROOT . '/core/AuthContext.php';
+        AuthContext::refreshMembershipSession();
         if (!AuthContext::canViewCensoFamiliar()) {
-            $_SESSION['error_msg'] = 'No tiene permisos para ver el registro familiar.';
-            $this->redirect('/admin/dashboard');
+            $_SESSION['error_msg'] = 'No tiene permisos para ver el registro de Navidad / censo familiar.';
+            $this->redirectUserHome();
             return;
         }
 
@@ -1923,10 +1924,19 @@ class AdminController extends Controller {
         $junta = $this->juntaModel->getJuntaById($juntaId);
         $puedeGestionar = AuthContext::canManageCensoFamiliar();
 
+        // Campaña pública: misma junta que /publico/registro_familiar
+        $campaniaJuntaId = $censoModel->resolveCampaignJuntaId();
+        $avisoCampania = '';
+        if ($juntaId > 0 && $campaniaJuntaId > 0 && $juntaId !== $campaniaJuntaId) {
+            $avisoCampania = 'El formulario público guarda en la junta de la campaña (ID '
+                . $campaniaJuntaId . '). Usted está en la junta ID ' . $juntaId
+                . '. Si no ve respuestas, verifique que su organización sea la Junta de Vecinos N° 136 Valle de Peñaflor.';
+        }
+
         if (!$censoModel->hasTables()) {
             $data = array_merge([
-                'title' => 'Registro familiar',
-                'header_title' => 'Registro familiar (público)',
+                'title' => 'Registro Navidad',
+                'header_title' => 'Registro juguetes Navidad 2026',
                 'header_subtitle' => 'Migración SQL pendiente',
                 'active_menu' => 'censo_familiar',
                 'migration_pending' => true,
@@ -1953,9 +1963,33 @@ class AdminController extends Controller {
             return;
         }
 
+        // Si es directiva y su junta es la de campaña (o no tiene datos locales), usar la junta de la campaña
+        $nombreJunta = mb_strtoupper((string)($junta->nombre ?? ''), 'UTF-8');
+        $esJuntaCampania = ($juntaId === $campaniaJuntaId)
+            || (strpos($nombreJunta, '136') !== false && (strpos($nombreJunta, 'VALLE') !== false || strpos($nombreJunta, 'PE') !== false));
+
+        if ($esJuntaCampania && $campaniaJuntaId > 0) {
+            $juntaId = $campaniaJuntaId;
+            $junta = $this->juntaModel->getJuntaById($juntaId) ?: $junta;
+            $avisoCampania = '';
+        }
+
         $link = $censoModel->getOrCreateLink($juntaId, (int)($_SESSION['user_id'] ?? 0));
         $registros = $censoModel->listByJunta($juntaId);
         $resumen = $censoModel->getResumenJunta($juntaId);
+
+        if (empty($registros) && $campaniaJuntaId > 0 && $campaniaJuntaId !== $juntaId && AuthContext::isDirectivo()) {
+            $registrosCampania = $censoModel->listByJunta($campaniaJuntaId);
+            if (!empty($registrosCampania)) {
+                $juntaId = $campaniaJuntaId;
+                $junta = $this->juntaModel->getJuntaById($juntaId) ?: $junta;
+                $link = $censoModel->getOrCreateLink($juntaId, (int)($_SESSION['user_id'] ?? 0));
+                $registros = $registrosCampania;
+                $resumen = $censoModel->getResumenJunta($juntaId);
+                $avisoCampania = '';
+            }
+        }
+
         $detalleId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
         $detalle = null;
         $personas = [];
@@ -1967,9 +2001,9 @@ class AdminController extends Controller {
         }
 
         $data = array_merge([
-            'title' => 'Registro familiar',
-            'header_title' => 'Registro familiar (público)',
-            'header_subtitle' => 'Avance del registro asociado a ' . ($junta->nombre ?? ('junta #' . $juntaId)),
+            'title' => 'Registro Navidad',
+            'header_title' => 'Registro juguetes Navidad 2026',
+            'header_subtitle' => 'Avance del registro · ' . ($junta->nombre ?? ('junta #' . $juntaId)),
             'active_menu' => 'censo_familiar',
             'migration_pending' => false,
             'junta' => $junta,
@@ -1980,7 +2014,7 @@ class AdminController extends Controller {
             'personas' => $personas,
             'puede_gestionar' => $puedeGestionar,
             'success' => $_SESSION['success_msg'] ?? '',
-            'error' => $_SESSION['error_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? ($avisoCampania !== '' ? $avisoCampania : ''),
         ], $this->finanzasViewExtras());
         unset($_SESSION['success_msg'], $_SESSION['error_msg']);
         $this->view('admin/censo_familiar', $data);

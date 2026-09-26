@@ -1,5 +1,20 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
 <?php require_once APPROOT . '/core/SocioInput.php'; ?>
+<?php require_once APPROOT . '/core/AuthContext.php'; ?>
+
+<?php if (AuthContext::canViewCensoFamiliar()): ?>
+<div class="card card-primary" style="margin-bottom:1.25rem;">
+    <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:0.85rem;">
+        <div>
+            <h3 style="font-family:var(--font-heading); font-size:1.1rem; margin:0 0 0.35rem;">Registro juguetes Navidad 2026</h3>
+            <p style="margin:0; font-size:0.88rem; color:var(--text-muted); line-height:1.45;">
+                Revise las inscripciones del formulario público de la Junta de Vecinos N° 136 Valle de Peñaflor.
+            </p>
+        </div>
+        <a href="<?php echo URLROOT; ?>/admin/censo_familiar" class="btn btn-primary">Ver registros</a>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php
 $mostrar_calendario = $data['mostrar_calendario'] ?? false;

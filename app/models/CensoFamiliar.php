@@ -1,6 +1,9 @@
 <?php
 class CensoFamiliar extends Model {
 
+    /** Preferencia de ID de campaña (JV N° 136 Valle de Peñaflor). */
+    public const CAMPAIGN_JUNTA_ID_PREF = 6;
+
     public function hasTables(): bool {
         try {
             $this->db->query("SHOW TABLES LIKE 'censo_registros'");
@@ -8,6 +11,39 @@ class CensoFamiliar extends Model {
         } catch (Throwable $e) {
             return false;
         }
+    }
+
+    /**
+     * Junta de la campaña pública de Navidad.
+     * Prefiere ID 6 si existe; si no, busca por nombre (136 / Valle / Peñaflor).
+     */
+    public function resolveCampaignJuntaId(): int {
+        try {
+            $this->db->query("SELECT id, nombre FROM juntas_vecinos WHERE id = :id LIMIT 1");
+            $this->db->bind(':id', self::CAMPAIGN_JUNTA_ID_PREF);
+            $byId = $this->db->single();
+            if ($byId) {
+                $n = mb_strtoupper((string)($byId->nombre ?? ''), 'UTF-8');
+                if (strpos($n, '136') !== false || strpos($n, 'VALLE') !== false || strpos($n, 'PE') !== false) {
+                    return (int)$byId->id;
+                }
+            }
+
+            $this->db->query("SELECT id FROM juntas_vecinos
+                WHERE UPPER(nombre) LIKE '%136%'
+                  AND (UPPER(nombre) LIKE '%VALLE%' OR UPPER(nombre) LIKE '%PE_AFLOR%' OR UPPER(nombre) LIKE '%PENAFLOR%')
+                ORDER BY id ASC LIMIT 1");
+            $byName = $this->db->single();
+            if ($byName) {
+                return (int)$byName->id;
+            }
+            if ($byId) {
+                return (int)$byId->id;
+            }
+        } catch (Throwable $e) {
+            // fallback
+        }
+        return self::CAMPAIGN_JUNTA_ID_PREF;
     }
 
     public function getOrCreateLink(int $juntaId, int $createdBy = 0): ?object {

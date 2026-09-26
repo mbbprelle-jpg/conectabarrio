@@ -72,7 +72,20 @@ class AuthContext {
 
     /** Cargo normalizado de la membresía activa (ej. SECRETARIO). */
     public static function sessionCargo(): string {
-        return strtoupper(trim((string)($_SESSION['user_cargo'] ?? '')));
+        $c = strtoupper(trim((string)($_SESSION['user_cargo'] ?? '')));
+        if ($c === '') {
+            return '';
+        }
+        // Unificar variantes: "Secretario/a", "SECRETARIA", espacios, etc.
+        $c = preg_replace('/\s+/', '', $c);
+        $c = str_replace(['/A', '/O', '.'], '', $c);
+        $aliases = [
+            'SECRETARIA' => 'SECRETARIO',
+            'PRESIDENTA' => 'PRESIDENTE',
+            'TESORERA' => 'TESORERO',
+            'DIRECTORA' => 'DIRECTOR',
+        ];
+        return $aliases[$c] ?? $c;
     }
 
     public static function canRegisterPayments() {
