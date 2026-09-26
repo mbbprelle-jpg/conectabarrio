@@ -2020,6 +2020,156 @@ class AdminController extends Controller {
         $this->view('admin/censo_familiar', $data);
     }
 
+    /**
+     * Exporta reporte Excel (XML) en 2 hojas:
+     * 1) Responsables (adultos)  2) Detalle (hijos/discapacidad/embarazo)
+     * Ambas se vinculan por id_registro.
+     */
+    public function censo_familiar_export() {
+        require_once APPROOT . '/core/AuthContext.php';
+        AuthContext::refreshMembershipSession();
+        if (!AuthContext::canViewCensoFamiliar()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para exportar el registro de Navidad.';
+            $this->redirectUserHome();
+            return;
+        }
+
+        $censoModel = $this->model('CensoFamiliar');
+        if (!$censoModel->hasTables()) {
+            $_SESSION['error_msg'] = 'El módulo de censo aún no está habilitado en la base de datos.';
+            $this->redirect('/admin/censo_familiar');
+            return;
+        }
+
+        $juntaId = $this->activeJuntaId();
+        $campaniaJuntaId = $censoModel->resolveCampaignJuntaId();
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        $nombreJunta = mb_strtoupper((string)($junta->nombre ?? ''), 'UTF-8');
+        $esJuntaCampania = ($juntaId === $campaniaJuntaId)
+            || (strpos($nombreJunta, '136') !== false && (strpos($nombreJunta, 'VALLE') !== false || strpos($nombreJunta, 'PE') !== false));
+        if ($esJuntaCampania && $campaniaJuntaId > 0) {
+            $juntaId = $campaniaJuntaId;
+            $junta = $this->juntaModel->getJuntaById($juntaId) ?: $junta;
+        }
+
+        $soloId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $responsables = $censoModel->listRegistrosExportByJunta($juntaId, $soloId > 0 ? $soloId : null);
+        $detalle = $censoModel->listPersonasExportByJunta($juntaId, $soloId > 0 ? $soloId : null);
+
+        if (empty($responsables)) {
+            $_SESSION['error_msg'] = 'No hay registros para exportar.';
+            $this->redirect('/admin/censo_familiar' . ($soloId > 0 ? '?id=' . $soloId : ''));
+            return;
+        }
+
+        $this->exportCensoFamiliarExcelXml($junta, $responsables, $detalle, $soloId);
+    }
+
+    /**
+     * @param object[] $responsables
+     * @param object[] $detalle
+     */
+    private function exportCensoFamiliarExcelXml($junta, array $responsables, array $detalle, int $soloId = 0): void {
+        $nombreOrg = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string)($junta->nombre ?? 'organizacion'));
+        $suffix = $soloId > 0 ? ('_reg' . $soloId) : '';
+        $filename = 'censo_navidad_' . $nombreOrg . $suffix . '_' . date('Ymd_His') . '.xls';
+
+        $esc = static function ($v): string {
+            return htmlspecialchars((string)$v, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        };
+        $cell = static function (string $type, $value) use ($esc): string {
+            if ($type === 'Number' && ($value === '' || $value === null)) {
+                return '<Cell><Data ss:Type="String"></Data></Cell>';
+            }
+            return '<Cell><Data ss:Type="' . $type . '">' . $esc($value) . '</Data></Cell>';
+        };
+        $rowXml = static function (array $cells): string {
+            return '<Row>' . implode('', $cells) . '</Row>';
+        };
+
+        $sheet1 = [];
+        $sheet1[] = $rowXml([
+            $cell('String', 'id_registro'),
+            $cell('String', 'fecha_registro'),
+            $cell('String', 'rut_adulto'),
+            $cell('String', 'nombre_adulto'),
+            $cell('String', 'telefono'),
+            $cell('String', 'direccion'),
+            $cell('String', 'registra_hijos'),
+            $cell('String', 'registra_discapacidad'),
+            $cell('String', 'registra_embarazo'),
+        ]);
+        foreach ($responsables as $r) {
+            $dir = trim((string)($r->direccion_texto ?: ($r->calle_nombre ?? '')));
+            $sheet1[] = $rowXml([
+                $cell('Number', (int)$r->id),
+                $cell('String', !empty($r->created_at) ? date('d-m-Y H:i', strtotime($r->created_at)) : ''),
+                $cell('String', $r->rut ?? ''),
+                $cell('String', $r->nombre ?? ''),
+                $cell('String', $r->telefono ?? ''),
+                $cell('String', $dir),
+                $cell('String', !empty($r->registra_hijos) ? 'SI' : 'NO'),
+                $cell('String', !empty($r->registra_discapacidad) ? 'SI' : 'NO'),
+                $cell('String', !empty($r->registra_embarazo) ? 'SI' : 'NO'),
+            ]);
+        }
+
+        $tipoLabel = [
+            'hijo' => 'Hijo/a (0-8)',
+            'discapacidad' => 'Discapacidad (0-18)',
+            'embarazo' => 'Embarazo',
+        ];
+        $sheet2 = [];
+        $sheet2[] = $rowXml([
+            $cell('String', 'id_registro'),
+            $cell('String', 'id_persona'),
+            $cell('String', 'adulto_rut'),
+            $cell('String', 'adulto_nombre'),
+            $cell('String', 'tipo'),
+            $cell('String', 'rut_persona'),
+            $cell('String', 'nombre_persona'),
+            $cell('String', 'sexo'),
+            $cell('String', 'edad'),
+            $cell('String', 'fecha_parto'),
+            $cell('String', 'usa_datos_adulto'),
+        ]);
+        foreach ($detalle as $p) {
+            $sheet2[] = $rowXml([
+                $cell('Number', (int)$p->id_registro),
+                $cell('Number', (int)$p->id_persona),
+                $cell('String', $p->adulto_rut ?? ''),
+                $cell('String', $p->adulto_nombre ?? ''),
+                $cell('String', $tipoLabel[$p->tipo ?? ''] ?? ($p->tipo ?? '')),
+                $cell('String', $p->persona_rut ?? ''),
+                $cell('String', $p->nombre_completo ?? ''),
+                $cell('String', $p->sexo ?? ''),
+                $cell('String', $p->edad !== null && $p->edad !== '' ? (string)$p->edad : ''),
+                $cell('String', !empty($p->fecha_parto) ? date('d-m-Y', strtotime($p->fecha_parto)) : ''),
+                $cell('String', !empty($p->usa_datos_adulto) ? 'SI' : 'NO'),
+            ]);
+        }
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . '<?mso-application progid="Excel.Sheet"?>' . "\n"
+            . '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+            . ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+            . '<Styles><Style ss:ID="Default" ss:Name="Normal"><Font ss:FontName="Calibri" ss:Size="11"/></Style></Styles>'
+            . '<Worksheet ss:Name="Responsables"><Table>'
+            . implode('', $sheet1)
+            . '</Table></Worksheet>'
+            . '<Worksheet ss:Name="Detalle"><Table>'
+            . implode('', $sheet2)
+            . '</Table></Worksheet>'
+            . '</Workbook>';
+
+        header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        echo $xml;
+        exit;
+    }
+
     public function traspasar_cuotas_aplicar() {
         $this->requireRegisterPayments();
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {

@@ -92,16 +92,28 @@
     </div>
 
     <div class="card card-primary">
-        <h3 style="font-family:var(--font-heading); font-size:1.1rem; margin:0 0 0.75rem;">
-            Respuestas recibidas (<?php echo count($data['registros'] ?? []); ?>)
-        </h3>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:0.75rem;">
+            <h3 style="font-family:var(--font-heading); font-size:1.1rem; margin:0;">
+                Respuestas recibidas (<?php echo count($data['registros'] ?? []); ?>)
+            </h3>
+            <?php if (!empty($data['registros'])): ?>
+                <a href="<?php echo URLROOT; ?>/admin/censo_familiar_export" class="btn btn-primary btn-sm">
+                    Exportar reporte (Excel)
+                </a>
+            <?php endif; ?>
+        </div>
         <?php if (empty($data['registros'])): ?>
             <p style="color:var(--text-muted); margin:0;">Aún no hay registros.</p>
         <?php else: ?>
+            <p style="margin:0 0 0.75rem; font-size:0.8rem; color:var(--text-muted);">
+                El Excel tiene 2 hojas: <strong>Responsables</strong> (adultos) y <strong>Detalle</strong> (inscritos),
+                vinculadas por la columna <strong>id_registro</strong>.
+            </p>
             <div class="table-responsive">
                 <table class="table">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Fecha</th>
                             <th>RUT adulto</th>
                             <th>Nombre</th>
@@ -114,6 +126,7 @@
                     <tbody>
                         <?php foreach ($data['registros'] as $r): ?>
                             <tr>
+                                <td style="font-family:monospace;"><?php echo (int)$r->id; ?></td>
                                 <td style="font-size:0.8rem; white-space:nowrap;">
                                     <?php echo !empty($r->created_at) ? date('d-m-Y H:i', strtotime($r->created_at)) : '—'; ?>
                                 </td>
@@ -132,8 +145,9 @@
                                     echo $tags ? htmlspecialchars(implode(', ', $tags)) : '—';
                                     ?>
                                 </td>
-                                <td>
+                                <td style="white-space:nowrap;">
                                     <a class="btn btn-secondary btn-sm" href="<?php echo URLROOT; ?>/admin/censo_familiar?id=<?php echo (int)$r->id; ?>">Ver</a>
+                                    <a class="btn btn-primary btn-sm" href="<?php echo URLROOT; ?>/admin/censo_familiar_export?id=<?php echo (int)$r->id; ?>">Excel</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -146,13 +160,22 @@
     <?php if (!empty($data['detalle'])): ?>
         <?php $d = $data['detalle']; ?>
         <div class="card card-primary" style="margin-top:1rem;">
-            <h3 style="font-family:var(--font-heading); font-size:1.1rem; margin:0 0 0.75rem;">
-                Detalle #<?php echo (int)$d->id; ?> — <?php echo htmlspecialchars($d->nombre); ?>
-            </h3>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:0.75rem; margin-bottom:0.75rem;">
+                <h3 style="font-family:var(--font-heading); font-size:1.1rem; margin:0;">
+                    Detalle #<?php echo (int)$d->id; ?> — <?php echo htmlspecialchars($d->nombre); ?>
+                </h3>
+                <a class="btn btn-primary btn-sm" href="<?php echo URLROOT; ?>/admin/censo_familiar_export?id=<?php echo (int)$d->id; ?>">
+                    Exportar este registro (Excel)
+                </a>
+            </div>
             <p style="font-size:0.88rem; margin:0 0 0.75rem;">
+                <strong>ID registro:</strong> <?php echo (int)$d->id; ?> ·
                 <strong>RUT:</strong> <?php echo htmlspecialchars($d->rut); ?> ·
                 <strong>Tel:</strong> <?php echo htmlspecialchars($d->telefono); ?> ·
                 <strong>Dir:</strong> <?php echo htmlspecialchars($d->direccion_texto ?: ($d->calle_nombre ?? '—')); ?>
+            </p>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin:0 0 0.75rem;">
+                En el Excel, la hoja Detalle usa <strong>id_registro = <?php echo (int)$d->id; ?></strong> para vincular con el adulto responsable.
             </p>
             <?php if (empty($data['personas'])): ?>
                 <p style="color:var(--text-muted);">Sin personas asociadas (solo adulto).</p>
@@ -160,6 +183,8 @@
                 <table class="table">
                     <thead>
                         <tr>
+                            <th>ID persona</th>
+                            <th>ID registro</th>
                             <th>Tipo</th>
                             <th>RUT</th>
                             <th>Nombre</th>
@@ -170,6 +195,8 @@
                     <tbody>
                         <?php foreach ($data['personas'] as $p): ?>
                             <tr>
+                                <td style="font-family:monospace;"><?php echo (int)$p->id; ?></td>
+                                <td style="font-family:monospace;"><?php echo (int)$d->id; ?></td>
                                 <td><?php echo htmlspecialchars($p->tipo); ?></td>
                                 <td style="font-family:monospace;"><?php echo htmlspecialchars($p->rut); ?></td>
                                 <td><?php echo htmlspecialchars($p->nombre_completo); ?></td>

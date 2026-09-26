@@ -161,6 +161,56 @@ class CensoFamiliar extends Model {
         return $this->db->resultSet();
     }
 
+    /**
+     * Personas asociadas para exportación, con datos del adulto (vínculo por id_registro).
+     * @return object[]
+     */
+    public function listPersonasExportByJunta(int $juntaId, ?int $registroId = null): array {
+        $sql = "SELECT p.id AS id_persona,
+                p.registro_id AS id_registro,
+                r.rut AS adulto_rut,
+                r.nombre AS adulto_nombre,
+                p.tipo,
+                p.rut AS persona_rut,
+                p.nombre_completo,
+                p.sexo,
+                p.edad,
+                p.fecha_parto,
+                p.usa_datos_adulto,
+                p.created_at
+            FROM censo_personas p
+            INNER JOIN censo_registros r ON r.id = p.registro_id
+            WHERE r.junta_id = :junta_id";
+        if ($registroId !== null && $registroId > 0) {
+            $sql .= " AND r.id = :registro_id";
+        }
+        $sql .= " ORDER BY p.registro_id ASC, p.tipo ASC, p.id ASC";
+        $this->db->query($sql);
+        $this->db->bind(':junta_id', $juntaId);
+        if ($registroId !== null && $registroId > 0) {
+            $this->db->bind(':registro_id', $registroId);
+        }
+        return $this->db->resultSet();
+    }
+
+    /** @return object[] */
+    public function listRegistrosExportByJunta(int $juntaId, ?int $registroId = null): array {
+        $sql = "SELECT r.*, c.nombre AS calle_nombre
+            FROM censo_registros r
+            LEFT JOIN calles c ON c.id = r.calle_id
+            WHERE r.junta_id = :junta_id";
+        if ($registroId !== null && $registroId > 0) {
+            $sql .= " AND r.id = :registro_id";
+        }
+        $sql .= " ORDER BY r.id ASC";
+        $this->db->query($sql);
+        $this->db->bind(':junta_id', $juntaId);
+        if ($registroId !== null && $registroId > 0) {
+            $this->db->bind(':registro_id', $registroId);
+        }
+        return $this->db->resultSet();
+    }
+
     public function getRegistroDetalle(int $registroId, int $juntaId): ?object {
         $this->db->query("SELECT r.*, c.nombre AS calle_nombre
             FROM censo_registros r
