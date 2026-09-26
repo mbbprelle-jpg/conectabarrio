@@ -421,17 +421,16 @@ $callesPickerJson = array_map(static function ($c) {
 <?php if ($link && empty($data['success'])): ?>
 <div id="censoIntroModal" class="censo-intro-overlay is-open" role="dialog" aria-modal="true" aria-labelledby="censoIntroTitle">
     <div class="censo-intro-box">
-        <div class="censo-intro-badge">Municipalidad de Peñaflor</div>
         <h2 id="censoIntroTitle" class="censo-intro-title">Registro para juguetes de Navidad 2026</h2>
         <div class="censo-intro-org" role="note">
             <span class="censo-intro-org-label">Este formulario solo aplica para la organización</span>
             <span class="censo-intro-org-name">Junta de Vecinos N° 136 Valle de Peñaflor</span>
         </div>
         <p class="censo-intro-lead">
-            La Municipalidad de Peñaflor, a través de las organizaciones sociales,
-            está recopilando la información de niños, niñas y jóvenes de nuestra comunidad
-            para entregarles un presente en esta Navidad.
-            Si usted no pertenece a esta junta, no utilice este formulario.
+            Este es un formulario de la Junta de Vecinos N° 136 Valle de Peñaflor
+            para inscribir a niños, niñas y jóvenes de la comunidad y gestionar
+            la entrega de un presente en Navidad 2026.
+            Si usted no pertenece a esta organización, no utilice este formulario.
         </p>
         <div class="censo-intro-plazo">
             <div aria-hidden="true" style="flex-shrink:0; width:28px; height:28px; color:#f0c674; margin-top:0.1rem;">
