@@ -96,7 +96,7 @@ class CensoFamiliar extends Model {
 
     /**
      * @param array $adulto
-     * @param array $personas list of ['tipo','rut','nombre_completo','sexo','edad','fecha_parto','usa_datos_adulto']
+     * @param array $personas list of ['tipo','rut','nombre_completo','sexo','edad','fecha_nacimiento','fecha_parto','usa_datos_adulto']
      */
     public function createRegistro(array $adulto, array $personas): array {
         $this->db->query("INSERT INTO censo_registros
@@ -126,15 +126,16 @@ class CensoFamiliar extends Model {
 
         foreach ($personas as $p) {
             $this->db->query("INSERT INTO censo_personas
-                (registro_id, tipo, rut, nombre_completo, sexo, edad, fecha_parto, usa_datos_adulto)
+                (registro_id, tipo, rut, nombre_completo, sexo, edad, fecha_nacimiento, fecha_parto, usa_datos_adulto)
                 VALUES
-                (:registro_id, :tipo, :rut, :nombre_completo, :sexo, :edad, :fecha_parto, :usa_datos_adulto)");
+                (:registro_id, :tipo, :rut, :nombre_completo, :sexo, :edad, :fecha_nacimiento, :fecha_parto, :usa_datos_adulto)");
             $this->db->bind(':registro_id', $registroId);
             $this->db->bind(':tipo', $p['tipo']);
             $this->db->bind(':rut', $p['rut']);
             $this->db->bind(':nombre_completo', $p['nombre_completo']);
             $this->db->bind(':sexo', $p['sexo']);
             $this->db->bind(':edad', $p['edad'] ?? null);
+            $this->db->bind(':fecha_nacimiento', $p['fecha_nacimiento'] ?? null);
             $this->db->bind(':fecha_parto', $p['fecha_parto'] ?? null);
             $this->db->bind(':usa_datos_adulto', !empty($p['usa_datos_adulto']) ? 1 : 0);
             if (!$this->db->execute()) {
@@ -175,6 +176,7 @@ class CensoFamiliar extends Model {
                 p.nombre_completo,
                 p.sexo,
                 p.edad,
+                p.fecha_nacimiento,
                 p.fecha_parto,
                 p.usa_datos_adulto,
                 p.created_at
@@ -253,5 +255,99 @@ class CensoFamiliar extends Model {
             'total_discapacidad' => $byTipo['discapacidad'],
             'total_embarazo' => $byTipo['embarazo'],
         ];
+    }
+
+    public function hasFechaNacimientoColumn(): bool {
+        try {
+            $this->db->query("SHOW COLUMNS FROM censo_personas LIKE 'fecha_nacimiento'");
+            return (bool)$this->db->single();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    public function contarSinFechaNacimiento(int $juntaId): int {
+        $this->db->query("SELECT COUNT(*) AS total
+            FROM censo_personas p
+            INNER JOIN censo_registros r ON r.id = p.registro_id
+            WHERE r.junta_id = :junta_id
+              AND p.tipo IN ('hijo', 'discapacidad')
+              AND p.fecha_nacimiento IS NULL");
+        $this->db->bind(':junta_id', $juntaId);
+        $row = $this->db->single();
+        return (int)($row->total ?? 0);
+    }
+
+    /**
+     * Hijos y personas con discapacidad, para completar la fecha de nacimiento.
+     * @return object[]
+     */
+    public function listPersonasParaFechaNacimiento(int $juntaId, bool $soloPendientes = false): array {
+        $sql = "SELECT p.id, p.registro_id, p.tipo, p.rut, p.nombre_completo, p.sexo, p.edad, p.fecha_nacimiento,
+                r.nombre AS adulto_nombre, r.rut AS adulto_rut
+            FROM censo_personas p
+            INNER JOIN censo_registros r ON r.id = p.registro_id
+            WHERE r.junta_id = :junta_id
+              AND p.tipo IN ('hijo', 'discapacidad')";
+        if ($soloPendientes) {
+            $sql .= " AND p.fecha_nacimiento IS NULL";
+        }
+        $sql .= " ORDER BY (p.fecha_nacimiento IS NULL) DESC, r.nombre ASC, p.nombre_completo ASC, p.id ASC";
+        $this->db->query($sql);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
+    public function getPersonaDeJunta(int $personaId, int $juntaId): ?object {
+        $this->db->query("SELECT p.*
+            FROM censo_personas p
+            INNER JOIN censo_registros r ON r.id = p.registro_id
+            WHERE p.id = :id AND r.junta_id = :junta_id
+            LIMIT 1");
+        $this->db->bind(':id', $personaId);
+        $this->db->bind(':junta_id', $juntaId);
+        $row = $this->db->single();
+        return $row ?: null;
+    }
+
+    public function actualizarFechaNacimiento(int $personaId, int $juntaId, string $fecha, int $edad): bool {
+        $this->db->query("UPDATE censo_personas p
+            INNER JOIN censo_registros r ON r.id = p.registro_id
+            SET p.fecha_nacimiento = :fecha, p.edad = :edad
+            WHERE p.id = :id AND r.junta_id = :junta_id
+              AND p.tipo IN ('hijo', 'discapacidad')");
+        $this->db->bind(':fecha', $fecha);
+        $this->db->bind(':edad', $edad);
+        $this->db->bind(':id', $personaId);
+        $this->db->bind(':junta_id', $juntaId);
+        return (bool)$this->db->execute();
+    }
+
+    /**
+     * Años cumplidos al día de hoy.
+     *
+     * @return array{ok:bool, error?:string, edad?:int, fecha?:string}
+     */
+    public function validarFechaNacimiento(string $fecha, int $maxEdad): array {
+        $fecha = trim($fecha);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+            return ['ok' => false, 'error' => 'indique la fecha de nacimiento.'];
+        }
+        $dt = DateTime::createFromFormat('!Y-m-d', $fecha);
+        $errores = DateTime::getLastErrors();
+        $invalida = !$dt || $dt->format('Y-m-d') !== $fecha
+            || (is_array($errores) && (($errores['warning_count'] ?? 0) > 0 || ($errores['error_count'] ?? 0) > 0));
+        if ($invalida) {
+            return ['ok' => false, 'error' => 'la fecha de nacimiento no es válida.'];
+        }
+        $hoy = new DateTime('today');
+        if ($dt > $hoy) {
+            return ['ok' => false, 'error' => 'la fecha de nacimiento no puede ser futura.'];
+        }
+        $edad = (int)$dt->diff($hoy)->y;
+        if ($edad > $maxEdad) {
+            return ['ok' => false, 'error' => "con esa fecha la edad es de $edad años. Debe ser entre 0 y $maxEdad."];
+        }
+        return ['ok' => true, 'edad' => $edad, 'fecha' => $dt->format('Y-m-d')];
     }
 }

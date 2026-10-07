@@ -2000,6 +2000,9 @@ class AdminController extends Controller {
             }
         }
 
+        $tieneFechaNacimiento = $censoModel->hasFechaNacimientoColumn();
+        $pendientesNacimiento = $tieneFechaNacimiento ? $censoModel->contarSinFechaNacimiento($juntaId) : 0;
+
         $data = array_merge([
             'title' => 'Registro Navidad',
             'header_title' => 'Registro juguetes Navidad 2026',
@@ -2013,11 +2016,154 @@ class AdminController extends Controller {
             'detalle' => $detalle,
             'personas' => $personas,
             'puede_gestionar' => $puedeGestionar,
+            'tiene_fecha_nacimiento' => $tieneFechaNacimiento,
+            'pendientes_nacimiento' => $pendientesNacimiento,
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? ($avisoCampania !== '' ? $avisoCampania : ''),
         ], $this->finanzasViewExtras());
         unset($_SESSION['success_msg'], $_SESSION['error_msg']);
         $this->view('admin/censo_familiar', $data);
+    }
+
+    /**
+     * Completa o corrige la fecha de nacimiento de hijos y personas con discapacidad ya inscritos.
+     */
+    public function censo_familiar_fechas() {
+        require_once APPROOT . '/core/AuthContext.php';
+        AuthContext::refreshMembershipSession();
+        if (!AuthContext::canViewCensoFamiliar()) {
+            $_SESSION['error_msg'] = 'No tiene permisos para ver el registro de Navidad / censo familiar.';
+            $this->redirectUserHome();
+            return;
+        }
+
+        $censoModel = $this->model('CensoFamiliar');
+        if (!$censoModel->hasTables()) {
+            $_SESSION['error_msg'] = 'El módulo de censo aún no está habilitado en la base de datos.';
+            $this->redirect('/admin/censo_familiar');
+            return;
+        }
+
+        $puedeGestionar = AuthContext::canManageCensoFamiliar();
+        $juntaId = $this->juntaIdCensoVisible($censoModel);
+        $volverId = (int)($_POST['volver_id'] ?? 0);
+
+        if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+            if (!$puedeGestionar) {
+                $_SESSION['error_msg'] = 'No tiene permisos para editar las fechas de nacimiento.';
+                $this->redirect($volverId > 0 ? '/admin/censo_familiar?id=' . $volverId : '/admin/censo_familiar_fechas');
+                return;
+            }
+            if (!$censoModel->hasFechaNacimientoColumn()) {
+                $_SESSION['error_msg'] = 'Falta la columna fecha_nacimiento. Ejecute sql/add_censo_personas_fecha_nacimiento.sql.';
+                $this->redirect($volverId > 0 ? '/admin/censo_familiar?id=' . $volverId : '/admin/censo_familiar_fechas');
+                return;
+            }
+            $fechas = $_POST['fechas'] ?? [];
+            if (!is_array($fechas)) {
+                $fechas = [];
+            }
+            $resultado = $this->guardarFechasNacimientoCenso($censoModel, $juntaId, $fechas);
+            if ($resultado['guardadas'] > 0) {
+                $n = $resultado['guardadas'];
+                $_SESSION['success_msg'] = $n === 1
+                    ? 'Se guardó 1 fecha de nacimiento y se actualizó la edad.'
+                    : 'Se guardaron ' . $n . ' fechas de nacimiento y se actualizó la edad.';
+            }
+            if (!empty($resultado['errores'])) {
+                $_SESSION['error_msg'] = implode(' ', $resultado['errores']);
+            } elseif ($resultado['guardadas'] === 0) {
+                $_SESSION['error_msg'] = 'No hay fechas nuevas para guardar.';
+            }
+            $soloPendientes = !empty($_POST['solo_pendientes']) ? '1' : '0';
+            if ($volverId > 0) {
+                $this->redirect('/admin/censo_familiar?id=' . $volverId);
+                return;
+            }
+            $this->redirect('/admin/censo_familiar_fechas' . ($soloPendientes === '1' ? '?pendientes=1' : ''));
+            return;
+        }
+
+        $soloPendientes = isset($_GET['pendientes']) && $_GET['pendientes'] === '1';
+        $tieneFecha = $censoModel->hasFechaNacimientoColumn();
+        $personas = $tieneFecha ? $censoModel->listPersonasParaFechaNacimiento($juntaId, $soloPendientes) : [];
+        $pendientes = $tieneFecha ? $censoModel->contarSinFechaNacimiento($juntaId) : 0;
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+
+        $data = array_merge([
+            'title' => 'Fechas de nacimiento',
+            'header_title' => 'Registro juguetes Navidad 2026',
+            'header_subtitle' => 'Completar fecha de nacimiento',
+            'active_menu' => 'censo_familiar',
+            'junta' => $junta,
+            'personas' => $personas,
+            'pendientes_nacimiento' => $pendientes,
+            'solo_pendientes' => $soloPendientes,
+            'tiene_fecha_nacimiento' => $tieneFecha,
+            'puede_gestionar' => $puedeGestionar,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ], $this->finanzasViewExtras());
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $this->view('admin/censo_familiar_fechas', $data);
+    }
+
+    /**
+     * @param array<int|string, mixed> $fechas
+     * @return array{guardadas:int, errores:string[]}
+     */
+    private function guardarFechasNacimientoCenso($censoModel, int $juntaId, array $fechas): array {
+        $guardadas = 0;
+        $errores = [];
+        foreach ($fechas as $idRaw => $fechaRaw) {
+            $id = (int)$idRaw;
+            $fecha = trim((string)$fechaRaw);
+            if ($id <= 0 || $fecha === '') {
+                continue;
+            }
+            $persona = $censoModel->getPersonaDeJunta($id, $juntaId);
+            if (!$persona || !in_array($persona->tipo ?? '', ['hijo', 'discapacidad'], true)) {
+                $errores[] = 'No se encontró la persona #' . $id . ' en esta organización.';
+                continue;
+            }
+            $max = $persona->tipo === 'hijo' ? 8 : 18;
+            $nac = $censoModel->validarFechaNacimiento($fecha, $max);
+            $nombre = (string)($persona->nombre_completo ?? ('Persona #' . $id));
+            if (!$nac['ok']) {
+                $errores[] = $nombre . ': ' . $nac['error'];
+                continue;
+            }
+            $actual = !empty($persona->fecha_nacimiento) ? date('Y-m-d', strtotime($persona->fecha_nacimiento)) : '';
+            if ($actual === $nac['fecha']) {
+                continue;
+            }
+            if (!$censoModel->actualizarFechaNacimiento($id, $juntaId, $nac['fecha'], (int)$nac['edad'])) {
+                $errores[] = $nombre . ': no se pudo guardar la fecha.';
+                continue;
+            }
+            $guardadas++;
+        }
+        return ['guardadas' => $guardadas, 'errores' => $errores];
+    }
+
+    private function juntaIdCensoVisible($censoModel): int {
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = $this->activeJuntaId();
+        $campaniaJuntaId = $censoModel->resolveCampaignJuntaId();
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        $nombreJunta = mb_strtoupper((string)($junta->nombre ?? ''), 'UTF-8');
+        $esJuntaCampania = ($juntaId === $campaniaJuntaId)
+            || (strpos($nombreJunta, '136') !== false && (strpos($nombreJunta, 'VALLE') !== false || strpos($nombreJunta, 'PE') !== false));
+        if ($esJuntaCampania && $campaniaJuntaId > 0) {
+            return $campaniaJuntaId;
+        }
+        if ($campaniaJuntaId > 0 && $campaniaJuntaId !== $juntaId && AuthContext::isDirectivo()) {
+            $registros = $censoModel->listByJunta($juntaId);
+            if (empty($registros) && !empty($censoModel->listByJunta($campaniaJuntaId))) {
+                return $campaniaJuntaId;
+            }
+        }
+        return $juntaId;
     }
 
     /**
@@ -2130,6 +2276,7 @@ class AdminController extends Controller {
             $cell('String', 'nombre_persona'),
             $cell('String', 'sexo'),
             $cell('String', 'edad'),
+            $cell('String', 'fecha_nacimiento'),
             $cell('String', 'fecha_parto'),
             $cell('String', 'usa_datos_adulto'),
         ]);
@@ -2144,6 +2291,7 @@ class AdminController extends Controller {
                 $cell('String', $p->nombre_completo ?? ''),
                 $cell('String', $p->sexo ?? ''),
                 $cell('String', $p->edad !== null && $p->edad !== '' ? (string)$p->edad : ''),
+                $cell('String', !empty($p->fecha_nacimiento) ? date('d-m-Y', strtotime($p->fecha_nacimiento)) : ''),
                 $cell('String', !empty($p->fecha_parto) ? date('d-m-Y', strtotime($p->fecha_parto)) : ''),
                 $cell('String', !empty($p->usa_datos_adulto) ? 'SI' : 'NO'),
             ]);

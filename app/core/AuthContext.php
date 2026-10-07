@@ -329,6 +329,7 @@ class AuthContext {
         if (self::canViewCensoFamiliar()) {
             $methods[] = 'censo_familiar';
             $methods[] = 'censo_familiar_export';
+            $methods[] = 'censo_familiar_fechas';
         }
         if (self::canRegisterPayments()) {
             $methods = array_merge($methods, [

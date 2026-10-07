@@ -75,7 +75,13 @@ $callesPickerJson = array_map(static function ($c) {
 .censo-toggle-box { display: none; margin-top: 0.75rem; }
 .censo-toggle-box.open { display: block; }
 .cb-rut-chile.is-invalid,
+.cb-fnac-censo.is-invalid,
 .cb-edad-censo.is-invalid { border-color: var(--danger, #ef4444) !important; }
+.cb-edad-censo[readonly] {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  cursor: default;
+}
 .cb-field-hint {
   display: block;
   margin-top: 0.25rem;
@@ -578,47 +584,109 @@ $callesPickerJson = array_map(static function ($c) {
         });
     }
 
-    function bindEdadInput(input, maxEdad, label) {
-        if (!input || input.dataset.edadBound === '1') return;
-        input.dataset.edadBound = '1';
-        input.min = '0';
-        input.max = String(maxEdad);
-        input.step = '1';
+    function isoShift(iso, years, days) {
+        var p = String(iso || '').split('-');
+        var dt = new Date(Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)));
+        if (isNaN(dt.getTime())) return '';
+        dt.setUTCFullYear(dt.getUTCFullYear() + years);
+        dt.setUTCDate(dt.getUTCDate() + days);
+        return dt.toISOString().slice(0, 10);
+    }
+
+    function edadCompleta(iso) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+        var p = iso.split('-');
+        var y = parseInt(p[0], 10);
+        var m = parseInt(p[1], 10);
+        var d = parseInt(p[2], 10);
+        var birth = new Date(y, m - 1, d);
+        if (birth.getFullYear() !== y || birth.getMonth() !== m - 1 || birth.getDate() !== d) return null;
+        var today = new Date();
+        today.setHours(0, 0, 0, 0);
+        birth.setHours(0, 0, 0, 0);
+        if (birth.getTime() > today.getTime()) return -1;
+        var age = today.getFullYear() - y;
+        var monthDiff = (today.getMonth() + 1) - m;
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < d)) age--;
+        return age;
+    }
+
+    function textoEdad(age) {
+        return age === 1 ? '1 año' : age + ' años';
+    }
+
+    function bindFechaNacimiento(dateInput, edadInput, maxEdad, label) {
+        if (!dateInput || !edadInput || dateInput.dataset.fnacBound === '1') return;
+        dateInput.dataset.fnacBound = '1';
+        dateInput.max = HOY;
+        dateInput.min = isoShift(HOY, -(maxEdad + 1), 1);
         var hint = document.createElement('small');
         hint.className = 'cb-field-hint';
-        hint.textContent = 'Entre 0 y ' + maxEdad + ' años';
-        input.parentNode.appendChild(hint);
+        hint.textContent = 'La edad se calcula sola (0 a ' + maxEdad + ' años).';
+        dateInput.parentNode.appendChild(hint);
 
-        function check() {
-            var raw = String(input.value || '').trim();
+        function check(strict) {
+            var raw = String(dateInput.value || '').trim();
+            dateInput.dataset.errorMsg = '';
             if (raw === '') {
-                input.classList.remove('is-invalid');
-                hint.textContent = 'Entre 0 y ' + maxEdad + ' años';
+                edadInput.value = '';
+                edadInput.classList.remove('is-invalid');
+                if (strict) {
+                    dateInput.classList.add('is-invalid');
+                    hint.textContent = label + ': indique la fecha de nacimiento.';
+                    hint.classList.add('is-error');
+                    dateInput.dataset.errorMsg = 'indique la fecha de nacimiento.';
+                    dateInput.setCustomValidity('Indique la fecha de nacimiento');
+                    return false;
+                }
+                dateInput.classList.remove('is-invalid');
+                hint.textContent = 'La edad se calcula sola (0 a ' + maxEdad + ' años).';
                 hint.classList.remove('is-error');
-                input.setCustomValidity('');
+                dateInput.setCustomValidity('');
                 return true;
             }
-            var n = parseInt(raw, 10);
-            if (isNaN(n) || n < 0 || n > maxEdad) {
-                input.classList.add('is-invalid');
-                hint.textContent = label + ': la edad debe ser entre 0 y ' + maxEdad + ' años';
+            var age = edadCompleta(raw);
+            if (age === null || age < 0) {
+                edadInput.value = '';
+                edadInput.classList.add('is-invalid');
+                dateInput.classList.add('is-invalid');
+                hint.textContent = age === -1
+                    ? label + ': la fecha de nacimiento no puede ser futura.'
+                    : label + ': la fecha de nacimiento no es válida.';
                 hint.classList.add('is-error');
-                input.setCustomValidity('Edad fuera de rango (0–' + maxEdad + ')');
+                dateInput.dataset.errorMsg = age === -1
+                    ? 'la fecha de nacimiento no puede ser futura.'
+                    : 'la fecha de nacimiento no es válida.';
+                dateInput.setCustomValidity(dateInput.dataset.errorMsg);
                 return false;
             }
-            input.classList.remove('is-invalid');
-            hint.textContent = 'Entre 0 y ' + maxEdad + ' años';
+            edadInput.value = String(age);
+            if (age > maxEdad) {
+                edadInput.classList.add('is-invalid');
+                dateInput.classList.add('is-invalid');
+                hint.textContent = label + ': con esa fecha la edad es de ' + textoEdad(age) + '. Debe ser entre 0 y ' + maxEdad + '.';
+                hint.classList.add('is-error');
+                dateInput.dataset.errorMsg = 'con esa fecha la edad es de ' + textoEdad(age) + '. Debe ser entre 0 y ' + maxEdad + '.';
+                dateInput.setCustomValidity('Edad fuera de rango (0–' + maxEdad + ')');
+                return false;
+            }
+            edadInput.classList.remove('is-invalid');
+            dateInput.classList.remove('is-invalid');
+            hint.textContent = 'Edad calculada: ' + textoEdad(age) + '.';
             hint.classList.remove('is-error');
-            input.setCustomValidity('');
+            dateInput.setCustomValidity('');
             return true;
         }
-        input.addEventListener('input', check);
-        input.addEventListener('change', check);
-        input.addEventListener('blur', function () {
-            if (!check()) {
-                alert(label + ': la edad debe ser entre 0 y ' + maxEdad + ' años.');
+
+        dateInput._checkFnac = check;
+        dateInput.addEventListener('input', function () { check(false); });
+        dateInput.addEventListener('change', function () { check(false); });
+        dateInput.addEventListener('blur', function () {
+            if (String(dateInput.value || '').trim() !== '' && !check(false)) {
+                alert(label + ': ' + (dateInput.dataset.errorMsg || 'fecha de nacimiento no válida.'));
             }
         });
+        if (dateInput.value) check(false);
     }
 
     function sexoSelect(name, val) {
@@ -647,9 +715,11 @@ $callesPickerJson = array_map(static function ($c) {
                 '<input type="text" name="' + prefix + '_rut[]" class="form-control cb-rut-chile" maxlength="12" required placeholder="11111111-1" value="' + (prefill.rut || '') + '"></div>' +
                 '<div class="form-group"><label class="form-label">Nombre completo</label>' +
                 '<input type="text" name="' + prefix + '_nombre[]" class="form-control cb-uppercase" required value="' + (prefill.nombre || '') + '"></div>' +
+                '<div class="form-group"><label class="form-label">Fecha de nacimiento</label>' +
+                '<input type="date" name="' + prefix + '_fecha_nacimiento[]" class="form-control cb-fnac-censo" required value="' + escAttr(prefill.fecha_nacimiento) + '"></div>' +
+                '<div class="form-group"><label class="form-label">Edad</label>' +
+                '<input type="text" class="form-control cb-edad-censo" readonly tabindex="-1" placeholder="Se calcula sola"></div>' +
                 '<div class="form-group"><label class="form-label">Sexo</label>' + sexoSelect(prefix + '_sexo[]', prefill.sexo) + '</div>' +
-                '<div class="form-group"><label class="form-label">Edad (0–' + maxEdad + ')</label>' +
-                '<input type="number" name="' + prefix + '_edad[]" class="form-control cb-edad-censo" min="0" max="' + maxEdad + '" step="1" required value="' + (prefill.edad || '') + '"></div>' +
             '</div>';
         container.appendChild(row);
         row.querySelector('.censo-person-remove')?.addEventListener('click', function () {
@@ -658,7 +728,14 @@ $callesPickerJson = array_map(static function ($c) {
         });
         bindRutInput(row.querySelector('.cb-rut-chile'));
         bindUppercase(row.querySelector('.cb-uppercase'));
-        bindEdadInput(row.querySelector('.cb-edad-censo'), maxEdad, label);
+        bindFechaNacimiento(row.querySelector('.cb-fnac-censo'), row.querySelector('.cb-edad-censo'), maxEdad, label);
+    }
+
+    function escAttr(v) {
+        return String(v == null ? '' : v)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
     }
 
     function renumberPeople(container, label) {
@@ -808,7 +885,7 @@ $callesPickerJson = array_map(static function ($c) {
                 'rut' => $r,
                 'nombre' => $old['hijo_nombre'][$i] ?? '',
                 'sexo' => $old['hijo_sexo'][$i] ?? '',
-                'edad' => $old['hijo_edad'][$i] ?? '',
+                'fecha_nacimiento' => $old['hijo_fecha_nacimiento'][$i] ?? '',
             ];
         }
     }
@@ -819,7 +896,7 @@ $callesPickerJson = array_map(static function ($c) {
                 'rut' => $r,
                 'nombre' => $old['disc_nombre'][$i] ?? '',
                 'sexo' => $old['disc_sexo'][$i] ?? '',
-                'edad' => $old['disc_edad'][$i] ?? '',
+                'fecha_nacimiento' => $old['disc_fecha_nacimiento'][$i] ?? '',
             ];
         }
     }
@@ -860,17 +937,13 @@ $callesPickerJson = array_map(static function ($c) {
             if (!hRows.length) errors.push('Agregue al menos un hijo o desmarque la opción.');
             hRows.forEach(function (row, idx) {
                 var r = row.querySelector('.cb-rut-chile');
-                var ed = row.querySelector('.cb-edad-censo');
+                var fecha = row.querySelector('.cb-fnac-censo');
                 if (r && !validateRutChile(r.value)) {
                     errors.push('Hijo #' + (idx + 1) + ': RUT inválido.');
                     setRutState(r, false, 'RUT inválido');
                 }
-                if (ed) {
-                    var n = parseInt(ed.value, 10);
-                    if (isNaN(n) || n < 0 || n > 8) {
-                        errors.push('Hijo #' + (idx + 1) + ': la edad debe ser entre 0 y 8 años.');
-                        ed.classList.add('is-invalid');
-                    }
+                if (!fecha || !fecha._checkFnac || !fecha._checkFnac(true)) {
+                    errors.push('Hijo #' + (idx + 1) + ': ' + ((fecha && fecha.dataset.errorMsg) || 'indique la fecha de nacimiento.'));
                 }
             });
         }
@@ -881,17 +954,13 @@ $callesPickerJson = array_map(static function ($c) {
             if (!dRows.length) errors.push('Agregue al menos una persona con discapacidad o desmarque la opción.');
             dRows.forEach(function (row, idx) {
                 var r = row.querySelector('.cb-rut-chile');
-                var ed = row.querySelector('.cb-edad-censo');
+                var fecha = row.querySelector('.cb-fnac-censo');
                 if (r && !validateRutChile(r.value)) {
                     errors.push('Discapacidad #' + (idx + 1) + ': RUT inválido.');
                     setRutState(r, false, 'RUT inválido');
                 }
-                if (ed) {
-                    var n = parseInt(ed.value, 10);
-                    if (isNaN(n) || n < 0 || n > 18) {
-                        errors.push('Discapacidad #' + (idx + 1) + ': la edad debe ser entre 0 y 18 años.');
-                        ed.classList.add('is-invalid');
-                    }
+                if (!fecha || !fecha._checkFnac || !fecha._checkFnac(true)) {
+                    errors.push('Discapacidad #' + (idx + 1) + ': ' + ((fecha && fecha.dataset.errorMsg) || 'indique la fecha de nacimiento.'));
                 }
             });
         }

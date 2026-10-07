@@ -97,9 +97,20 @@
                 Respuestas recibidas (<?php echo count($data['registros'] ?? []); ?>)
             </h3>
             <?php if (!empty($data['registros'])): ?>
-                <a href="<?php echo URLROOT; ?>/admin/censo_familiar_export" class="btn btn-primary btn-sm">
-                    Exportar reporte (Excel)
-                </a>
+                <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+                    <?php if ($puedeGestionar): ?>
+                        <a href="<?php echo URLROOT; ?>/admin/censo_familiar_fechas<?php echo !empty($data['pendientes_nacimiento']) ? '?pendientes=1' : ''; ?>" class="btn btn-secondary btn-sm">
+                            Completar fechas de nacimiento<?php
+                            if (!empty($data['tiene_fecha_nacimiento']) && (int)($data['pendientes_nacimiento'] ?? 0) > 0) {
+                                echo ' (' . (int)$data['pendientes_nacimiento'] . ' pendientes)';
+                            }
+                            ?>
+                        </a>
+                    <?php endif; ?>
+                    <a href="<?php echo URLROOT; ?>/admin/censo_familiar_export" class="btn btn-primary btn-sm">
+                        Exportar reporte (Excel)
+                    </a>
+                </div>
             <?php endif; ?>
         </div>
         <?php if (empty($data['registros'])): ?>
@@ -189,7 +200,7 @@
                             <th>RUT</th>
                             <th>Nombre</th>
                             <th>Sexo</th>
-                            <th>Edad / Parto</th>
+                            <th>Nacimiento / Edad / Parto</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -203,11 +214,38 @@
                                 <td><?php echo htmlspecialchars($p->sexo); ?></td>
                                 <td>
                                     <?php
+                                    $puedeEditarFnac = $puedeGestionar
+                                        && !empty($data['tiene_fecha_nacimiento'])
+                                        && in_array($p->tipo, ['hijo', 'discapacidad'], true);
                                     if ($p->tipo === 'embarazo') {
                                         echo 'Parto: ' . htmlspecialchars($p->fecha_parto ?? '—');
                                         if (!empty($p->usa_datos_adulto)) echo ' (mismos datos adulto)';
+                                    } elseif ($puedeEditarFnac) {
+                                        $maxFnac = $p->tipo === 'hijo' ? 8 : 18;
+                                        $fnacIso = !empty($p->fecha_nacimiento) ? date('Y-m-d', strtotime($p->fecha_nacimiento)) : '';
+                                        $edadTxt = ($p->edad !== null && $p->edad !== '') ? ((int)$p->edad . ' años registrados') : 'Sin edad registrada';
+                                        ?>
+                                        <form method="post" action="<?php echo URLROOT; ?>/admin/censo_familiar_fechas" style="display:flex; flex-wrap:wrap; gap:0.4rem; align-items:center;">
+                                            <input type="hidden" name="volver_id" value="<?php echo (int)$d->id; ?>">
+                                            <input type="date" class="form-control cb-fnac-admin" style="max-width:11.5rem;"
+                                                   name="fechas[<?php echo (int)$p->id; ?>]"
+                                                   data-max="<?php echo (int)$maxFnac; ?>"
+                                                   max="<?php echo date('Y-m-d'); ?>"
+                                                   value="<?php echo htmlspecialchars($fnacIso); ?>">
+                                            <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                            <span class="cb-fnac-preview"></span>
+                                        </form>
+                                        <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.25rem;">
+                                            <?php echo htmlspecialchars($edadTxt); ?>
+                                            <?php if ($fnacIso === ''): ?> · falta la fecha de nacimiento<?php endif; ?>
+                                        </div>
+                                        <?php
                                     } else {
-                                        echo htmlspecialchars((string)($p->edad ?? '—')) . ' años';
+                                        $fnac = !empty($p->fecha_nacimiento) ? date('d-m-Y', strtotime($p->fecha_nacimiento)) : '';
+                                        $edadTxt = ($p->edad !== null && $p->edad !== '') ? ((string)$p->edad . ' años') : '—';
+                                        echo $fnac !== ''
+                                            ? htmlspecialchars($fnac) . ' · ' . htmlspecialchars($edadTxt)
+                                            : htmlspecialchars($edadTxt);
                                     }
                                     ?>
                                 </td>
@@ -218,6 +256,13 @@
             <?php endif; ?>
             <a href="<?php echo URLROOT; ?>/admin/censo_familiar" class="btn btn-secondary btn-sm" style="margin-top:0.75rem;">Cerrar detalle</a>
         </div>
+        <?php if ($puedeGestionar && !empty($data['tiene_fecha_nacimiento'])): ?>
+            <style>
+            .cb-fnac-preview { font-size: 0.75rem; color: var(--text-muted); }
+            .cb-fnac-preview.is-error { color: var(--danger, #ef4444); }
+            </style>
+            <?php require APPROOT . '/views/partials/censo_fnac_admin_script.php'; ?>
+        <?php endif; ?>
     <?php endif; ?>
 <?php endif; ?>
 

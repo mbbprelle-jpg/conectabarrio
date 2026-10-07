@@ -40,6 +40,7 @@
         nombre_completo VARCHAR(180) NOT NULL,
         sexo VARCHAR(20) NOT NULL,
         edad TINYINT UNSIGNED NULL,
+        fecha_nacimiento DATE NULL,
         fecha_parto DATE NULL,
         usa_datos_adulto TINYINT(1) NOT NULL DEFAULT 0,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

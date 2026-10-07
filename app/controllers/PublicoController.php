@@ -213,15 +213,15 @@ class PublicoController extends Controller {
                 $rut = RutChile::normalize($row['rut'] ?? '');
                 $nombre = mb_strtoupper(trim((string)($row['nombre'] ?? '')), 'UTF-8');
                 $sexo = trim((string)($row['sexo'] ?? ''));
-                $edad = (int)($row['edad'] ?? -1);
+                $nac = $this->censoModel->validarFechaNacimiento((string)($row['fecha_nacimiento'] ?? ''), 8);
                 if ($rut === false) {
                     return ['ok' => false, 'error' => "Hijo #$n: RUT inválido."];
                 }
                 if ($nombre === '' || !in_array($sexo, ['MASCULINO', 'FEMENINO', 'NO ESPECIFICAR'], true)) {
                     return ['ok' => false, 'error' => "Hijo #$n: complete nombre y sexo."];
                 }
-                if ($edad < 0 || $edad > 8) {
-                    return ['ok' => false, 'error' => "Hijo #$n: la edad debe ser entre 0 y 8 años."];
+                if (!$nac['ok']) {
+                    return ['ok' => false, 'error' => "Hijo #$n: " . $nac['error']];
                 }
                 if (isset($rutsEnForm[$rut]) || $this->censoModel->rutNinoYaRegistrado($juntaId, $rut, 'hijo')) {
                     return ['ok' => false, 'error' => "Hijo #$n: el RUT $rut ya está registrado."];
@@ -232,7 +232,8 @@ class PublicoController extends Controller {
                     'rut' => $rut,
                     'nombre_completo' => $nombre,
                     'sexo' => $sexo,
-                    'edad' => $edad,
+                    'edad' => $nac['edad'],
+                    'fecha_nacimiento' => $nac['fecha'],
                     'fecha_parto' => null,
                     'usa_datos_adulto' => 0,
                 ];
@@ -249,22 +250,23 @@ class PublicoController extends Controller {
                 $rut = RutChile::normalize($row['rut'] ?? '');
                 $nombre = mb_strtoupper(trim((string)($row['nombre'] ?? '')), 'UTF-8');
                 $sexo = trim((string)($row['sexo'] ?? ''));
-                $edad = (int)($row['edad'] ?? -1);
+                $nac = $this->censoModel->validarFechaNacimiento((string)($row['fecha_nacimiento'] ?? ''), 18);
                 if ($rut === false) {
                     return ['ok' => false, 'error' => "Discapacidad #$n: RUT inválido."];
                 }
                 if ($nombre === '' || !in_array($sexo, ['MASCULINO', 'FEMENINO', 'NO ESPECIFICAR'], true)) {
                     return ['ok' => false, 'error' => "Discapacidad #$n: complete nombre y sexo."];
                 }
-                if ($edad < 0 || $edad > 18) {
-                    return ['ok' => false, 'error' => "Discapacidad #$n: la edad debe ser entre 0 y 18 años."];
+                if (!$nac['ok']) {
+                    return ['ok' => false, 'error' => "Discapacidad #$n: " . $nac['error']];
                 }
                 $personas[] = [
                     'tipo' => 'discapacidad',
                     'rut' => $rut,
                     'nombre_completo' => $nombre,
                     'sexo' => $sexo,
-                    'edad' => $edad,
+                    'edad' => $nac['edad'],
+                    'fecha_nacimiento' => $nac['fecha'],
                     'fecha_parto' => null,
                     'usa_datos_adulto' => 0,
                 ];
@@ -288,6 +290,7 @@ class PublicoController extends Controller {
                     'nombre_completo' => $adulto['nombre'],
                     'sexo' => $sexo,
                     'edad' => null,
+                    'fecha_nacimiento' => null,
                     'fecha_parto' => $fechaParto,
                     'usa_datos_adulto' => 1,
                 ];
@@ -314,6 +317,7 @@ class PublicoController extends Controller {
                     'nombre_completo' => $nombre,
                     'sexo' => $sexo,
                     'edad' => null,
+                    'fecha_nacimiento' => null,
                     'fecha_parto' => $fechaParto,
                     'usa_datos_adulto' => 0,
                 ];
@@ -327,7 +331,7 @@ class PublicoController extends Controller {
         $ruts = $post[$prefix . '_rut'] ?? [];
         $nombres = $post[$prefix . '_nombre'] ?? [];
         $sexos = $post[$prefix . '_sexo'] ?? [];
-        $edades = $post[$prefix . '_edad'] ?? [];
+        $fechas = $post[$prefix . '_fecha_nacimiento'] ?? [];
         if (!is_array($ruts)) {
             return [];
         }
@@ -336,7 +340,7 @@ class PublicoController extends Controller {
             $rut = trim((string)$rut);
             $nombre = trim((string)($nombres[$i] ?? ''));
             $sexo = trim((string)($sexos[$i] ?? ''));
-            $edad = $edades[$i] ?? '';
+            $fechaNacimiento = trim((string)($fechas[$i] ?? ''));
             if ($rut === '' && $nombre === '') {
                 continue;
             }
@@ -344,7 +348,7 @@ class PublicoController extends Controller {
                 'rut' => $rut,
                 'nombre' => $nombre,
                 'sexo' => $sexo,
-                'edad' => $edad,
+                'fecha_nacimiento' => $fechaNacimiento,
             ];
         }
         return $rows;
