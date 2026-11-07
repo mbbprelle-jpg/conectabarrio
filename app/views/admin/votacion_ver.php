@@ -58,6 +58,16 @@
     <?php endif; ?>
 </div>
 
+<div style="margin-bottom:0.75rem;">
+    <a href="<?php echo URLROOT; ?>/admin/votacion_exportar/<?php echo (int)$v->id; ?>" class="btn btn-secondary btn-sm">Exportar respuestas (Excel)</a>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin:0.4rem 0 0;">
+        <?php if (!empty($data['puede_ver_detalle'])): ?>
+            El archivo trae el resumen y cada respuesta, con nombre, RUT y la pregunta adicional. Es la misma información confidencial de esta ficha.
+        <?php else: ?>
+            El archivo trae los totales y porcentajes. El detalle con nombre solo lo exporta el administrador o quien creó la consulta.
+        <?php endif; ?>
+    </p>
+</div>
 <?php
 $votacion = $v;
 $resultados = $data['resultados'];

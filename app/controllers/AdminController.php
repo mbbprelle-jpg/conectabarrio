@@ -3597,6 +3597,88 @@ class AdminController extends Controller {
         $this->view('admin/votacion_ver', $data);
     }
 
+    public function votacion_exportar($id = 0) {
+        $this->requireManageVotaciones();
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)$id;
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v) {
+            $_SESSION['error_msg'] = 'Votación no encontrada.';
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $conDetalle = $this->votacionModel->canViewVoterDetail($v, (int)$_SESSION['user_id'], AuthContext::isFullAdmin());
+        $this->exportarVotacionCsv(
+            $v,
+            $this->votacionModel->getResultadosPayload($id),
+            $conDetalle ? $this->votacionModel->getDetalleVotantes($id, $juntaId) : null
+        );
+    }
+
+    private function exportarVotacionCsv(object $v, array $resultados, ?array $detalle): void {
+        $filename = 'votacion_' . (int)$v->id . '_respuestas_' . date('Ymd_His') . '.csv';
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
+        $sep = ';';
+
+        fputcsv($out, ['Consulta', (string)$v->titulo], $sep);
+        fputcsv($out, ['Tipo', (string)$v->tipo], $sep);
+        fputcsv($out, ['Estado', (string)$v->estado], $sep);
+        fputcsv($out, ['Inicio', date('d/m/Y H:i:s', strtotime((string)$v->fecha_inicio))], $sep);
+        fputcsv($out, ['Cierre', date('d/m/Y H:i:s', strtotime((string)$v->fecha_fin))], $sep);
+        fputcsv($out, ['Total de respuestas', (int)($resultados['total'] ?? 0)], $sep);
+        fputcsv($out, [], $sep);
+        fputcsv($out, ['Resumen', 'Votos', 'Porcentaje del total'], $sep);
+        foreach ($resultados['opciones'] ?? [] as $o) {
+            fputcsv($out, [(string)$o['texto'], (int)$o['votos'], (int)$o['pct'] . '%'], $sep);
+            if (($o['tipo'] ?? 'ninguno') !== 'ninguno' && ($o['pregunta'] ?? '') !== '' && (int)$o['votos'] > 0) {
+                fputcsv($out, ['', 'Entre quienes eligieron esta opción: ' . $o['pregunta'], 'Votos', 'Porcentaje de esta opción'], $sep);
+                if (($o['tipo'] ?? '') === 'opciones') {
+                    foreach ($o['items'] as $item) {
+                        fputcsv($out, ['', (string)$item['texto'], (int)$item['votos'], (int)$item['pct'] . '%'], $sep);
+                    }
+                } else {
+                    fputcsv($out, ['', 'Respuestas escritas', (int)($o['textos'] ?? 0)], $sep);
+                }
+            }
+        }
+        if ((int)($resultados['sin_opcion'] ?? 0) > 0) {
+            fputcsv($out, ['Solo comentario, sin opción', (int)$resultados['sin_opcion']], $sep);
+        }
+
+        fputcsv($out, [], $sep);
+        if ($detalle === null) {
+            fputcsv($out, ['El detalle con nombre solo lo exporta el administrador o quien creó la consulta.'], $sep);
+        } else {
+            fputcsv($out, ['Fecha', 'Nombre', 'RUT', 'Correo', 'Respuesta', 'Pregunta adicional', 'Respuesta adicional', 'Comentario'], $sep);
+            foreach ($detalle as $d) {
+                $adicional = (string)($d->seguimiento_opcion_texto ?? '');
+                if ($adicional === '') {
+                    $adicional = (string)($d->seguimiento_texto ?? '');
+                }
+                fputcsv($out, [
+                    !empty($d->created_at) ? date('d/m/Y H:i:s', strtotime((string)$d->created_at)) : '',
+                    (string)($d->nombre ?? ''),
+                    (string)($d->rut ?? ''),
+                    (string)($d->email ?? ''),
+                    (string)($d->opcion_texto ?? ''),
+                    $adicional !== '' ? (string)($d->seguimiento_pregunta ?? '') : '',
+                    $adicional,
+                    (string)($d->respuesta_texto ?? ''),
+                ], $sep);
+            }
+        }
+
+        fclose($out);
+        exit;
+    }
+
     public function votacion_recordar() {
         $this->requireManageVotaciones();
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {

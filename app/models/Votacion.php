@@ -561,7 +561,7 @@ class Votacion extends Model {
         $this->ensureSeguimiento();
         if ($this->schemaReady()) {
             $this->db->query('SELECT r.created_at, u.nombre, u.rut, u.email, o.texto AS opcion_texto, r.respuesta_texto,
-                r.seguimiento_texto, s.texto AS seguimiento_opcion_texto
+                o.seguimiento_pregunta, r.seguimiento_texto, s.texto AS seguimiento_opcion_texto
                 FROM votacion_respuestas r
                 INNER JOIN usuarios u ON u.id = r.usuario_id
                 LEFT JOIN votacion_opciones o ON o.id = r.opcion_id
@@ -571,7 +571,7 @@ class Votacion extends Model {
                 ORDER BY r.created_at DESC');
         } else {
             $this->db->query('SELECT r.created_at, u.nombre, u.rut, u.email, o.texto AS opcion_texto, r.respuesta_texto,
-                NULL AS seguimiento_texto, NULL AS seguimiento_opcion_texto
+                NULL AS seguimiento_pregunta, NULL AS seguimiento_texto, NULL AS seguimiento_opcion_texto
                 FROM votacion_respuestas r
                 INNER JOIN usuarios u ON u.id = r.usuario_id
                 LEFT JOIN votacion_opciones o ON o.id = r.opcion_id
