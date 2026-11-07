@@ -1,5 +1,5 @@
 <?php require_once APPROOT . '/views/layouts/header.php'; ?>
-<?php $v = $data['votacion']; $totalVotos = array_sum(array_map(static fn($o) => (int)$o->votos, $data['opciones'])); ?>
+<?php $v = $data['votacion']; ?>
 
 <?php if (!empty($data['success'])): ?><div class="alert alert-success"><span><?php echo htmlspecialchars($data['success']); ?></span></div><?php endif; ?>
 <?php if (!empty($data['error'])): ?><div class="alert alert-danger"><span><?php echo htmlspecialchars($data['error']); ?></span></div><?php endif; ?>
@@ -9,8 +9,16 @@
         <div>
             <p style="font-size:0.85rem;color:var(--text-muted);margin:0;"><?php echo nl2br(htmlspecialchars($v->descripcion ?? '')); ?></p>
             <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.75rem;">
+                <?php
+                $visLabel = [
+                    'al_votar' => 'el socio ve los % después de responder',
+                    'todos' => 'todos los electores ven los %',
+                    'directiva' => 'los % solo los ve la directiva',
+                ][$v->resultados_visibilidad ?? 'directiva'] ?? 'resultados reservados';
+                ?>
                 <?php echo date('d/m/Y H:i', strtotime($v->fecha_inicio)); ?> — <?php echo date('d/m/Y H:i', strtotime($v->fecha_fin)); ?>
                 · Audiencia: <?php echo htmlspecialchars(str_replace('_', ' ', $v->audiencia_tipo)); ?>
+                · <?php echo htmlspecialchars($visLabel); ?>
             </p>
         </div>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -32,22 +40,12 @@
     <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($data['link_publico']); ?>" onclick="this.select();">
 </div>
 
-<div class="card card-success">
-    <h3 class="card-title">Resultados (<?php echo $totalVotos; ?> respuesta<?php echo $totalVotos === 1 ? '' : 's'; ?>)</h3>
-    <?php foreach ($data['opciones'] as $o):
-        $pct = $totalVotos > 0 ? round(((int)$o->votos / $totalVotos) * 100) : 0;
-    ?>
-    <div style="margin-bottom:1rem;">
-        <div style="display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:0.25rem;">
-            <span><?php echo htmlspecialchars($o->texto); ?></span>
-            <strong><?php echo (int)$o->votos; ?> (<?php echo $pct; ?>%)</strong>
-        </div>
-        <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;">
-            <div style="width:<?php echo $pct; ?>%;height:100%;background:var(--gradient-primary);"></div>
-        </div>
-    </div>
-    <?php endforeach; ?>
-</div>
+<?php
+$votacion = $v;
+$resultados = $data['resultados'];
+$parciales_url = $data['parciales_url'] ?? '';
+require APPROOT . '/views/partials/votacion_resultados.php';
+?>
 
 <?php if ($data['puede_ver_detalle'] && !empty($data['detalle_votantes'])): ?>
 <div class="card card-primary" style="margin-top:1.5rem;">
@@ -62,7 +60,14 @@
                     <td><?php echo date('d/m/Y H:i', strtotime($d->created_at)); ?></td>
                     <td><?php echo htmlspecialchars($d->nombre); ?></td>
                     <td style="font-family:monospace;font-size:0.85rem;"><?php echo htmlspecialchars($d->rut); ?></td>
-                    <td><?php echo htmlspecialchars($d->opcion_texto ?: ($d->respuesta_texto ?: '—')); ?></td>
+                    <td><?php
+                        $partes = [];
+                        if (!empty($d->opcion_texto)) $partes[] = $d->opcion_texto;
+                        if (!empty($d->seguimiento_opcion_texto)) $partes[] = $d->seguimiento_opcion_texto;
+                        elseif (!empty($d->seguimiento_texto)) $partes[] = $d->seguimiento_texto;
+                        if (!empty($d->respuesta_texto)) $partes[] = $d->respuesta_texto;
+                        echo htmlspecialchars($partes ? implode(' · ', $partes) : '—');
+                    ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

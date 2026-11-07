@@ -3248,6 +3248,7 @@ class AdminController extends Controller {
             $this->redirect('/admin/dashboard');
             exit;
         }
+        $this->votacionModel->ensureSeguimiento();
     }
 
     /** @return int[] */
@@ -3277,6 +3278,7 @@ class AdminController extends Controller {
     private function parseVotacionPost(array $post): array {
         $inicio = trim($post['fecha_inicio'] ?? '');
         $fin = trim($post['fecha_fin'] ?? '');
+        $opciones = $this->parseOpcionesVotacion($post);
         return [
             'titulo' => trim($post['titulo'] ?? ''),
             'descripcion' => trim($post['descripcion'] ?? ''),
@@ -3285,10 +3287,65 @@ class AdminController extends Controller {
                 ? $post['audiencia_tipo'] : 'todos_socios',
             'fecha_inicio' => $inicio !== '' ? str_replace('T', ' ', $inicio) . ':00' : '',
             'fecha_fin' => $fin !== '' ? str_replace('T', ' ', $fin) . ':00' : '',
-            'resultados_visibilidad' => ($post['resultados_visibilidad'] ?? '') === 'todos' ? 'todos' : 'directiva',
-            'opciones' => array_filter(array_map('trim', $post['opciones'] ?? [])),
+            'resultados_visibilidad' => in_array($post['resultados_visibilidad'] ?? '', ['directiva', 'todos', 'al_votar'], true)
+                ? $post['resultados_visibilidad'] : 'al_votar',
+            'opciones' => $opciones['items'],
+            'opciones_error' => $opciones['error'],
             'publicar' => !empty($post['publicar']),
         ];
+    }
+
+    /** @return array{items: array<int, array<string, mixed>>, error: string} */
+    private function parseOpcionesVotacion(array $post): array {
+        $textos = $post['opciones'] ?? [];
+        if (!is_array($textos)) {
+            return ['items' => [], 'error' => ''];
+        }
+        $items = [];
+        $error = '';
+        foreach ($textos as $i => $texto) {
+            $texto = trim((string)$texto);
+            if ($texto === '') {
+                continue;
+            }
+            if (mb_strlen($texto) > 500) {
+                $texto = mb_substr($texto, 0, 500);
+            }
+            $tipo = (string)($post['seguimiento_tipo'][$i] ?? 'ninguno');
+            if (!in_array($tipo, ['ninguno', 'texto', 'opciones'], true)) {
+                $tipo = 'ninguno';
+            }
+            $pregunta = trim((string)($post['seguimiento_pregunta'][$i] ?? ''));
+            if (mb_strlen($pregunta) > 500) {
+                $pregunta = mb_substr($pregunta, 0, 500);
+            }
+            $lineas = [];
+            foreach (preg_split('/\r\n|\r|\n/', (string)($post['seguimiento_opciones_texto'][$i] ?? '')) ?: [] as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                if (mb_strlen($line) > 500) {
+                    $line = mb_substr($line, 0, 500);
+                }
+                $lineas[] = $line;
+            }
+            $lineas = array_values(array_unique($lineas));
+            if ($tipo === 'texto' && $pregunta === '') {
+                $error = 'Escriba la pregunta adicional de «' . $texto . '», o deje el seguimiento en «No preguntar más».';
+            }
+            if ($tipo === 'opciones' && ($pregunta === '' || count($lineas) < 2)) {
+                $error = 'En «' . $texto . '», la pregunta adicional necesita un enunciado y al menos 2 alternativas (una por línea).';
+            }
+            $items[] = [
+                'id' => (int)($post['opcion_id'][$i] ?? 0),
+                'texto' => $texto,
+                'seguimiento_tipo' => $tipo,
+                'seguimiento_pregunta' => $tipo === 'ninguno' ? null : $pregunta,
+                'seguimiento_lineas' => $tipo === 'opciones' ? $lineas : [],
+            ];
+        }
+        return ['items' => $items, 'error' => $error];
     }
 
     public function reunion_reenviar_rsvp() {
@@ -3325,13 +3382,14 @@ class AdminController extends Controller {
         $data = [
             'title' => 'Votaciones y encuestas',
             'header_title' => 'Votaciones y encuestas',
-            'header_subtitle' => 'Consultas formales con control de electores, plazos y confidencialidad',
+            'header_subtitle' => 'Consultas con pregunta de seguimiento y porcentajes en vivo para quien ya respondió',
             'active_menu' => 'votaciones',
             'votaciones' => $this->votacionModel->getByJunta($juntaId),
             'miembros' => $this->membresiaModel->getMiembrosActivosParaConvocatoria($juntaId),
             'edit' => null,
             'edit_opciones' => [],
             'edit_electores' => [],
+            'seguimiento_listo' => $this->votacionModel->ensureSeguimiento(),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
         ];
@@ -3340,7 +3398,7 @@ class AdminController extends Controller {
             $edit = $this->votacionModel->getByIdAndJunta($editId, $juntaId);
             if ($edit && in_array($edit->estado, ['borrador', 'activa'], true)) {
                 $data['edit'] = $edit;
-                $data['edit_opciones'] = $this->votacionModel->getOpciones($editId);
+                $data['edit_opciones'] = $this->votacionModel->getOpcionesConSeguimiento($editId);
                 $data['edit_electores'] = $this->votacionModel->getElectoresIds($editId);
             }
         }
@@ -3355,6 +3413,11 @@ class AdminController extends Controller {
         }
         $juntaId = (int)$_SESSION['user_junta_id'];
         $parsed = $this->parseVotacionPost($this->sanitizePost());
+        if ($parsed['opciones_error'] !== '') {
+            $_SESSION['error_msg'] = $parsed['opciones_error'];
+            $this->redirect('/admin/votaciones');
+            return;
+        }
         if ($parsed['titulo'] === '' || $parsed['fecha_inicio'] === '' || $parsed['fecha_fin'] === '' || count($parsed['opciones']) < 2) {
             $_SESSION['error_msg'] = 'Complete título, fechas y al menos 2 opciones.';
             $this->redirect('/admin/votaciones');
@@ -3378,7 +3441,7 @@ class AdminController extends Controller {
             $this->redirect('/admin/votaciones');
             return;
         }
-        $this->votacionModel->replaceOpciones($vid, $parsed['opciones']);
+        $this->votacionModel->syncOpciones($vid, $parsed['opciones']);
         if ($parsed['audiencia_tipo'] === 'seleccionados') {
             $this->votacionModel->replaceElectores($vid, $this->resolveElectoresFromPost($this->sanitizePost(), $juntaId));
         }
@@ -3396,6 +3459,11 @@ class AdminController extends Controller {
         $post = $this->sanitizePost();
         $id = (int)($post['votacion_id'] ?? 0);
         $parsed = $this->parseVotacionPost($post);
+        if ($parsed['opciones_error'] !== '') {
+            $_SESSION['error_msg'] = $parsed['opciones_error'];
+            $this->redirect('/admin/votaciones?editar=' . $id);
+            return;
+        }
         if (!$this->votacionModel->update($id, $juntaId, [
             'titulo' => $parsed['titulo'],
             'descripcion' => $parsed['descripcion'],
@@ -3410,7 +3478,7 @@ class AdminController extends Controller {
             return;
         }
         if (count($parsed['opciones']) >= 2) {
-            $this->votacionModel->replaceOpciones($id, $parsed['opciones']);
+            $this->votacionModel->syncOpciones($id, $parsed['opciones']);
         }
         if ($parsed['audiencia_tipo'] === 'seleccionados') {
             $this->votacionModel->replaceElectores($id, $this->resolveElectoresFromPost($post, $juntaId));
@@ -3440,7 +3508,8 @@ class AdminController extends Controller {
             'header_subtitle' => ucfirst($v->tipo) . ' · ' . ucfirst($v->estado),
             'active_menu' => 'votaciones',
             'votacion' => $v,
-            'opciones' => $this->votacionModel->getResultadosAgregados($id),
+            'resultados' => $this->votacionModel->getResultadosPayload($id),
+            'parciales_url' => URLROOT . '/admin/votacion_parciales/' . $id,
             'link_publico' => $link,
             'puede_ver_detalle' => $this->votacionModel->canViewVoterDetail($v, (int)$_SESSION['user_id'], AuthContext::isFullAdmin()),
             'detalle_votantes' => [],
@@ -3493,44 +3562,57 @@ class AdminController extends Controller {
             return;
         }
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
-            if (!$this->votacionModel->canUserParticipate($v, $uid, $juntaId)) {
-                $_SESSION['error_msg'] = 'No puede votar en esta consulta.';
-                $this->redirectUserHome();
-                return;
-            }
-            $opcionId = (int)($_POST['opcion_id'] ?? 0);
-            $texto = trim($_POST['respuesta_texto'] ?? '');
-            if ($v->tipo === 'encuesta' && $texto === '' && $opcionId <= 0) {
-                $_SESSION['error_msg'] = 'Indique su respuesta.';
+            $error = $this->votacionModel->submitVote($v, $uid, $juntaId, $this->sanitizePost());
+            if ($error) {
+                $_SESSION['error_msg'] = $error;
                 $this->redirect('/admin/votacion_votar/' . $id);
                 return;
             }
-            if ($v->tipo === 'votacion' && $opcionId <= 0) {
-                $_SESSION['error_msg'] = 'Seleccione una opción.';
-                $this->redirect('/admin/votacion_votar/' . $id);
-                return;
-            }
-            $this->votacionModel->registerVote($id, $uid, $opcionId > 0 ? $opcionId : null, $texto !== '' ? $texto : null);
-            $_SESSION['success_msg'] = 'Su voto fue registrado de forma confidencial.';
+            $_SESSION['success_msg'] = 'Su respuesta quedó registrada. Los porcentajes no identifican a quién votó.';
             if (AuthContext::canManageVotaciones()) {
                 $this->redirect('/admin/votacion_ver/' . $id);
             } else {
-                $this->redirect('/socio/votaciones');
+                $this->redirect('/socio/votacion_resultados/' . $id);
             }
             return;
         }
+        $ya = $this->votacionModel->hasUserVoted($id, $uid);
+        $ver = $this->votacionModel->canViewResults($v, $uid, $juntaId, AuthContext::isFullAdmin(), AuthContext::isDirectivo());
         $data = [
             'title' => 'Participar: ' . $v->titulo,
             'header_title' => $v->titulo,
-            'header_subtitle' => 'Su voto es confidencial para el resto de la organización',
+            'header_subtitle' => 'Su identidad no se publica. Si la consulta lo permite, verá los porcentajes después de responder.',
             'active_menu' => 'votaciones',
             'votacion' => $v,
-            'opciones' => $this->votacionModel->getOpciones($id),
-            'ya_voto' => $this->votacionModel->hasUserVoted($id, $uid),
+            'opciones' => $this->votacionModel->getOpcionesConSeguimiento($id),
+            'ya_voto' => $ya,
             'puede_votar' => $this->votacionModel->canUserParticipate($v, $uid, $juntaId),
+            'resultados' => ($ya && $ver) ? $this->votacionModel->getResultadosPayload($id) : null,
+            'parciales_url' => ($ya && $ver) ? URLROOT . '/admin/votacion_parciales/' . $id : '',
             'back_url' => URLROOT . '/admin/votaciones',
         ];
         $this->view('admin/votacion_votar', $data);
+    }
+
+    public function votacion_parciales($id = 0) {
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)$id;
+        $this->votacionModel->syncEstadosActivas();
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        $permitido = $v && (
+            AuthContext::canManageVotaciones()
+            || $this->votacionModel->canViewResults($v, (int)$_SESSION['user_id'], $juntaId, AuthContext::isFullAdmin(), AuthContext::isDirectivo())
+        );
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        if (!$permitido) {
+            http_response_code(403);
+            echo json_encode(['error' => 'No disponible'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        echo json_encode($this->votacionModel->getResultadosPayload($id), JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     /** @return int[] */

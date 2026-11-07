@@ -32,7 +32,7 @@
     <h3 class="card-title">Historial de consultas</h3>
     <div class="table-responsive">
         <table class="table">
-            <thead><tr><th>Título</th><th>Estado</th><th>Plazo</th></tr></thead>
+            <thead><tr><th>Título</th><th>Estado</th><th>Avance</th></tr></thead>
             <tbody>
             <?php
             $vModel = new Votacion();
@@ -41,13 +41,29 @@
             foreach ($data['historial'] as $v):
                 if (!$vModel->isUserElector((int)$v->id, $uid, $v->audiencia_tipo, $jid)) continue;
                 $verResultados = $vModel->canViewResults($v, $uid, $jid, false, $data['is_directiva']);
+                $resumen = '';
+                if ($verResultados) {
+                    $payload = $vModel->getResultadosPayload((int)$v->id);
+                    $partes = [];
+                    foreach (array_slice($payload['opciones'], 0, 4) as $o) {
+                        $partes[] = $o['texto'] . ' ' . (int)$o['pct'] . '%';
+                    }
+                    $resumen = $partes ? implode(' · ', $partes) : 'Sin respuestas aún';
+                }
             ?>
                 <tr>
-                    <td><?php echo htmlspecialchars($v->titulo); ?></td>
+                    <td>
+                        <?php echo htmlspecialchars($v->titulo); ?>
+                        <?php if ($resumen !== ''): ?>
+                        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.2rem;"><?php echo htmlspecialchars($resumen); ?></div>
+                        <?php endif; ?>
+                    </td>
                     <td><?php echo htmlspecialchars($v->estado); ?></td>
                     <td>
                         <?php if ($verResultados): ?>
-                        <a href="<?php echo URLROOT; ?>/admin/votacion_ver/<?php echo (int)$v->id; ?>" class="btn btn-secondary btn-sm">Ver resultados</a>
+                        <a href="<?php echo URLROOT; ?>/socio/votacion_resultados/<?php echo (int)$v->id; ?>" class="btn btn-secondary btn-sm">Ver porcentajes</a>
+                        <?php elseif (($v->resultados_visibilidad ?? '') === 'al_votar' && $v->estado === 'activa'): ?>
+                        <span style="font-size:0.8rem;color:var(--text-muted);">Responda para ver el avance</span>
                         <?php else: ?>
                         <span style="font-size:0.8rem;color:var(--text-muted);">Resultados reservados</span>
                         <?php endif; ?>

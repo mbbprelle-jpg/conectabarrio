@@ -363,7 +363,7 @@ class AuthContext {
         if (self::canManageVotaciones()) {
             $methods = array_merge($methods, [
                 'votaciones', 'votacion_crear', 'votacion_actualizar', 'votacion_ver',
-                'votacion_publicar', 'votacion_cerrar', 'votacion_votar',
+                'votacion_publicar', 'votacion_cerrar', 'votacion_votar', 'votacion_parciales',
             ]);
         }
         if (self::isDirectivo() || self::canManageReuniones()) {
@@ -373,7 +373,7 @@ class AuthContext {
             $methods = array_merge($methods, [
                 'documentacion_legal', 'junta_documento_legal_subir',
                 'junta_documento_legal_eliminar', 'junta_documento_legal_descargar',
-                'votacion_ver',
+                'votacion_ver', 'votacion_parciales',
             ]);
         }
         return array_unique($methods);

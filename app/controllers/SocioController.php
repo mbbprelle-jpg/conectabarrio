@@ -295,13 +295,16 @@ class SocioController extends Controller {
         $socioId = (int)$_SESSION['user_id'];
         $juntaId = (int)$_SESSION['user_junta_id'];
         require_once APPROOT . '/core/AuthContext.php';
+        if ($this->votacionModel->tablesExist()) {
+            $this->votacionModel->ensureSeguimiento();
+        }
         $pendientes = $this->votacionModel->tablesExist()
             ? $this->votacionModel->getActivasForUsuario($juntaId, $socioId) : [];
         $todas = $this->votacionModel->tablesExist() ? $this->votacionModel->getByJunta($juntaId) : [];
         $this->view('socio/votaciones', [
             'title' => 'Votaciones y encuestas',
             'header_title' => 'Votaciones y encuestas',
-            'header_subtitle' => 'Participe en consultas activas de su organización',
+            'header_subtitle' => 'Participe en las consultas y vea los porcentajes cuando ya respondió',
             'active_menu' => 'votaciones',
             'pendientes' => $pendientes,
             'historial' => $todas,
@@ -329,34 +332,93 @@ class SocioController extends Controller {
             return;
         }
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
-            if (!$this->votacionModel->canUserParticipate($v, $uid, $juntaId)) {
-                $_SESSION['error_msg'] = 'No puede votar en esta consulta.';
-                $this->redirect('/socio/votaciones');
-                return;
-            }
-            $opcionId = (int)($_POST['opcion_id'] ?? 0);
-            $texto = trim($_POST['respuesta_texto'] ?? '');
-            if ($v->tipo === 'votacion' && $opcionId <= 0) {
-                $_SESSION['error_msg'] = 'Seleccione una opción.';
+            $error = $this->votacionModel->submitVote($v, $uid, $juntaId, $this->sanitizePost());
+            if ($error) {
+                $_SESSION['error_msg'] = $error;
                 $this->redirect('/socio/votacion_votar/' . $id);
                 return;
             }
-            $this->votacionModel->registerVote($id, $uid, $opcionId > 0 ? $opcionId : null, $texto !== '' ? $texto : null);
-            $_SESSION['success_msg'] = 'Su voto fue registrado de forma confidencial.';
-            $this->redirect('/socio/votaciones');
+            $_SESSION['success_msg'] = 'Su respuesta quedó registrada. Los porcentajes no identifican a quién votó.';
+            $this->redirect('/socio/votacion_resultados/' . $id);
             return;
         }
+        require_once APPROOT . '/core/AuthContext.php';
+        $ya = $this->votacionModel->hasUserVoted($id, $uid);
+        $ver = $this->votacionModel->canViewResults($v, $uid, $juntaId, false, AuthContext::isDirectivo());
         $this->view('admin/votacion_votar', [
             'title' => 'Participar: ' . $v->titulo,
             'header_title' => $v->titulo,
-            'header_subtitle' => 'Su voto es confidencial para el resto de la organización',
+            'header_subtitle' => 'Su identidad no se publica. Si la consulta lo permite, verá los porcentajes después de responder.',
             'active_menu' => 'votaciones',
             'votacion' => $v,
-            'opciones' => $this->votacionModel->getOpciones($id),
-            'ya_voto' => $this->votacionModel->hasUserVoted($id, $uid),
+            'opciones' => $this->votacionModel->getOpcionesConSeguimiento($id),
+            'ya_voto' => $ya,
             'puede_votar' => $this->votacionModel->canUserParticipate($v, $uid, $juntaId),
+            'resultados' => ($ya && $ver) ? $this->votacionModel->getResultadosPayload($id) : null,
+            'parciales_url' => ($ya && $ver) ? URLROOT . '/socio/votacion_parciales/' . $id : '',
             'back_url' => URLROOT . '/socio/votaciones',
         ]);
+    }
+
+    public function votacion_resultados($id = 0) {
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $uid = (int)$_SESSION['user_id'];
+        $id = (int)$id;
+        if (!$this->votacionModel->tablesExist()) {
+            $this->redirect('/socio/votaciones');
+            return;
+        }
+        $this->votacionModel->ensureSeguimiento();
+        $this->votacionModel->syncEstadosActivas();
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        $puedeVer = $v && $this->votacionModel->canViewResults($v, $uid, $juntaId, false, AuthContext::isDirectivo());
+        $esElector = $v && $this->votacionModel->isUserElector($id, $uid, $v->audiencia_tipo, $juntaId);
+        if (!$v || (!$esElector && !$puedeVer)) {
+            $_SESSION['error_msg'] = 'No puede ver esta consulta.';
+            $this->redirect('/socio/votaciones');
+            return;
+        }
+        if (!$puedeVer) {
+            if (empty($_SESSION['success_msg'])) {
+                $_SESSION['error_msg'] = 'Los resultados se publican después de responder, o están reservados a la directiva.';
+            }
+            $this->redirect('/socio/votaciones');
+            return;
+        }
+        $this->view('socio/votacion_resultados', [
+            'title' => 'Resultados: ' . $v->titulo,
+            'header_title' => $v->titulo,
+            'header_subtitle' => $v->estado === 'cerrada'
+                ? 'Resultado final. No se muestra quién votó cada opción.'
+                : 'Resultados parciales en vivo. No se muestra quién votó cada opción.',
+            'active_menu' => 'votaciones',
+            'votacion' => $v,
+            'resultados' => $this->votacionModel->getResultadosPayload($id),
+            'parciales_url' => URLROOT . '/socio/votacion_parciales/' . $id,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ]);
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+    }
+
+    public function votacion_parciales($id = 0) {
+        require_once APPROOT . '/core/AuthContext.php';
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $uid = (int)$_SESSION['user_id'];
+        $id = (int)$id;
+        $this->votacionModel->syncEstadosActivas();
+        $v = $this->votacionModel->tablesExist() ? $this->votacionModel->getByIdAndJunta($id, $juntaId) : null;
+        $permitido = $v && $this->votacionModel->canViewResults($v, $uid, $juntaId, false, AuthContext::isDirectivo());
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        if (!$permitido) {
+            http_response_code(403);
+            echo json_encode(['error' => 'No disponible'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        echo json_encode($this->votacionModel->getResultadosPayload($id), JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     public function reunion_rsvp() {
