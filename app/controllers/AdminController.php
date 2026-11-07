@@ -3295,6 +3295,32 @@ class AdminController extends Controller {
         ];
     }
 
+    private function votacionErrorAlGuardar(array $parsed): ?string {
+        if (($parsed['opciones_error'] ?? '') !== '') {
+            return $parsed['opciones_error'];
+        }
+        if ($parsed['titulo'] === '' || $parsed['fecha_inicio'] === '' || $parsed['fecha_fin'] === '' || count($parsed['opciones']) < 2) {
+            return 'Complete la pregunta principal, las fechas y al menos 2 opciones.';
+        }
+        $this->votacionModel->ensureSeguimiento();
+        $max = $this->votacionModel->tituloMaxLength();
+        $len = mb_strlen($parsed['titulo']);
+        if ($len > $max) {
+            return 'La pregunta principal tiene ' . $len . ' caracteres y el máximo es ' . $max . '. Acórtela; el detalle puede ir en Descripción.';
+        }
+        $pideSeguimiento = false;
+        foreach ($parsed['opciones'] as $item) {
+            if (($item['seguimiento_tipo'] ?? 'ninguno') !== 'ninguno') {
+                $pideSeguimiento = true;
+                break;
+            }
+        }
+        if ($pideSeguimiento && !$this->votacionModel->ensureSeguimiento()) {
+            return 'No se guardó la encuesta: la pregunta que aparece solo al elegir una opción no se pudo activar. Ejecute sql/add_votacion_seguimiento.sql y vuelva a intentar.';
+        }
+        return null;
+    }
+
     /** @return array{items: array<int, array<string, mixed>>, error: string} */
     private function parseOpcionesVotacion(array $post): array {
         $textos = $post['opciones'] ?? [];
@@ -3413,13 +3439,9 @@ class AdminController extends Controller {
         }
         $juntaId = (int)$_SESSION['user_junta_id'];
         $parsed = $this->parseVotacionPost($this->sanitizePost());
-        if ($parsed['opciones_error'] !== '') {
-            $_SESSION['error_msg'] = $parsed['opciones_error'];
-            $this->redirect('/admin/votaciones');
-            return;
-        }
-        if ($parsed['titulo'] === '' || $parsed['fecha_inicio'] === '' || $parsed['fecha_fin'] === '' || count($parsed['opciones']) < 2) {
-            $_SESSION['error_msg'] = 'Complete título, fechas y al menos 2 opciones.';
+        $errorGuardado = $this->votacionErrorAlGuardar($parsed);
+        if ($errorGuardado !== null) {
+            $_SESSION['error_msg'] = $errorGuardado;
             $this->redirect('/admin/votaciones');
             return;
         }
@@ -3459,8 +3481,9 @@ class AdminController extends Controller {
         $post = $this->sanitizePost();
         $id = (int)($post['votacion_id'] ?? 0);
         $parsed = $this->parseVotacionPost($post);
-        if ($parsed['opciones_error'] !== '') {
-            $_SESSION['error_msg'] = $parsed['opciones_error'];
+        $errorGuardado = $this->votacionErrorAlGuardar($parsed);
+        if ($errorGuardado !== null) {
+            $_SESSION['error_msg'] = $errorGuardado;
             $this->redirect('/admin/votaciones?editar=' . $id);
             return;
         }

@@ -22,3 +22,6 @@ ALTER TABLE votacion_respuestas
 
 ALTER TABLE votaciones
     MODIFY COLUMN resultados_visibilidad ENUM('directiva','todos','al_votar') NOT NULL DEFAULT 'directiva';
+
+ALTER TABLE votaciones
+    MODIFY COLUMN titulo VARCHAR(500) NOT NULL;

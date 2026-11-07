@@ -17,9 +17,10 @@ $editElectores = $data['edit_electores'] ?? [];
         <form action="<?php echo URLROOT; ?>/admin/<?php echo $edit ? 'votacion_actualizar' : 'votacion_crear'; ?>" method="POST">
             <?php if ($edit): ?><input type="hidden" name="votacion_id" value="<?php echo (int)$edit->id; ?>"><?php endif; ?>
             <div class="form-group">
-                <label class="form-label">Título *</label>
-                <input type="text" name="titulo" class="form-control" required maxlength="200"
-                    value="<?php echo htmlspecialchars($edit->titulo ?? ''); ?>">
+                <label class="form-label">Pregunta principal *</label>
+                <textarea name="titulo" class="form-control" required maxlength="500" rows="4"
+                    placeholder="Ej. ¿Está de acuerdo con que la junta realice la actividad de Navidad usando fondos de la comunidad?"><?php echo htmlspecialchars($edit->titulo ?? ''); ?></textarea>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">Es el texto que verán los socios. Hasta 500 caracteres.</p>
             </div>
             <div class="form-group">
                 <label class="form-label">Descripción</label>

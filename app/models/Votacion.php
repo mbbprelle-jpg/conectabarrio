@@ -59,6 +59,10 @@ class Votacion extends Model {
                 $this->db->query("ALTER TABLE votaciones MODIFY COLUMN resultados_visibilidad ENUM('directiva','todos','al_votar') NOT NULL DEFAULT 'directiva'");
                 $this->db->execute();
             }
+            if (!$this->tituloPermitePreguntaLarga()) {
+                $this->db->query('ALTER TABLE votaciones MODIFY COLUMN titulo VARCHAR(500) NOT NULL');
+                $this->db->execute();
+            }
             try {
                 $this->db->query('ALTER TABLE votacion_respuestas ADD CONSTRAINT fk_resp_seguimiento FOREIGN KEY (seguimiento_opcion_id) REFERENCES votacion_seguimiento_opciones(id) ON DELETE SET NULL');
                 $this->db->execute();
@@ -83,7 +87,8 @@ class Votacion extends Model {
             && $this->columnExists('votacion_respuestas', 'seguimiento_texto')
             && $this->columnExists('votacion_respuestas', 'seguimiento_opcion_id')
             && $this->tableExists('votacion_seguimiento_opciones')
-            && $this->visibilidadSupportsAlVotar();
+            && $this->visibilidadSupportsAlVotar()
+            && $this->tituloPermitePreguntaLarga();
         if ($ok) {
             self::$schemaReady = true;
         }
@@ -112,6 +117,27 @@ class Votacion extends Model {
         } catch (Throwable $e) {
             return false;
         }
+    }
+
+    public function tituloMaxLength(): int {
+        try {
+            $this->db->query("SHOW COLUMNS FROM votaciones LIKE 'titulo'");
+            $col = $this->db->single();
+            $type = strtolower((string)($col->Type ?? ''));
+            if (str_contains($type, 'text')) {
+                return 5000;
+            }
+            if (preg_match('/varchar\((\d+)\)/', $type, $m)) {
+                return (int)$m[1];
+            }
+        } catch (Throwable $e) {
+            return 200;
+        }
+        return 200;
+    }
+
+    private function tituloPermitePreguntaLarga(): bool {
+        return $this->tituloMaxLength() >= 500;
     }
 
     private function visibilidadSupportsAlVotar(): bool {
