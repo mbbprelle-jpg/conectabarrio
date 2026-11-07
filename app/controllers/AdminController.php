@@ -3765,7 +3765,9 @@ class AdminController extends Controller {
             'resultados' => ($ya && $ver) ? $this->votacionModel->getResultadosPayload($id) : null,
             'parciales_url' => ($ya && $ver) ? URLROOT . '/admin/votacion_parciales/' . $id : '',
             'back_url' => URLROOT . '/admin/votaciones',
+            'error' => $_SESSION['error_msg'] ?? '',
         ];
+        unset($_SESSION['error_msg']);
         $this->view('admin/votacion_votar', $data);
     }
 

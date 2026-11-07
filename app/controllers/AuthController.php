@@ -14,6 +14,11 @@ class AuthController extends Controller {
             $this->redirectByRole($_SESSION['user_rol']);
         }
 
+        if (!empty($_SESSION['pending_votacion_token'])) {
+            $this->redirect('/votacion/l/' . $_SESSION['pending_votacion_token']);
+            return;
+        }
+
         $success = $_SESSION['success_msg'] ?? '';
         unset($_SESSION['success_msg']);
 
@@ -48,8 +53,7 @@ class AuthController extends Controller {
 
             // Validar campos vacíos
             if (empty($rutOrEmail) || empty($password)) {
-                $data['error'] = 'Por favor, ingrese todos los campos requeridos.';
-                $this->view('auth/login', $data);
+                $this->mostrarErrorLogin('Por favor, ingrese todos los campos requeridos.', $rutOrEmail, $data);
                 return;
             }
 
@@ -66,15 +70,31 @@ class AuthController extends Controller {
                     $pendingUser = $this->userModel->findUserByRut($rutOrEmail);
                 }
                 if ($pendingUser && isset($pendingUser->status) && $pendingUser->status === 'pending') {
-                    $data['error'] = 'Su solicitud de registro aún está pendiente de aprobación por la directiva.';
+                    $mensaje = 'Su solicitud de registro aún está pendiente de aprobación por la directiva.';
                 } else {
-                    $data['error'] = 'Credenciales incorrectas o usuario inactivo.';
+                    $mensaje = 'Credenciales incorrectas o usuario inactivo.';
                 }
-                $this->view('auth/login', $data);
+                $this->mostrarErrorLogin($mensaje, $rutOrEmail, $data);
             }
         } else {
+            if (!empty($_SESSION['pending_votacion_token'])) {
+                $this->redirect('/votacion/l/' . $_SESSION['pending_votacion_token']);
+                return;
+            }
             $this->redirect('/auth/login');
         }
+    }
+
+    private function mostrarErrorLogin(string $mensaje, string $rut, array $data): void {
+        if (!empty($_SESSION['pending_votacion_token'])) {
+            $_SESSION['votacion_login_error'] = $mensaje;
+            $_SESSION['votacion_login_rut'] = $rut;
+            $this->redirect('/votacion/l/' . $_SESSION['pending_votacion_token']);
+            return;
+        }
+        $data['error'] = $mensaje;
+        $data['rut_or_email'] = $rut;
+        $this->view('auth/login', $data);
     }
 
     private function beginUserSession($user) {

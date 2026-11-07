@@ -357,7 +357,9 @@ class SocioController extends Controller {
             'resultados' => ($ya && $ver) ? $this->votacionModel->getResultadosPayload($id) : null,
             'parciales_url' => ($ya && $ver) ? URLROOT . '/socio/votacion_parciales/' . $id : '',
             'back_url' => URLROOT . '/socio/votaciones',
+            'error' => $_SESSION['error_msg'] ?? '',
         ]);
+        unset($_SESSION['error_msg']);
     }
 
     public function votacion_resultados($id = 0) {
