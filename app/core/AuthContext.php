@@ -367,7 +367,7 @@ class AuthContext {
         if (self::canManageVotaciones()) {
             $methods = array_merge($methods, [
                 'votaciones', 'votacion_crear', 'votacion_actualizar', 'votacion_ver',
-                'votacion_publicar', 'votacion_cerrar', 'votacion_votar', 'votacion_parciales', 'votacion_recordar',
+                'votacion_publicar', 'votacion_cerrar', 'votacion_votar', 'votacion_parciales', 'votacion_recordar', 'votacion_probar_correo',
             ]);
         }
         if (self::isDirectivo() || self::canManageReuniones()) {

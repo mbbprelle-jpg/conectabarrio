@@ -3623,7 +3623,7 @@ class AdminController extends Controller {
 
         $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Organización';
         $link = URLROOT . '/votacion/l/' . $v->token_publico;
-        $cierre = date('d/m/Y H:i', strtotime($v->fecha_fin));
+        $cierre = date('d/m/Y H:i:s', strtotime($v->fecha_fin));
         $subject = 'Recordatorio: ' . $v->titulo . ' — ' . $juntaNombre;
         $enviados = 0;
         $errores = 0;
@@ -3673,7 +3673,62 @@ class AdminController extends Controller {
         $this->redirect('/admin/votacion_ver/' . $id);
     }
 
-    private function htmlRecordatorioVotacion(string $nombre, string $junta, string $titulo, string $cierre, string $link): string {
+    public function votacion_probar_correo() {
+        $this->requireManageVotaciones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        require_once APPROOT . '/core/Mailer.php';
+        require_once APPROOT . '/core/InviteRutCheck.php';
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($_POST['votacion_id'] ?? 0);
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v) {
+            $_SESSION['error_msg'] = 'Votación no encontrada.';
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        if (!Mailer::isConfigured()) {
+            $_SESSION['error_msg'] = 'El correo no está configurado en el servidor.';
+            $this->redirect('/admin/votacion_ver/' . $id);
+            return;
+        }
+
+        $email = trim((string)($_SESSION['user_email'] ?? ''));
+        if (!InviteRutCheck::hasRealEmail($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['error_msg'] = 'Su usuario no tiene un correo real para recibir la prueba.';
+            $this->redirect('/admin/votacion_ver/' . $id);
+            return;
+        }
+
+        $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Organización';
+        $link = URLROOT . '/votacion/l/' . $v->token_publico;
+        $cierre = date('d/m/Y H:i:s', strtotime($v->fecha_fin));
+        $html = $this->htmlRecordatorioVotacion(
+            (string)($_SESSION['user_nombre'] ?? 'Socio'),
+            $juntaNombre,
+            (string)$v->titulo,
+            $cierre,
+            $link,
+            true
+        );
+        $result = Mailer::send(
+            $email,
+            '[Prueba] Consulta: ' . $v->titulo . ' — ' . $juntaNombre,
+            $html,
+            defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : null
+        );
+        if ($result['ok']) {
+            $_SESSION['success_msg'] = 'Se envió una prueba solo a ' . $email . '. Revise su bandeja de entrada y, si no aparece, la carpeta de correo no deseado.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo enviar la prueba: ' . ($result['error'] ?? 'error de correo');
+        }
+        $this->redirect('/admin/votacion_ver/' . $id);
+    }
+
+    private function htmlRecordatorioVotacion(string $nombre, string $junta, string $titulo, string $cierre, string $link, bool $prueba = false): string {
         $nombre = htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8');
         $junta = htmlspecialchars($junta, ENT_QUOTES, 'UTF-8');
         $titulo = htmlspecialchars($titulo, ENT_QUOTES, 'UTF-8');
@@ -3687,6 +3742,9 @@ class AdminController extends Controller {
             . '<h1 style="margin:0;color:#fff;font-size:22px;">Consulta pendiente</h1>'
             . '<p style="margin:8px 0 0;color:#e0e7ff;font-size:14px;">' . $junta . '</p></td></tr>'
             . '<tr><td style="padding:32px;">'
+            . ($prueba
+                ? '<p style="margin:0 0 16px;padding:10px 12px;background:#fef3c7;border-radius:8px;color:#92400e;font-size:13px;">Este mensaje es una prueba y solo llegó a su correo. El socio recibe el mismo aviso, sin esta franja.</p>'
+                : '')
             . '<p style="margin:0 0 16px;color:#374151;font-size:15px;">Estimado(a) <strong>' . $nombre . '</strong>,</p>'
             . '<p style="margin:0 0 16px;color:#4b5563;font-size:14px;line-height:1.6;">Aún no registra su respuesta en esta consulta. El plazo cierra el <strong>' . $cierre . '</strong>.</p>'
             . '<p style="margin:0 0 20px;font-size:16px;font-weight:bold;color:#111827;">' . $titulo . '</p>'

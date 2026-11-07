@@ -36,8 +36,13 @@
 
 <div class="card card-warning" style="margin-bottom:1.5rem;">
     <h3 class="card-title">Enlace para electores</h3>
-    <p style="font-size:0.85rem;color:var(--text-muted);">Comparta este enlace por correo o WhatsApp. Si no están logueados, ingresarán al portal y serán dirigidos a votar.</p>
+    <p style="font-size:0.85rem;color:var(--text-muted);">Comparta este enlace por correo o WhatsApp. Quien no haya iniciado sesión verá una pantalla para autenticarse y, al entrar, se abre la consulta.</p>
     <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($data['link_publico']); ?>" onclick="this.select();">
+    <form action="<?php echo URLROOT; ?>/admin/votacion_probar_correo" method="POST" style="margin-top:0.75rem;">
+        <input type="hidden" name="votacion_id" value="<?php echo (int)$v->id; ?>">
+        <button type="submit" class="btn btn-secondary btn-sm">Enviarme un correo de prueba</button>
+    </form>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin:0.4rem 0 0;">Llega solo a su correo, para ver el aviso tal como lo recibe un socio. No avisa al resto.</p>
     <?php if ($v->estado === 'activa'): ?>
         <?php $sinVotar = (int)($data['sin_votar'] ?? 0); ?>
         <?php if ($sinVotar > 0): ?>
