@@ -219,7 +219,11 @@ class AuthContext {
         if (!empty($_SESSION['permiso_todos'])) {
             return true;
         }
-        return !empty($_SESSION['permiso_votaciones']);
+        if (!empty($_SESSION['permiso_votaciones'])) {
+            return true;
+        }
+        // El cargo Secretario implica crear votaciones y encuestas, aunque falte el flag en BD.
+        return self::sessionCargo() === 'SECRETARIO';
     }
 
     /**

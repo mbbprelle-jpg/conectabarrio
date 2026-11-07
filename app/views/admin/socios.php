@@ -520,6 +520,7 @@ foreach ($data['calles'] as $calleItem) {
                                     $permFlujo = !empty($mem->permiso_flujo_caja) || !empty($mem->permiso_todos);
                                     $permDocs = !empty($mem->permiso_documentos) || !empty($mem->permiso_todos);
                                     $permReunion = !empty($mem->permiso_reuniones) || !empty($mem->permiso_todos);
+                                    $permVotacion = !empty($mem->permiso_votaciones) || !empty($mem->permiso_todos);
                                     ?>
                                     <?php if ($cargo): ?>
                                         <span class="badge badge-info" style="margin-bottom: 0.25rem; display: inline-block;"><?php echo htmlspecialchars($cargo); ?></span><br>
@@ -532,6 +533,7 @@ foreach ($data['calles'] as $calleItem) {
                                         if ($permFlujo) $permParts[] = 'Flujo';
                                         if ($permDocs) $permParts[] = 'Docs';
                                         if ($permReunion) $permParts[] = 'Reuniones';
+                                        if ($permVotacion || strtoupper((string)$cargo) === 'SECRETARIO') $permParts[] = 'Votaciones';
                                         echo $permParts ? implode(' · ', $permParts) : 'Sin delegación';
                                         ?>
                                     </small>
@@ -545,6 +547,7 @@ foreach ($data['calles'] as $calleItem) {
                                                 data-perm-flujo="<?php echo $permFlujo ? '1' : '0'; ?>"
                                                 data-perm-docs="<?php echo $permDocs ? '1' : '0'; ?>"
                                                 data-perm-reunion="<?php echo $permReunion ? '1' : '0'; ?>"
+                                                data-perm-votacion="<?php echo $permVotacion ? '1' : '0'; ?>"
                                                 data-perm-todos="<?php echo !empty($mem->permiso_todos) ? '1' : '0'; ?>"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.72rem;">
                                             Delegar
@@ -1446,7 +1449,7 @@ foreach ($data['calles'] as $calleItem) {
                 </label>
             </div>
             <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
-                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa gestión de socios y vista de flujo;
+                Los permisos solo aplican si usted los otorga explícitamente. Al asignar <strong>Secretario</strong> se activa gestión de socios, flujo y votaciones o encuestas;
                 al asignar <strong>Tesorero</strong>, registro de pagos y flujo. El <strong>Director</strong> recibe todos los permisos.
                 El flujo de caja debe estar habilitado para la organización.
             </p>
@@ -2019,6 +2022,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_flujo').checked = this.dataset.permFlujo === '1';
             document.getElementById('delegacion_perm_docs').checked = this.dataset.permDocs === '1';
             document.getElementById('delegacion_perm_reunion').checked = this.dataset.permReunion === '1';
+            document.getElementById('delegacion_perm_votacion').checked = this.dataset.permVotacion === '1' || this.dataset.cargo === 'SECRETARIO';
             document.getElementById('delegacion_perm_todos').checked = this.dataset.permTodos === '1';
             openModal(delegacionModal);
         });
@@ -2032,6 +2036,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_flujo').checked = true;
             document.getElementById('delegacion_perm_docs').checked = true;
             document.getElementById('delegacion_perm_reunion').checked = true;
+            document.getElementById('delegacion_perm_votacion').checked = true;
         }
         if (this.value === 'TESORERO') {
             document.getElementById('delegacion_perm_pagos').checked = true;
@@ -2050,6 +2055,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('delegacion_perm_flujo').checked = true;
             document.getElementById('delegacion_perm_docs').checked = true;
             document.getElementById('delegacion_perm_reunion').checked = true;
+            document.getElementById('delegacion_perm_votacion').checked = true;
         }
     });
     <?php endif; ?>
