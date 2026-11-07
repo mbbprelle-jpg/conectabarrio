@@ -38,6 +38,19 @@
     <h3 class="card-title">Enlace para electores</h3>
     <p style="font-size:0.85rem;color:var(--text-muted);">Comparta este enlace por correo o WhatsApp. Si no están logueados, ingresarán al portal y serán dirigidos a votar.</p>
     <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($data['link_publico']); ?>" onclick="this.select();">
+    <?php if ($v->estado === 'activa'): ?>
+        <?php $sinVotar = (int)($data['sin_votar'] ?? 0); ?>
+        <?php if ($sinVotar > 0): ?>
+        <form action="<?php echo URLROOT; ?>/admin/votacion_recordar" method="POST" style="margin-top:1rem;"
+            onsubmit="return confirm('Se enviará un correo aparte a cada socio que aún no vota. Ninguno verá las direcciones de los demás.');">
+            <input type="hidden" name="votacion_id" value="<?php echo (int)$v->id; ?>">
+            <button type="submit" class="btn btn-primary btn-sm">Avisar por correo a quienes no han votado (<?php echo $sinVotar; ?>)</button>
+        </form>
+        <p style="font-size:0.75rem;color:var(--text-muted);margin:0.5rem 0 0;">Cada mensaje lleva solo la dirección de esa persona. No se usa copia visible ni copia oculta compartida. Quienes aún no activan su cuenta no reciben este aviso.</p>
+        <?php else: ?>
+        <p style="font-size:0.85rem;margin:0.75rem 0 0;">Todos los electores ya votaron.</p>
+        <?php endif; ?>
+    <?php endif; ?>
 </div>
 
 <?php

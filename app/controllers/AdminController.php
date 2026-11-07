@@ -3345,23 +3345,14 @@ class AdminController extends Controller {
             if (mb_strlen($pregunta) > 500) {
                 $pregunta = mb_substr($pregunta, 0, 500);
             }
-            $lineas = [];
-            foreach (preg_split('/\r\n|\r|\n/', (string)($post['seguimiento_opciones_texto'][$i] ?? '')) ?: [] as $line) {
-                $line = trim($line);
-                if ($line === '') {
-                    continue;
-                }
-                if (mb_strlen($line) > 500) {
-                    $line = mb_substr($line, 0, 500);
-                }
-                $lineas[] = $line;
-            }
-            $lineas = array_values(array_unique($lineas));
+            $lineas = $this->lineasDeSeguimiento((string)($post['seguimiento_opciones_texto'][$i] ?? ''));
             if ($tipo === 'texto' && $pregunta === '') {
                 $error = 'Escriba la pregunta adicional de «' . $texto . '», o deje el seguimiento en «No preguntar más».';
             }
-            if ($tipo === 'opciones' && ($pregunta === '' || count($lineas) < 2)) {
-                $error = 'En «' . $texto . '», la pregunta adicional necesita un enunciado y al menos 2 alternativas (una por línea).';
+            if ($tipo === 'opciones' && $pregunta === '') {
+                $error = 'En «' . $texto . '», escriba el enunciado de la pregunta adicional.';
+            } elseif ($tipo === 'opciones' && count($lineas) < 2) {
+                $error = 'En «' . $texto . '», escriba al menos 2 alternativas, cada una en su propia línea del recuadro de abajo.';
             }
             $items[] = [
                 'id' => (int)($post['opcion_id'][$i] ?? 0),
@@ -3372,6 +3363,50 @@ class AdminController extends Controller {
             ];
         }
         return ['items' => $items, 'error' => $error];
+    }
+
+    private function recordarFormularioVotacion(): void {
+        $post = $_POST;
+        $filas = [];
+        foreach ($post['opciones'] ?? [] as $i => $texto) {
+            $filas[] = [
+                'id' => (int)($post['opcion_id'][$i] ?? 0),
+                'texto' => (string)$texto,
+                'tipo' => (string)($post['seguimiento_tipo'][$i] ?? 'ninguno'),
+                'pregunta' => (string)($post['seguimiento_pregunta'][$i] ?? ''),
+                'lineas' => (string)($post['seguimiento_opciones_texto'][$i] ?? ''),
+            ];
+        }
+        $_SESSION['votacion_form_draft'] = [
+            'votacion_id' => (int)($post['votacion_id'] ?? 0),
+            'titulo' => (string)($post['titulo'] ?? ''),
+            'descripcion' => (string)($post['descripcion'] ?? ''),
+            'tipo' => (string)($post['tipo'] ?? 'votacion'),
+            'audiencia_tipo' => (string)($post['audiencia_tipo'] ?? 'todos_socios'),
+            'fecha_inicio' => (string)($post['fecha_inicio'] ?? ''),
+            'fecha_fin' => (string)($post['fecha_fin'] ?? ''),
+            'resultados_visibilidad' => (string)($post['resultados_visibilidad'] ?? 'al_votar'),
+            'publicar' => !empty($post['publicar']),
+            'electores' => array_map('intval', $post['electores'] ?? []),
+            'opciones' => $filas,
+        ];
+    }
+
+    /** @return string[] */
+    private function lineasDeSeguimiento(string $raw): array {
+        $raw = preg_replace('/&#0*13;&#0*10;|&#0*10;&#0*13;|&#0*13;|&#0*10;|&#x0*0?d;&#x0*0?a;|&#x0*0?a;|&#x0*0?d;/i', "\n", $raw) ?? $raw;
+        $lineas = [];
+        foreach (preg_split("/\r\n|\r|\n/", $raw) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if (mb_strlen($line) > 500) {
+                $line = mb_substr($line, 0, 500);
+            }
+            $lineas[] = $line;
+        }
+        return array_values(array_unique($lineas));
     }
 
     public function reunion_reenviar_rsvp() {
@@ -3418,8 +3453,17 @@ class AdminController extends Controller {
             'seguimiento_listo' => $this->votacionModel->ensureSeguimiento(),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
+            'form_draft' => null,
         ];
         unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+        $draft = $_SESSION['votacion_form_draft'] ?? null;
+        if (is_array($draft)) {
+            $draftId = (int)($draft['votacion_id'] ?? 0);
+            if (($editId === 0 && $draftId === 0) || ($editId > 0 && $draftId === $editId)) {
+                $data['form_draft'] = $draft;
+                unset($_SESSION['votacion_form_draft']);
+            }
+        }
         if ($editId > 0) {
             $edit = $this->votacionModel->getByIdAndJunta($editId, $juntaId);
             if ($edit && in_array($edit->estado, ['borrador', 'activa'], true)) {
@@ -3441,6 +3485,7 @@ class AdminController extends Controller {
         $parsed = $this->parseVotacionPost($this->sanitizePost());
         $errorGuardado = $this->votacionErrorAlGuardar($parsed);
         if ($errorGuardado !== null) {
+            $this->recordarFormularioVotacion();
             $_SESSION['error_msg'] = $errorGuardado;
             $this->redirect('/admin/votaciones');
             return;
@@ -3459,10 +3504,12 @@ class AdminController extends Controller {
             'estado' => $estado,
         ]);
         if (!$vid) {
+            $this->recordarFormularioVotacion();
             $_SESSION['error_msg'] = 'No se pudo crear la votación.';
             $this->redirect('/admin/votaciones');
             return;
         }
+        unset($_SESSION['votacion_form_draft']);
         $this->votacionModel->syncOpciones($vid, $parsed['opciones']);
         if ($parsed['audiencia_tipo'] === 'seleccionados') {
             $this->votacionModel->replaceElectores($vid, $this->resolveElectoresFromPost($this->sanitizePost(), $juntaId));
@@ -3483,6 +3530,7 @@ class AdminController extends Controller {
         $parsed = $this->parseVotacionPost($post);
         $errorGuardado = $this->votacionErrorAlGuardar($parsed);
         if ($errorGuardado !== null) {
+            $this->recordarFormularioVotacion();
             $_SESSION['error_msg'] = $errorGuardado;
             $this->redirect('/admin/votaciones?editar=' . $id);
             return;
@@ -3496,6 +3544,7 @@ class AdminController extends Controller {
             'fecha_fin' => $parsed['fecha_fin'],
             'resultados_visibilidad' => $parsed['resultados_visibilidad'],
         ])) {
+            $this->recordarFormularioVotacion();
             $_SESSION['error_msg'] = 'No se pudo actualizar.';
             $this->redirect('/admin/votaciones?editar=' . $id);
             return;
@@ -3508,6 +3557,7 @@ class AdminController extends Controller {
         } else {
             $this->votacionModel->replaceElectores($id, []);
         }
+        unset($_SESSION['votacion_form_draft']);
         $_SESSION['success_msg'] = 'Votación actualizada.';
         $this->redirect('/admin/votacion_ver/' . $id);
     }
@@ -3534,6 +3584,7 @@ class AdminController extends Controller {
             'resultados' => $this->votacionModel->getResultadosPayload($id),
             'parciales_url' => URLROOT . '/admin/votacion_parciales/' . $id,
             'link_publico' => $link,
+            'sin_votar' => count($this->votacionModel->getElectoresSinVotar($id, $juntaId, $v->audiencia_tipo)),
             'puede_ver_detalle' => $this->votacionModel->canViewVoterDetail($v, (int)$_SESSION['user_id'], AuthContext::isFullAdmin()),
             'detalle_votantes' => [],
             'success' => $_SESSION['success_msg'] ?? '',
@@ -3544,6 +3595,107 @@ class AdminController extends Controller {
             $data['detalle_votantes'] = $this->votacionModel->getDetalleVotantes($id, $juntaId);
         }
         $this->view('admin/votacion_ver', $data);
+    }
+
+    public function votacion_recordar() {
+        $this->requireManageVotaciones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        require_once APPROOT . '/core/Mailer.php';
+        require_once APPROOT . '/core/InviteRutCheck.php';
+
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($_POST['votacion_id'] ?? 0);
+        $this->votacionModel->syncEstadosActivas();
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v || !$this->votacionModel->isActiva($v)) {
+            $_SESSION['error_msg'] = 'Solo se puede avisar mientras la consulta está abierta.';
+            $this->redirect($v ? '/admin/votacion_ver/' . $id : '/admin/votaciones');
+            return;
+        }
+        if (!Mailer::isConfigured()) {
+            $_SESSION['error_msg'] = 'El correo no está configurado en el servidor.';
+            $this->redirect('/admin/votacion_ver/' . $id);
+            return;
+        }
+
+        $juntaNombre = $_SESSION['user_junta_nombre'] ?? 'Organización';
+        $link = URLROOT . '/votacion/l/' . $v->token_publico;
+        $cierre = date('d/m/Y H:i', strtotime($v->fecha_fin));
+        $subject = 'Recordatorio: ' . $v->titulo . ' — ' . $juntaNombre;
+        $enviados = 0;
+        $errores = 0;
+        $sinCorreo = 0;
+        $sinActivar = 0;
+
+        foreach ($this->votacionModel->getElectoresSinVotar($id, $juntaId, $v->audiencia_tipo) as $socio) {
+            $email = trim((string)($socio->email ?? ''));
+            if ((int)($socio->estado ?? 1) !== 1 || ($socio->status ?? '') === 'pending') {
+                $sinActivar++;
+                continue;
+            }
+            if (!InviteRutCheck::hasRealEmail($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $sinCorreo++;
+                continue;
+            }
+            $html = $this->htmlRecordatorioVotacion(
+                (string)($socio->nombre ?? 'Socio'),
+                $juntaNombre,
+                (string)$v->titulo,
+                $cierre,
+                $link
+            );
+            $result = Mailer::send($email, $subject, $html, defined('SMTP_FROM_EMAIL') ? SMTP_FROM_EMAIL : null);
+            if ($result['ok']) {
+                $enviados++;
+            } else {
+                $errores++;
+            }
+        }
+
+        if ($enviados === 0 && $errores === 0 && $sinCorreo === 0 && $sinActivar === 0) {
+            $_SESSION['success_msg'] = 'No queda nadie por avisar: todos los electores ya votaron.';
+        } else {
+            $msg = 'Se enviaron ' . $enviados . ' correo(s) individuales. Cada persona solo ve su propia dirección.';
+            if ($sinActivar > 0) {
+                $msg .= ' ' . $sinActivar . ' no se avisaron porque su cuenta aún no está activada.';
+            }
+            if ($sinCorreo > 0) {
+                $msg .= ' ' . $sinCorreo . ' no tienen un correo real.';
+            }
+            if ($errores > 0) {
+                $msg .= ' ' . $errores . ' envío(s) fallaron.';
+            }
+            $_SESSION[$errores > 0 && $enviados === 0 ? 'error_msg' : 'success_msg'] = $msg;
+        }
+        $this->redirect('/admin/votacion_ver/' . $id);
+    }
+
+    private function htmlRecordatorioVotacion(string $nombre, string $junta, string $titulo, string $cierre, string $link): string {
+        $nombre = htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8');
+        $junta = htmlspecialchars($junta, ENT_QUOTES, 'UTF-8');
+        $titulo = htmlspecialchars($titulo, ENT_QUOTES, 'UTF-8');
+        $cierre = htmlspecialchars($cierre, ENT_QUOTES, 'UTF-8');
+        $link = htmlspecialchars($link, ENT_QUOTES, 'UTF-8');
+        return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"></head>'
+            . '<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">'
+            . '<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 0;"><tr><td align="center">'
+            . '<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;">'
+            . '<tr><td style="background:#4f46e5;padding:28px 32px;text-align:center;">'
+            . '<h1 style="margin:0;color:#fff;font-size:22px;">Consulta pendiente</h1>'
+            . '<p style="margin:8px 0 0;color:#e0e7ff;font-size:14px;">' . $junta . '</p></td></tr>'
+            . '<tr><td style="padding:32px;">'
+            . '<p style="margin:0 0 16px;color:#374151;font-size:15px;">Estimado(a) <strong>' . $nombre . '</strong>,</p>'
+            . '<p style="margin:0 0 16px;color:#4b5563;font-size:14px;line-height:1.6;">Aún no registra su respuesta en esta consulta. El plazo cierra el <strong>' . $cierre . '</strong>.</p>'
+            . '<p style="margin:0 0 20px;font-size:16px;font-weight:bold;color:#111827;">' . $titulo . '</p>'
+            . '<a href="' . $link . '" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:bold;font-size:14px;">Entrar y responder</a>'
+            . '<p style="margin:20px 0 0;color:#6b7280;font-size:13px;">Si no tiene la sesión iniciada, el enlace le pedirá entrar con su cuenta y después abrirá la votación. Este mensaje es solo para usted.</p>'
+            . '</td></tr>'
+            . '<tr><td style="padding:20px 32px;background:#f9fafb;text-align:center;border-top:1px solid #e5e7eb;">'
+            . '<p style="margin:0;color:#9ca3af;font-size:12px;">Mensaje automático de ConectaBarrio. Los demás socios no aparecen como destinatarios.</p>'
+            . '</td></tr></table></td></tr></table></body></html>';
     }
 
     public function votacion_publicar() {

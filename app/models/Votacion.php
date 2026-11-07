@@ -294,6 +294,44 @@ class Votacion extends Model {
         return (bool)$this->db->single();
     }
 
+    /** Electores que todavía no registran respuesta. */
+    public function getElectoresSinVotar(int $votacionId, int $juntaId, string $audienciaTipo): array {
+        $pendiente = 'AND NOT EXISTS (
+            SELECT 1 FROM votacion_respuestas r
+            WHERE r.votacion_id = :vid AND r.usuario_id = u.id
+        )';
+        if ($audienciaTipo === 'seleccionados') {
+            $sql = "SELECT u.id, u.nombre, u.email, u.estado, u.status
+                FROM votacion_electores e
+                INNER JOIN usuarios u ON u.id = e.usuario_id
+                INNER JOIN usuario_membresias m ON m.usuario_id = u.id AND m.junta_id = :jid AND m.estado = 1
+                WHERE e.votacion_id = :vid2 {$pendiente}
+                ORDER BY u.nombre ASC";
+        } elseif ($audienciaTipo === 'directiva') {
+            $sql = "SELECT u.id, u.nombre, u.email, u.estado, u.status
+                FROM usuario_membresias m
+                INNER JOIN usuarios u ON u.id = m.usuario_id
+                WHERE m.junta_id = :jid AND m.estado = 1
+                AND (m.rol = 'admin' OR m.permiso_todos = 1 OR m.cargo IN ('SECRETARIO','TESORERO','DIRECTOR'))
+                {$pendiente}
+                ORDER BY u.nombre ASC";
+        } else {
+            $sql = "SELECT u.id, u.nombre, u.email, u.estado, u.status
+                FROM usuario_membresias m
+                INNER JOIN usuarios u ON u.id = m.usuario_id
+                WHERE m.junta_id = :jid AND m.estado = 1 AND u.rol != 'maestro'
+                {$pendiente}
+                ORDER BY u.nombre ASC";
+        }
+        $this->db->query($sql);
+        $this->db->bind(':jid', $juntaId);
+        $this->db->bind(':vid', $votacionId);
+        if ($audienciaTipo === 'seleccionados') {
+            $this->db->bind(':vid2', $votacionId);
+        }
+        return $this->db->resultSet();
+    }
+
     private function userIsActiveMember(int $usuarioId, int $juntaId): bool {
         $this->db->query('SELECT id FROM usuario_membresias
             WHERE usuario_id = :uid AND junta_id = :jid AND estado = 1 LIMIT 1');
