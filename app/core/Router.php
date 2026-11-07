@@ -16,6 +16,15 @@ class Router {
     public function __construct() {
         $url = $this->getUrl();
 
+        if ($this->applyShortLink($url)) {
+            $this->checkAccessControl();
+            if (!method_exists($this->currentController, $this->currentMethod)) {
+                $this->notFound($this->currentMethod);
+            }
+            call_user_func_array([$this->currentController, $this->currentMethod], $this->params);
+            return;
+        }
+
         // 1. Determinar el controlador
         if (isset($url[0])) {
             $controllerName = ucwords($url[0]) . 'Controller';
@@ -57,6 +66,28 @@ class Router {
 
         // Llamar al callback con los parámetros
         call_user_func_array([$this->currentController, $this->currentMethod], $this->params);
+    }
+
+    /**
+     * Enlaces cortos que no coinciden con Controlador/método.
+     * /votacion/l/{token} y /reunion/rsvp/{token}/{confirmar|rechazar}
+     */
+    private function applyShortLink(array $url): bool {
+        if (($url[0] ?? '') === 'votacion' && ($url[1] ?? '') === 'l') {
+            require_once APPROOT . '/controllers/VotacionLinkController.php';
+            $this->currentController = new VotacionLinkController();
+            $this->currentMethod = 'ingresar';
+            $this->params = [(string)($url[2] ?? '')];
+            return true;
+        }
+        if (($url[0] ?? '') === 'reunion' && ($url[1] ?? '') === 'rsvp') {
+            require_once APPROOT . '/controllers/ReunionRsvpController.php';
+            $this->currentController = new ReunionRsvpController();
+            $this->currentMethod = 'responder';
+            $this->params = [(string)($url[2] ?? ''), (string)($url[3] ?? '')];
+            return true;
+        }
+        return false;
     }
 
     // Parsea la URL
