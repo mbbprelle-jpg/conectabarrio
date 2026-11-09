@@ -1,4 +1,8 @@
 <?php
+// Hora oficial de Chile. Las fechas de votaciones, encuestas e invitaciones se guardan y comparan en este huso.
+date_default_timezone_set('America/Santiago');
+define('APP_TIMEZONE', 'America/Santiago');
+
 // Asegurar integridad de codificación de caracteres en todas las respuestas
 header('Content-Type: text/html; charset=UTF-8');
 

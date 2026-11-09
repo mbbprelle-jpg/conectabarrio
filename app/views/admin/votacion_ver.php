@@ -17,6 +17,7 @@
                 ][$v->resultados_visibilidad ?? 'directiva'] ?? 'resultados reservados';
                 ?>
                 <?php echo date('d/m/Y H:i', strtotime($v->fecha_inicio)); ?> — <?php echo date('d/m/Y H:i', strtotime($v->fecha_fin)); ?>
+                (hora de Chile, ahora <?php echo date('d/m/Y H:i'); ?>)
                 · Audiencia: <?php echo htmlspecialchars(str_replace('_', ' ', $v->audiencia_tipo)); ?>
                 · <?php echo htmlspecialchars($visLabel); ?>
             </p>
@@ -32,6 +33,25 @@
             <a href="<?php echo URLROOT; ?>/admin/votaciones" class="btn btn-secondary btn-sm">Volver</a>
         </div>
     </div>
+</div>
+
+<div class="card card-primary" style="margin-bottom:1.5rem;">
+    <h3 class="card-title">Horario de la consulta</h3>
+    <p style="font-size:0.85rem;color:var(--text-muted);">Las fechas usan la hora de Chile. Si el cierre queda después de ahora, la consulta vuelve a abrirse y se conservan los votos ya emitidos.</p>
+    <form action="<?php echo URLROOT; ?>/admin/votacion_horario" method="POST" style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+        <input type="hidden" name="votacion_id" value="<?php echo (int)$v->id; ?>">
+        <div class="form-group" style="margin:0;min-width:220px;">
+            <label class="form-label">Inicio</label>
+            <input type="datetime-local" name="fecha_inicio" class="form-control" required
+                value="<?php echo date('Y-m-d\TH:i', strtotime($v->fecha_inicio)); ?>">
+        </div>
+        <div class="form-group" style="margin:0;min-width:220px;">
+            <label class="form-label">Cierre</label>
+            <input type="datetime-local" name="fecha_fin" class="form-control" required
+                value="<?php echo date('Y-m-d\TH:i', strtotime($v->fecha_fin)); ?>">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Guardar horario</button>
+    </form>
 </div>
 
 <div class="card card-warning" style="margin-bottom:1.5rem;">
@@ -81,12 +101,12 @@ require APPROOT . '/views/partials/votacion_resultados.php';
     <p style="font-size:0.8rem;color:var(--text-muted);margin:-0.5rem 0 1rem;">Información confidencial resguardada según política de la organización.</p>
     <div class="table-responsive">
         <table class="table">
-            <thead><tr><th>Fecha</th><th>Persona</th><th>RUT</th><th>Respuesta</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Nombre y apellidos</th><th>RUT</th><th>Respuesta</th></tr></thead>
             <tbody>
             <?php foreach ($data['detalle_votantes'] as $d): ?>
                 <tr>
                     <td><?php echo date('d/m/Y H:i', strtotime($d->created_at)); ?></td>
-                    <td><?php echo htmlspecialchars($d->nombre); ?></td>
+                    <td><?php echo htmlspecialchars($d->nombre_completo ?? ''); ?></td>
                     <td style="font-family:monospace;font-size:0.85rem;"><?php echo htmlspecialchars($d->rut); ?></td>
                     <td><?php
                         $partes = [];

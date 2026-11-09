@@ -23,9 +23,23 @@ class Database {
         // Crear una instancia de PDO
         try {
             $this->dbh = new PDO($dsn, $this->user, $this->pass, $options);
+            $this->applyChileTimeZone();
         } catch (PDOException $e) {
             $this->error = $e->getMessage();
             die("Error de conexión a la base de datos: " . htmlspecialchars($this->error));
+        }
+    }
+
+    /**
+     * NOW() de MySQL debe coincidir con America/Santiago.
+     * Se usa el desfase actual (con horario de verano) porque no depende de las tablas de zonas de MySQL.
+     */
+    private function applyChileTimeZone(): void {
+        try {
+            $offset = (new DateTimeImmutable('now', new DateTimeZone('America/Santiago')))->format('P');
+            $this->dbh->exec('SET time_zone = ' . $this->dbh->quote($offset));
+        } catch (Throwable $e) {
+            error_log('No se pudo fijar la zona horaria de MySQL: ' . $e->getMessage());
         }
     }
 

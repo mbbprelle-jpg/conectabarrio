@@ -127,7 +127,7 @@ foreach ($data['calles'] as $calleItem) {
         </button>
         <button type="button" class="socios-action-btn" data-open-modal="invitacionModal">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-            Link invitación
+            Link validación
             <?php if (!empty($invitacionesActivas)): ?>
                 <span class="action-badge"><?php echo count($invitacionesActivas); ?> activo<?php echo count($invitacionesActivas) > 1 ? 's' : ''; ?></span>
             <?php endif; ?>
@@ -144,7 +144,7 @@ foreach ($data['calles'] as $calleItem) {
     <div class="socios-invite-strip">
         <span>
             <?php if (!empty($invitacionesActivas)): ?>
-                <?php echo count($invitacionesActivas); ?> enlace(s) de invitación vigente(s).
+                <?php echo count($invitacionesActivas); ?> enlace(s) de validación vigente(s).
             <?php else: ?>
                 Enlace recién generado — cópielo y compártalo.
             <?php endif; ?>
@@ -827,9 +827,11 @@ foreach ($data['calles'] as $calleItem) {
         <button type="button" class="modal-close-btn" data-close-modal="invitacionModal" aria-label="Cerrar">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
-        <h3 style="margin-bottom: 0.35rem;">Link de invitación (24 h)</h3>
+        <h3 style="margin-bottom: 0.35rem;">Enlace de validación</h3>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.25rem;">
-            Comparta el enlace para que nuevos vecinos soliciten su registro. Usted aprueba cada solicitud.
+            Compártalo con vecinos nuevos y con quienes están en <strong>alta provisional</strong>.
+            Entran con su RUT, completan sus datos y usted aprueba cada solicitud.
+            Un enlace de 1 o 2 años se puede reenviar las veces que quiera, sin generar otro.
         </p>
 
         <?php if (!empty($data['link_invitacion'])): ?>
@@ -848,7 +850,14 @@ foreach ($data['calles'] as $calleItem) {
                 $linkInv = URLROOT . '/invite/registro/' . $inv->token;
             ?>
                 <div style="padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-bottom: 0.5rem; font-size: 0.75rem;">
-                    <div style="margin-bottom: 0.35rem; color: var(--text-muted);">Vence: <?php echo date('d-m-Y H:i', strtotime($inv->expires_at)); ?></div>
+                    <?php
+                    $venceTs = strtotime($inv->expires_at);
+                    $resta = $venceTs ? $venceTs - time() : 0;
+                    $vigenciaTxt = $resta >= 86400
+                        ? ((int)floor($resta / 86400) . ' días')
+                        : (max(1, (int)ceil($resta / 3600)) . ' horas');
+                    ?>
+                    <div style="margin-bottom: 0.35rem; color: var(--text-muted);">Vence: <?php echo date('d-m-Y H:i', $venceTs); ?> (hora de Chile) · quedan <?php echo $vigenciaTxt; ?></div>
                     <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
                         <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($linkInv); ?>" style="flex: 1; min-width: 0; font-size: 0.68rem; font-family: monospace; padding: 0.35rem 0.5rem;">
                         <button type="button" class="btn btn-secondary btn-sm btn-copiar-invitacion" data-link="<?php echo htmlspecialchars($linkInv); ?>" style="white-space: nowrap;">Copiar link</button>
@@ -863,7 +872,18 @@ foreach ($data['calles'] as $calleItem) {
         <?php endif; ?>
 
         <form action="<?php echo URLROOT; ?>/admin/generar_invitacion" method="POST">
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Generar nuevo enlace (24 horas)</button>
+            <div class="form-group">
+                <label class="form-label" for="vigenciaInvitacion">Vigencia</label>
+                <select name="vigencia" id="vigenciaInvitacion" class="form-control">
+                    <option value="365d" selected>1 año — para validar alta provisional</option>
+                    <option value="730d">2 años</option>
+                    <option value="90d">90 días</option>
+                    <option value="30d">30 días</option>
+                    <option value="7d">7 días</option>
+                    <option value="24h">24 horas</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Generar enlace de validación</button>
         </form>
     </div>
 </div>

@@ -632,17 +632,44 @@ class AdminController extends Controller {
             return;
         }
         $juntaId = $_SESSION['user_junta_id'];
-        $created = $this->invitationModel->create($juntaId, 24);
+        $vigencia = (string)($this->sanitizePost()['vigencia'] ?? '365d');
+        $horas = $this->horasVigenciaInvitacion($vigencia);
+        $created = $this->invitationModel->create($juntaId, $horas);
         if (!$created) {
-            $_SESSION['error_msg'] = 'No se pudo generar el enlace de invitación.';
+            $_SESSION['error_msg'] = 'No se pudo generar el enlace de validación.';
             $this->redirect('/admin/socios');
             return;
         }
         $link = URLROOT . '/invite/registro/' . $created['token'];
         $_SESSION['link_invitacion'] = $link;
-        $_SESSION['success_msg'] = 'Enlace de invitación generado. Válido por 24 horas hasta '
-            . date('d-m-Y H:i', strtotime($created['expires_at'])) . '.';
+        $_SESSION['success_msg'] = 'Enlace de validación generado (' . $this->etiquetaVigenciaInvitacion($vigencia) . '). '
+            . 'Vigente hasta ' . date('d-m-Y H:i', strtotime($created['expires_at'])) . ' (hora de Chile). '
+            . 'Compártalo con quienes están en alta provisional; no hace falta generar otro mientras siga vigente.';
         $this->redirect('/admin/socios');
+    }
+
+    private function horasVigenciaInvitacion(string $vigencia): int {
+        $map = [
+            '24h' => 24,
+            '7d' => 24 * 7,
+            '30d' => 24 * 30,
+            '90d' => 24 * 90,
+            '365d' => 24 * 365,
+            '730d' => 24 * 365 * 2,
+        ];
+        return $map[$vigencia] ?? (24 * 365);
+    }
+
+    private function etiquetaVigenciaInvitacion(string $vigencia): string {
+        $map = [
+            '24h' => '24 horas',
+            '7d' => '7 días',
+            '30d' => '30 días',
+            '90d' => '90 días',
+            '365d' => '1 año',
+            '730d' => '2 años',
+        ];
+        return $map[$vigencia] ?? '1 año';
     }
 
     public function invitacion_revocar($id) {
@@ -3466,7 +3493,7 @@ class AdminController extends Controller {
         }
         if ($editId > 0) {
             $edit = $this->votacionModel->getByIdAndJunta($editId, $juntaId);
-            if ($edit && in_array($edit->estado, ['borrador', 'activa'], true)) {
+            if ($edit && in_array($edit->estado, ['borrador', 'activa', 'cerrada'], true)) {
                 $data['edit'] = $edit;
                 $data['edit_opciones'] = $this->votacionModel->getOpcionesConSeguimiento($editId);
                 $data['edit_electores'] = $this->votacionModel->getElectoresIds($editId);
@@ -3558,7 +3585,11 @@ class AdminController extends Controller {
             $this->votacionModel->replaceElectores($id, []);
         }
         unset($_SESSION['votacion_form_draft']);
-        $_SESSION['success_msg'] = 'Votación actualizada.';
+        $this->votacionModel->syncEstadosActivas();
+        $actual = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        $_SESSION['success_msg'] = ($actual && ($actual->estado ?? '') === 'activa')
+            ? 'Consulta actualizada. Está abierta hasta el ' . date('d/m/Y H:i', strtotime((string)$actual->fecha_fin)) . ' (hora de Chile).'
+            : 'Consulta actualizada.';
         $this->redirect('/admin/votacion_ver/' . $id);
     }
 
@@ -3656,7 +3687,7 @@ class AdminController extends Controller {
         if ($detalle === null) {
             fputcsv($out, ['El detalle con nombre solo lo exporta el administrador o quien creó la consulta.'], $sep);
         } else {
-            fputcsv($out, ['Fecha', 'Nombre', 'RUT', 'Correo', 'Respuesta', 'Pregunta adicional', 'Respuesta adicional', 'Comentario'], $sep);
+            fputcsv($out, ['Fecha', 'Nombre y apellidos', 'RUT', 'Correo', 'Respuesta', 'Pregunta adicional', 'Respuesta adicional', 'Comentario'], $sep);
             foreach ($detalle as $d) {
                 $adicional = (string)($d->seguimiento_opcion_texto ?? '');
                 if ($adicional === '') {
@@ -3664,7 +3695,7 @@ class AdminController extends Controller {
                 }
                 fputcsv($out, [
                     !empty($d->created_at) ? date('d/m/Y H:i:s', strtotime((string)$d->created_at)) : '',
-                    (string)($d->nombre ?? ''),
+                    (string)($d->nombre_completo ?? Votacion::nombreYApellidos($d)),
                     (string)($d->rut ?? ''),
                     (string)($d->email ?? ''),
                     (string)($d->opcion_texto ?? ''),
@@ -3859,8 +3890,56 @@ class AdminController extends Controller {
         }
         $juntaId = (int)$_SESSION['user_junta_id'];
         $id = (int)($_POST['votacion_id'] ?? 0);
-        $this->votacionModel->updateEstado($id, $juntaId, 'cerrada');
-        $_SESSION['success_msg'] = 'Votación cerrada.';
+        if ($this->votacionModel->cerrarAhora($id, $juntaId)) {
+            $_SESSION['success_msg'] = 'Consulta cerrada a la hora actual de Chile. Puede volver a abrirla cambiando la fecha de cierre.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo cerrar la consulta.';
+        }
+        $this->redirect('/admin/votacion_ver/' . $id);
+    }
+
+    public function votacion_horario() {
+        $this->requireManageVotaciones();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $post = $this->sanitizePost();
+        $id = (int)($post['votacion_id'] ?? 0);
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v || ($v->estado ?? '') === 'cancelada') {
+            $_SESSION['error_msg'] = 'No se puede modificar el horario de esta consulta.';
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $inicio = str_replace('T', ' ', trim($post['fecha_inicio'] ?? ''));
+        $fin = str_replace('T', ' ', trim($post['fecha_fin'] ?? ''));
+        if (strlen($inicio) === 16) {
+            $inicio .= ':00';
+        }
+        if (strlen($fin) === 16) {
+            $fin .= ':00';
+        }
+        $inicioTs = strtotime($inicio);
+        $finTs = strtotime($fin);
+        if ($inicioTs === false || $finTs === false || $finTs <= $inicioTs) {
+            $_SESSION['error_msg'] = 'El cierre debe ser posterior al inicio. Las horas son de Chile.';
+            $this->redirect('/admin/votacion_ver/' . $id);
+            return;
+        }
+        if (!$this->votacionModel->actualizarHorario($id, $juntaId, date('Y-m-d H:i:s', $inicioTs), date('Y-m-d H:i:s', $finTs))) {
+            $_SESSION['error_msg'] = 'No se pudo guardar el horario.';
+            $this->redirect('/admin/votacion_ver/' . $id);
+            return;
+        }
+        $this->votacionModel->syncEstadosActivas();
+        $actual = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if ($actual && ($actual->estado ?? '') === 'activa') {
+            $_SESSION['success_msg'] = 'Horario actualizado. La consulta está abierta hasta el ' . date('d/m/Y H:i', $finTs) . ' (hora de Chile).';
+        } else {
+            $_SESSION['success_msg'] = 'Horario actualizado. Cierra el ' . date('d/m/Y H:i', $finTs) . ' (hora de Chile).';
+        }
         $this->redirect('/admin/votacion_ver/' . $id);
     }
 

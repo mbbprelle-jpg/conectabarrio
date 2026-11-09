@@ -6,6 +6,7 @@ class VotacionLinkController extends Controller {
         if (!$model->tablesExist()) {
             die('Módulo de votaciones no disponible.');
         }
+        $model->syncEstadosActivas();
         $v = $model->getByToken((string)$token);
         if (!$v) {
             $this->view('auth/login_votacion', [

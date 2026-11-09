@@ -197,7 +197,7 @@ class Votacion extends Model {
         $this->db->query('UPDATE votaciones SET titulo = :titulo, descripcion = :descripcion, tipo = :tipo,
             audiencia_tipo = :audiencia_tipo, fecha_inicio = :fecha_inicio, fecha_fin = :fecha_fin,
             resultados_visibilidad = :resultados_visibilidad
-            WHERE id = :id AND junta_id = :junta_id AND estado IN (\'borrador\', \'activa\')');
+            WHERE id = :id AND junta_id = :junta_id AND estado IN (\'borrador\', \'activa\', \'cerrada\')');
         $this->db->bind(':titulo', $data['titulo']);
         $this->db->bind(':descripcion', $data['descripcion'] ?? null);
         $this->db->bind(':tipo', $data['tipo'] ?? 'votacion');
@@ -255,20 +255,47 @@ class Votacion extends Model {
         if (!$this->tablesExist()) {
             return;
         }
-        $this->db->query("UPDATE votaciones SET estado = 'activa'
-            WHERE estado = 'borrador' AND fecha_inicio <= NOW() AND fecha_fin >= NOW()");
-        $this->db->execute();
         $this->db->query("UPDATE votaciones SET estado = 'cerrada'
             WHERE estado IN ('borrador', 'activa') AND fecha_fin < NOW()");
         $this->db->execute();
+        $this->db->query("UPDATE votaciones SET estado = 'activa'
+            WHERE estado IN ('borrador', 'cerrada') AND fecha_inicio <= NOW() AND fecha_fin >= NOW()");
+        $this->db->execute();
+    }
+
+    public function actualizarHorario(int $id, int $juntaId, string $fechaInicio, string $fechaFin): bool {
+        $this->db->query('UPDATE votaciones
+            SET fecha_inicio = :fecha_inicio, fecha_fin = :fecha_fin
+            WHERE id = :id AND junta_id = :junta_id AND estado IN (\'borrador\', \'activa\', \'cerrada\')');
+        $this->db->bind(':fecha_inicio', $fechaInicio);
+        $this->db->bind(':fecha_fin', $fechaFin);
+        $this->db->bind(':id', $id);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->execute();
+    }
+
+    /** Cierre manual: deja la hora de término en este instante para que no se reabra sola. */
+    public function cerrarAhora(int $id, int $juntaId): bool {
+        $this->db->query("UPDATE votaciones
+            SET estado = 'cerrada', fecha_fin = DATE_SUB(NOW(), INTERVAL 1 SECOND)
+            WHERE id = :id AND junta_id = :junta_id AND estado IN ('borrador', 'activa')");
+        $this->db->bind(':id', $id);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->execute();
     }
 
     public function isActiva(object $v): bool {
+        if (($v->estado ?? '') === 'cancelada') {
+            return false;
+        }
         $now = time();
-        $inicio = strtotime($v->fecha_inicio);
-        $fin = strtotime($v->fecha_fin);
-        return ($v->estado === 'activa' || ($v->estado === 'borrador' && $inicio <= $now && $fin >= $now))
-            && $inicio <= $now && $fin >= $now;
+        $inicio = strtotime((string)$v->fecha_inicio);
+        $fin = strtotime((string)$v->fecha_fin);
+        if ($inicio === false || $fin === false) {
+            return false;
+        }
+        return $inicio <= $now && $fin >= $now
+            && in_array($v->estado, ['activa', 'borrador', 'cerrada'], true);
     }
 
     public function canUserParticipate(object $v, int $usuarioId, int $juntaId): bool {
@@ -560,7 +587,7 @@ class Votacion extends Model {
     public function getDetalleVotantes(int $votacionId, int $juntaId): array {
         $this->ensureSeguimiento();
         if ($this->schemaReady()) {
-            $this->db->query('SELECT r.created_at, u.nombre, u.rut, u.email, o.texto AS opcion_texto, r.respuesta_texto,
+            $this->db->query('SELECT r.created_at, u.nombre, u.apellido_paterno, u.apellido_materno, u.rut, u.email, o.texto AS opcion_texto, r.respuesta_texto,
                 o.seguimiento_pregunta, r.seguimiento_texto, s.texto AS seguimiento_opcion_texto
                 FROM votacion_respuestas r
                 INNER JOIN usuarios u ON u.id = r.usuario_id
@@ -570,7 +597,7 @@ class Votacion extends Model {
                 WHERE r.votacion_id = :vid
                 ORDER BY r.created_at DESC');
         } else {
-            $this->db->query('SELECT r.created_at, u.nombre, u.rut, u.email, o.texto AS opcion_texto, r.respuesta_texto,
+            $this->db->query('SELECT r.created_at, u.nombre, u.apellido_paterno, u.apellido_materno, u.rut, u.email, o.texto AS opcion_texto, r.respuesta_texto,
                 NULL AS seguimiento_pregunta, NULL AS seguimiento_texto, NULL AS seguimiento_opcion_texto
                 FROM votacion_respuestas r
                 INNER JOIN usuarios u ON u.id = r.usuario_id
@@ -581,7 +608,21 @@ class Votacion extends Model {
         }
         $this->db->bind(':vid', $votacionId);
         $this->db->bind(':jid', $juntaId);
-        return $this->db->resultSet();
+        $rows = $this->db->resultSet();
+        foreach ($rows as $row) {
+            $row->nombre_completo = self::nombreYApellidos($row);
+        }
+        return $rows;
+    }
+
+    /** Nombres (columna usuarios.nombre) + apellido paterno + apellido materno. */
+    public static function nombreYApellidos(object $usuario): string {
+        $partes = [
+            trim((string)($usuario->nombre ?? '')),
+            trim((string)($usuario->apellido_paterno ?? '')),
+            trim((string)($usuario->apellido_materno ?? '')),
+        ];
+        return implode(' ', array_filter($partes, static fn(string $p): bool => $p !== ''));
     }
 
     public function replaceOpciones(int $votacionId, array $textos): void {

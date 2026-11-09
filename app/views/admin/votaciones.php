@@ -113,6 +113,7 @@ while (count($filas) < 2) {
                 <input type="datetime-local" name="fecha_fin" id="fechaFin" class="form-control"
                     value="<?php echo htmlspecialchars($fechaFin); ?>">
                 <p id="avisoFechas" style="display:none;font-size:0.75rem;color:#b91c1c;margin:0.35rem 0 0;"></p>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">Hora de Chile (Santiago). Ahora: <?php echo date('d/m/Y H:i'); ?>. Puede dejar el cierre en días o semanas.</p>
             </div>
             <div class="form-group">
                 <label class="form-label">Quién ve los porcentajes</label>
@@ -178,8 +179,8 @@ while (count($filas) < 2) {
                         <td><?php echo (int)$v->total_votos; ?></td>
                         <td>
                             <a href="<?php echo URLROOT; ?>/admin/votacion_ver/<?php echo (int)$v->id; ?>" class="btn btn-secondary btn-sm">Ver</a>
-                            <?php if (in_array($v->estado, ['borrador', 'activa'], true)): ?>
-                            <a href="<?php echo URLROOT; ?>/admin/votaciones?editar=<?php echo (int)$v->id; ?>" class="btn btn-secondary btn-sm">Editar</a>
+                            <?php if (in_array($v->estado, ['borrador', 'activa', 'cerrada'], true)): ?>
+                            <a href="<?php echo URLROOT; ?>/admin/votaciones?editar=<?php echo (int)$v->id; ?>" class="btn btn-secondary btn-sm"><?php echo $v->estado === 'cerrada' ? 'Reabrir / editar' : 'Editar'; ?></a>
                             <?php endif; ?>
                         </td>
                     </tr>

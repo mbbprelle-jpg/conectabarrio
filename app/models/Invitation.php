@@ -1,9 +1,10 @@
 <?php
 class Invitation extends Model {
 
-    public function create($juntaId, $hoursValid = 24) {
+    public function create($juntaId, $hoursValid = 8760) {
+        $hoursValid = max(1, (int)$hoursValid);
         $token = bin2hex(random_bytes(32));
-        $expiresAt = date('Y-m-d H:i:s', strtotime('+' . (int)$hoursValid . ' hours'));
+        $expiresAt = date('Y-m-d H:i:s', strtotime('+' . $hoursValid . ' hours'));
         $this->db->query("INSERT INTO invitations (junta_id, token, expires_at, status) VALUES (:junta_id, :token, :expires_at, 'pending')");
         $this->db->bind(':junta_id', $juntaId);
         $this->db->bind(':token', $token);
