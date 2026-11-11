@@ -49,6 +49,7 @@ class SocioController extends Controller {
         }
 
         $cambioPendiente = $this->cambioModel->getPendingForUsuarioJunta((int)$socioId, (int)$juntaId);
+        $deudaCuotas = $this->resumenCuotasPendientes((int)$socioId, (int)$juntaId);
 
         require_once APPROOT . '/core/AsistenciaQr.php';
         $qrToken = $this->userModel->getOrCreateAsistenciaQrToken((int)$socioId);
@@ -84,6 +85,8 @@ class SocioController extends Controller {
             'cuota_vigente' => $cuotaVigente ? $cuotaVigente->monto : 0,
             'total_pagado' => $totalAportado,
             'cantidad_pagos' => $cantidadCuotasPagadas,
+            'cuotas_pendientes' => $deudaCuotas['cantidad'],
+            'monto_pendiente' => $deudaCuotas['monto'],
             'cambio_pendiente' => $cambioPendiente,
             'org_tipo' => $_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos',
             'uses_calles' => OrgHelper::usesCallesJurisdiccion($_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos'),
@@ -94,6 +97,62 @@ class SocioController extends Controller {
         $data = array_merge($data, $actividades);
 
         $this->view('socio/dashboard', $data);
+    }
+
+    /**
+     * Meses desde el inicio de la organización hasta el mes actual que no están
+     * pagados ni exentos, con el monto de cuota que regía en cada uno.
+     *
+     * @return array{cantidad:int,monto:int}
+     */
+    private function resumenCuotasPendientes(int $socioId, int $juntaId): array {
+        $cierreModel = $this->model('CierreMensual');
+        $mesInicio = (string)$cierreModel->getMesInicioJunta($juntaId);
+        $mesActual = date('Y-m');
+        if (!preg_match('/^\d{4}-\d{2}$/', $mesInicio) || $mesInicio > $mesActual) {
+            return ['cantidad' => 0, 'monto' => 0];
+        }
+
+        $this->db->query("SELECT mes_pagado FROM transacciones
+            WHERE socio_id = :socio_id AND junta_id = :junta_id
+            AND categoria IN ('Cuota Socio', 'Cuota Condonada')
+            AND mes_pagado IS NOT NULL AND mes_pagado <> ''");
+        $this->db->bind(':socio_id', $socioId);
+        $this->db->bind(':junta_id', $juntaId);
+        $cubiertos = [];
+        foreach ($this->db->resultSet() as $row) {
+            $cubiertos[(string)$row->mes_pagado] = true;
+        }
+
+        $configs = array_reverse($this->cuotaModel->getHistoryByJunta($juntaId));
+        $cantidad = 0;
+        $monto = 0;
+        $cursor = new DateTime($mesInicio . '-01');
+        $fin = new DateTime($mesActual . '-01');
+        while ($cursor <= $fin) {
+            $mes = $cursor->format('Y-m');
+            if (!isset($cubiertos[$mes])) {
+                $cantidad++;
+                $monto += $this->montoCuotaEnMes($configs, $mes);
+            }
+            $cursor->modify('+1 month');
+        }
+
+        return ['cantidad' => $cantidad, 'monto' => $monto];
+    }
+
+    /** @param object[] $configsAsc configuraciones ordenadas por mes_inicio ascendente */
+    private function montoCuotaEnMes(array $configsAsc, string $mes): int {
+        $elegida = null;
+        foreach ($configsAsc as $config) {
+            if ((string)($config->mes_inicio ?? '') <= $mes) {
+                $elegida = $config;
+            }
+        }
+        if (!$elegida && !empty($configsAsc)) {
+            $elegida = $configsAsc[0];
+        }
+        return $elegida ? (int)$elegida->monto : 0;
     }
 
     public function reuniones() {

@@ -60,6 +60,31 @@ if (!empty($data['votaciones_pendientes'])): ?>
         </div>
     </div>
 
+    <!-- Cuotas que faltan por pagar -->
+    <?php
+    $cuotasPendientes = (int)($data['cuotas_pendientes'] ?? 0);
+    $montoPendiente = (int)($data['monto_pendiente'] ?? 0);
+    $cuotasAlDia = $cuotasPendientes === 0;
+    ?>
+    <div class="card metric-card <?php echo $cuotasAlDia ? 'card-success' : 'card-danger'; ?>">
+        <div class="metric-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        </div>
+        <div class="metric-info">
+            <span class="metric-label">Cuotas pendientes</span>
+            <span class="metric-value"<?php echo $cuotasAlDia ? '' : ' style="color: var(--danger);"'; ?>>$<?php echo number_format($montoPendiente, 0, ',', '.'); ?> CLP</span>
+            <span class="metric-hint">
+                <?php if ($cuotasAlDia): ?>
+                    Al día. No tiene meses por pagar.
+                <?php else: ?>
+                    <?php echo $cuotasPendientes; ?> <?php echo $cuotasPendientes === 1 ? 'mes' : 'meses'; ?> por pagar
+                <?php endif; ?>
+            </span>
+        </div>
+    </div>
+
     <!-- Total Aportado Histórico -->
     <div class="card metric-card card-success">
         <div class="metric-icon">
