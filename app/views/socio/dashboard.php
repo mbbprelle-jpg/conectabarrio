@@ -130,7 +130,7 @@ if (!empty($data['votaciones_pendientes'])): ?>
 </div>
 
 <!-- Sección de Detalles del Perfil y Actividad Reciente -->
-<div class="grid-2col" style="margin-top: 1.5rem;">
+<div class="grid-socio-panel">
     
     <!-- Ficha Personal del Socio -->
     <div class="card card-primary">
@@ -308,13 +308,11 @@ if (!empty($data['votaciones_pendientes'])): ?>
         <?php endif; ?>
     </div>
 
-</div>
-
-<div class="card card-primary" style="margin-top: 1.5rem;">
+    <div class="card card-primary">
     <h3 class="card-title" style="margin-bottom: 0.35rem;">Pago de cuotas <?php echo (int)($data['cuotas_anio'] ?? date('Y')); ?></h3>
-    <p style="margin: 0 0 1rem; font-size: 0.82rem; color: var(--text-muted);">Estado de cada mes del año en curso. Pendiente es lo que ya venció y aún no está pagado ni eximido.</p>
+    <p style="margin: 0 0 0.75rem; font-size: 0.78rem; color: var(--text-muted);">Pendiente es un mes ya vencido, sin pago ni exención.</p>
     <div class="table-responsive">
-        <table class="table">
+        <table class="table cuotas-anio-table">
             <thead>
                 <tr>
                     <th>Mes</th>
@@ -351,6 +349,8 @@ if (!empty($data['votaciones_pendientes'])): ?>
             </tbody>
         </table>
     </div>
+    </div>
+
 </div>
 
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>
