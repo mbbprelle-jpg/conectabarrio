@@ -135,6 +135,14 @@ foreach ($data['calles'] as $calleItem) {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon></svg>
             Calles (<?php echo count($data['calles'] ?? []); ?>)
         </button>
+        <a href="<?php echo URLROOT; ?>/admin/socios_exportar/activos" class="socios-action-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Exportar socios
+        </a>
+        <a href="<?php echo URLROOT; ?>/admin/socios_exportar/prevalidar" class="socios-action-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Exportar prevalidados
+        </a>
         <button type="button" class="socios-action-btn" data-open-modal="invitacionModal">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
             Link validación
@@ -356,6 +364,7 @@ foreach ($data['calles'] as $calleItem) {
             <h4 style="margin: 0 0 1rem; font-size: 0.95rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                 Alta provisional
                 <span class="badge badge-warning" style="font-size: 0.68rem;"><?php echo $totalAltaProvisional; ?> sin correo</span>
+                <a href="<?php echo URLROOT; ?>/admin/socios_exportar/prevalidar" class="btn btn-secondary btn-sm" style="margin-left: auto;">Exportar prevalidados</a>
             </h4>
             <p style="font-size: 0.82rem; color: var(--text-muted); margin: 0 0 1rem;">
                 Socios registrados por la directiva o carga masiva sin correo. Puede asociarles pagos en Finanzas.
@@ -472,7 +481,12 @@ foreach ($data['calles'] as $calleItem) {
                 <?php if ($totalAltaProvisional > 0): ?>
                     <span style="font-size: 0.75rem; color: var(--warning); font-weight: 600;"><?php echo $totalAltaProvisional; ?> en alta provisional (sin correo)</span>
                 <?php endif; ?>
-                <input type="text" id="searchSocio" class="form-control" placeholder="Buscar socio por nombre o RUT..." style="max-width: 250px; padding: 0.5rem 0.8rem; font-size: 0.85rem;">
+                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+                    <?php if ($canManageSocios): ?>
+                    <a href="<?php echo URLROOT; ?>/admin/socios_exportar/activos" class="btn btn-secondary btn-sm">Exportar socios</a>
+                    <?php endif; ?>
+                    <input type="text" id="searchSocio" class="form-control" placeholder="Buscar socio por nombre o RUT..." style="max-width: 250px; padding: 0.5rem 0.8rem; font-size: 0.85rem;">
+                </div>
             </div>
         </div>
 

@@ -529,6 +529,144 @@ class AdminController extends Controller {
         $this->view('admin/socios', $data);
     }
 
+    public function socios_exportar($tipo = 'activos') {
+        $this->requireManageSocios();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $tipo = ($tipo === 'prevalidar') ? 'prevalidar' : 'activos';
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+
+        if ($tipo === 'prevalidar') {
+            $rows = $this->membresiaModel->overlayDomicilioOnUsers(
+                $this->userModel->getPrevalidarByJunta($juntaId),
+                $juntaId
+            );
+            $estadoFijo = 'Alta provisional';
+            $filenameBase = 'socios_prevalidar';
+        } else {
+            $rows = $this->membresiaModel->overlayDomicilioOnUsers(
+                $this->userModel->getPadronByJunta($juntaId),
+                $juntaId
+            );
+            $estadoFijo = '';
+            $filenameBase = 'socios';
+        }
+
+        usort($rows, static function ($a, $b): int {
+            $ia = (int)($a->id_socio ?? 0);
+            $ib = (int)($b->id_socio ?? 0);
+            if ($ia !== $ib) {
+                if ($ia === 0) {
+                    return 1;
+                }
+                if ($ib === 0) {
+                    return -1;
+                }
+                return $ia <=> $ib;
+            }
+            return strcasecmp(
+                trim(($a->apellido_paterno ?? '') . ' ' . ($a->nombre ?? '')),
+                trim(($b->apellido_paterno ?? '') . ' ' . ($b->nombre ?? ''))
+            );
+        });
+
+        $this->exportSociosCsv($junta, $rows, $filenameBase, $estadoFijo);
+    }
+
+    private function exportSociosCsv($junta, array $rows, string $filenameBase, string $estadoFijo): void {
+        require_once APPROOT . '/core/InviteRutCheck.php';
+        require_once APPROOT . '/core/SocioInput.php';
+
+        $nombreOrg = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string)($junta->nombre ?? 'organizacion'));
+        $filename = $filenameBase . '_' . $nombreOrg . '_' . date('Ymd') . '.csv';
+
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
+        $sep = ';';
+        fputcsv($out, [
+            'ID socio',
+            'RUT',
+            'Nombres',
+            'Apellido paterno',
+            'Apellido materno',
+            'Nombre completo',
+            'Correo',
+            'Teléfono',
+            'Género',
+            'Fecha de nacimiento',
+            'Estado civil',
+            'Nacionalidad',
+            'Profesión',
+            'Calle',
+            'Número',
+            'Dirección',
+            'Latitud',
+            'Longitud',
+            'Link Google',
+            'Socio desde',
+            'Estado',
+        ], $sep);
+
+        foreach ($rows as $s) {
+            $nombres = trim((string)($s->nombre ?? ''));
+            $paterno = trim((string)($s->apellido_paterno ?? ''));
+            $materno = trim((string)($s->apellido_materno ?? ''));
+            $completo = trim(implode(' ', array_filter([$nombres, $paterno, $materno], static fn(string $p): bool => $p !== '')));
+            if ($estadoFijo !== '') {
+                $estado = $estadoFijo;
+            } elseif (($s->rol ?? '') === 'admin') {
+                $estado = 'Administrador';
+            } else {
+                $estado = 'Activo';
+            }
+            $fechaInicio = '';
+            if (!empty($s->fecha_inicio)) {
+                $fechaInicio = substr((string)$s->fecha_inicio, 0, 10);
+            } elseif (!empty($s->created_at)) {
+                $fechaInicio = substr((string)$s->created_at, 0, 10);
+            }
+            fputcsv($out, [
+                (string)($s->id_socio ?? ''),
+                (string)($s->rut ?? ''),
+                $nombres,
+                $paterno,
+                $materno,
+                $completo,
+                InviteRutCheck::displayEmail($s->email ?? ''),
+                SocioInput::formatTelefonoDisplay($s->telefono ?? ''),
+                (string)($s->genero ?? ''),
+                $this->fechaExportSocios($s->fecha_nacimiento ?? ''),
+                (string)($s->estado_civil ?? ''),
+                (string)($s->nacionalidad ?? ''),
+                (string)($s->profesion ?? ''),
+                (string)($s->calle_nombre ?? ''),
+                (string)($s->numero_casa ?? ''),
+                (string)($s->direccion_texto ?? ''),
+                (string)($s->latitud ?? ''),
+                (string)($s->longitud ?? ''),
+                (string)($s->link_google ?? ''),
+                $this->fechaExportSocios($fechaInicio),
+                $estado,
+            ], $sep);
+        }
+
+        fclose($out);
+        exit;
+    }
+
+    private function fechaExportSocios($raw): string {
+        $raw = trim((string)$raw);
+        if ($raw === '') {
+            return '';
+        }
+        $ts = strtotime(substr($raw, 0, 10));
+        return $ts !== false ? date('d-m-Y', $ts) : '';
+    }
+
     // Inscribir un nuevo Socio en la Junta (POST)
     public function socio_crear() {
         $this->requireManageSocios();
