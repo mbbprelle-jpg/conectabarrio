@@ -310,4 +310,47 @@ if (!empty($data['votaciones_pendientes'])): ?>
 
 </div>
 
+<div class="card card-primary" style="margin-top: 1.5rem;">
+    <h3 class="card-title" style="margin-bottom: 0.35rem;">Pago de cuotas <?php echo (int)($data['cuotas_anio'] ?? date('Y')); ?></h3>
+    <p style="margin: 0 0 1rem; font-size: 0.82rem; color: var(--text-muted);">Estado de cada mes del año en curso. Pendiente es lo que ya venció y aún no está pagado ni eximido.</p>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Mes</th>
+                    <th>Estado</th>
+                    <th>Monto</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($data['cuotas_anio_detalle'] ?? [] as $fila):
+                $estadoCuota = $fila['estado'] ?? '';
+                $badge = '';
+                if ($estadoCuota === 'eximido') {
+                    $badge = 'badge-warning';
+                } elseif ($estadoCuota === 'pagado') {
+                    $badge = 'badge-success';
+                } elseif ($estadoCuota === 'pendiente') {
+                    $badge = 'badge-danger';
+                } elseif ($estadoCuota === 'por_vencer') {
+                    $badge = 'badge-info';
+                }
+            ?>
+                <tr>
+                    <td style="font-weight: 700; text-transform: uppercase;"><?php echo htmlspecialchars($fila['nombre']); ?></td>
+                    <td><?php if ($badge !== ''): ?><span class="badge <?php echo $badge; ?>"><?php echo htmlspecialchars($fila['etiqueta']); ?></span><?php else: ?><span style="color: var(--text-muted);"><?php echo htmlspecialchars($fila['etiqueta']); ?></span><?php endif; ?></td>
+                    <td>
+                        <?php if ($estadoCuota === 'eximido' || $estadoCuota === 'sin_periodo'): ?>
+                            —
+                        <?php else: ?>
+                            $<?php echo number_format((int)$fila['monto'], 0, ',', '.'); ?>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>

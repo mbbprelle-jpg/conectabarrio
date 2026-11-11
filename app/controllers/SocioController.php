@@ -49,7 +49,10 @@ class SocioController extends Controller {
         }
 
         $cambioPendiente = $this->cambioModel->getPendingForUsuarioJunta((int)$socioId, (int)$juntaId);
-        $deudaCuotas = $this->resumenCuotasPendientes((int)$socioId, (int)$juntaId);
+        $cuotasRegistradas = $this->cuotasRegistradasPorMes((int)$socioId, (int)$juntaId);
+        $deudaCuotas = $this->resumenCuotasPendientes((int)$juntaId, $cuotasRegistradas);
+        $anioCuotas = (int)date('Y');
+        $detalleAnio = $this->detalleCuotasAnio((int)$juntaId, $anioCuotas, $cuotasRegistradas);
 
         require_once APPROOT . '/core/AsistenciaQr.php';
         $qrToken = $this->userModel->getOrCreateAsistenciaQrToken((int)$socioId);
@@ -87,6 +90,8 @@ class SocioController extends Controller {
             'cantidad_pagos' => $cantidadCuotasPagadas,
             'cuotas_pendientes' => $deudaCuotas['cantidad'],
             'monto_pendiente' => $deudaCuotas['monto'],
+            'cuotas_anio' => $anioCuotas,
+            'cuotas_anio_detalle' => $detalleAnio,
             'cambio_pendiente' => $cambioPendiente,
             'org_tipo' => $_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos',
             'uses_calles' => OrgHelper::usesCallesJurisdiccion($_SESSION['user_junta_tipo'] ?? 'Junta de Vecinos'),
@@ -100,28 +105,43 @@ class SocioController extends Controller {
     }
 
     /**
+     * Cuotas pagadas o eximidas del socio, indexadas por YYYY-MM.
+     * Si un mes tuviera ambos registros, se conserva el pago.
+     *
+     * @return array<string, object>
+     */
+    private function cuotasRegistradasPorMes(int $socioId, int $juntaId): array {
+        $this->db->query("SELECT mes_pagado, categoria, monto, fecha FROM transacciones
+            WHERE socio_id = :socio_id AND junta_id = :junta_id
+            AND categoria IN ('Cuota Socio', 'Cuota Condonada')
+            AND mes_pagado IS NOT NULL AND mes_pagado <> ''
+            ORDER BY id ASC");
+        $this->db->bind(':socio_id', $socioId);
+        $this->db->bind(':junta_id', $juntaId);
+        $map = [];
+        foreach ($this->db->resultSet() as $row) {
+            $mes = (string)$row->mes_pagado;
+            if (isset($map[$mes]) && ($map[$mes]->categoria ?? '') === 'Cuota Socio') {
+                continue;
+            }
+            $map[$mes] = $row;
+        }
+        return $map;
+    }
+
+    /**
      * Meses desde el inicio de la organización hasta el mes actual que no están
      * pagados ni exentos, con el monto de cuota que regía en cada uno.
      *
+     * @param array<string, object> $registradas
      * @return array{cantidad:int,monto:int}
      */
-    private function resumenCuotasPendientes(int $socioId, int $juntaId): array {
+    private function resumenCuotasPendientes(int $juntaId, array $registradas): array {
         $cierreModel = $this->model('CierreMensual');
         $mesInicio = (string)$cierreModel->getMesInicioJunta($juntaId);
         $mesActual = date('Y-m');
         if (!preg_match('/^\d{4}-\d{2}$/', $mesInicio) || $mesInicio > $mesActual) {
             return ['cantidad' => 0, 'monto' => 0];
-        }
-
-        $this->db->query("SELECT mes_pagado FROM transacciones
-            WHERE socio_id = :socio_id AND junta_id = :junta_id
-            AND categoria IN ('Cuota Socio', 'Cuota Condonada')
-            AND mes_pagado IS NOT NULL AND mes_pagado <> ''");
-        $this->db->bind(':socio_id', $socioId);
-        $this->db->bind(':junta_id', $juntaId);
-        $cubiertos = [];
-        foreach ($this->db->resultSet() as $row) {
-            $cubiertos[(string)$row->mes_pagado] = true;
         }
 
         $configs = array_reverse($this->cuotaModel->getHistoryByJunta($juntaId));
@@ -131,7 +151,7 @@ class SocioController extends Controller {
         $fin = new DateTime($mesActual . '-01');
         while ($cursor <= $fin) {
             $mes = $cursor->format('Y-m');
-            if (!isset($cubiertos[$mes])) {
+            if (!isset($registradas[$mes])) {
                 $cantidad++;
                 $monto += $this->montoCuotaEnMes($configs, $mes);
             }
@@ -139,6 +159,58 @@ class SocioController extends Controller {
         }
 
         return ['cantidad' => $cantidad, 'monto' => $monto];
+    }
+
+    /**
+     * Los 12 meses del año, con estado eximido, pagado, pendiente o por vencer.
+     *
+     * @param array<string, object> $registradas
+     * @return array<int, array{mes:string,nombre:string,estado:string,etiqueta:string,monto:int}>
+     */
+    private function detalleCuotasAnio(int $juntaId, int $anio, array $registradas): array {
+        $cierreModel = $this->model('CierreMensual');
+        $mesInicio = (string)$cierreModel->getMesInicioJunta($juntaId);
+        $mesActual = date('Y-m');
+        $configs = array_reverse($this->cuotaModel->getHistoryByJunta($juntaId));
+        $nombres = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+        ];
+        $filas = [];
+        foreach ($nombres as $numero => $nombre) {
+            $mes = sprintf('%04d-%02d', $anio, $numero);
+            $registro = $registradas[$mes] ?? null;
+            if ($registro && ($registro->categoria ?? '') === 'Cuota Condonada') {
+                $estado = 'eximido';
+                $etiqueta = 'EXIMIDO';
+                $monto = 0;
+            } elseif ($registro && ($registro->categoria ?? '') === 'Cuota Socio') {
+                $estado = 'pagado';
+                $etiqueta = 'PAGADO';
+                $monto = (int)($registro->monto ?? 0);
+            } elseif ($mesInicio !== '' && $mes < $mesInicio) {
+                $estado = 'sin_periodo';
+                $etiqueta = '—';
+                $monto = 0;
+            } elseif ($mes > $mesActual) {
+                $estado = 'por_vencer';
+                $etiqueta = 'POR VENCER';
+                $monto = $this->montoCuotaEnMes($configs, $mes);
+            } else {
+                $estado = 'pendiente';
+                $etiqueta = 'PENDIENTE';
+                $monto = $this->montoCuotaEnMes($configs, $mes);
+            }
+            $filas[] = [
+                'mes' => $mes,
+                'nombre' => $nombre,
+                'estado' => $estado,
+                'etiqueta' => $etiqueta,
+                'monto' => $monto,
+            ];
+        }
+        return $filas;
     }
 
     /** @param object[] $configsAsc configuraciones ordenadas por mes_inicio ascendente */
