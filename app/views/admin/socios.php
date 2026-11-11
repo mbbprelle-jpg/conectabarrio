@@ -30,6 +30,16 @@ function cbFechaSocioInput($socio) {
     }
     return date('Y-m-d');
 }
+
+function cbNombreCompleto($socio): string {
+    $partes = [
+        trim((string)($socio->nombre ?? '')),
+        trim((string)($socio->apellido_paterno ?? '')),
+        trim((string)($socio->apellido_materno ?? '')),
+    ];
+    $partes = array_values(array_filter($partes, static fn(string $p): bool => $p !== ''));
+    return implode(' ', $partes);
+}
 ?>
 
 <!-- Mensajes Flash de Éxito / Error -->
@@ -249,7 +259,7 @@ foreach ($data['calles'] as $calleItem) {
                         <?php foreach ($sociosPendientes as $pend): ?>
                         <tr>
                             <td style="font-weight: 600;">
-                                <?php echo htmlspecialchars($pend->nombre . ' ' . $pend->apellido_paterno); ?>
+                                <?php echo htmlspecialchars(cbNombreCompleto($pend)); ?>
                                 <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;">
                                     Solicitud: <?php echo !empty($pend->created_at) ? date('d-m-Y H:i', strtotime($pend->created_at)) : '—'; ?>
                                 </div>
@@ -317,7 +327,7 @@ foreach ($data['calles'] as $calleItem) {
                         ?>
                         <tr>
                             <td style="font-weight: 600;">
-                                <?php echo htmlspecialchars(trim(($cambio->nombre ?? '') . ' ' . ($cambio->apellido_paterno ?? ''))); ?>
+                                <?php echo htmlspecialchars(cbNombreCompleto($cambio)); ?>
                                 <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;"><?php echo htmlspecialchars($cambio->rut ?? ''); ?></div>
                             </td>
                             <td style="font-size: 0.82rem;">
@@ -394,7 +404,7 @@ foreach ($data['calles'] as $calleItem) {
                         ?>
                         <tr data-prevalidar-row data-search="<?php echo htmlspecialchars($prevSearch, ENT_QUOTES, 'UTF-8'); ?>">
                             <td style="font-weight: 600;">
-                                <?php echo htmlspecialchars($prev->nombre . ' ' . $prev->apellido_paterno); ?>
+                                <?php echo htmlspecialchars(cbNombreCompleto($prev)); ?>
                                 <?php if (!empty($prev->id_socio)): ?>
                                     <span style="font-size: 0.75rem; color: var(--primary);"> #<?php echo (int)$prev->id_socio; ?></span>
                                 <?php endif; ?>
@@ -491,7 +501,7 @@ foreach ($data['calles'] as $calleItem) {
                                         #<?php echo htmlspecialchars($socio->id_socio ?? 'N/A'); ?>
                                     </span>
                                     <?php endif; ?>
-                                    <?php echo htmlspecialchars($socio->nombre); ?>
+                                    <?php echo htmlspecialchars(cbNombreCompleto($socio)); ?>
                                     <?php if ($esAdminPadron): ?>
                                         <span class="badge badge-info" style="font-size: 0.68rem; font-weight: 600;">Administrador</span>
                                     <?php endif; ?>
@@ -540,7 +550,7 @@ foreach ($data['calles'] as $calleItem) {
                                     <div style="margin-top: 0.35rem;">
                                         <button type="button" class="btn btn-secondary btn-sm btn-delegar-socio"
                                                 data-id="<?php echo (int)$socio->id; ?>"
-                                                data-nombre="<?php echo htmlspecialchars($socio->nombre); ?>"
+                                                data-nombre="<?php echo htmlspecialchars(cbNombreCompleto($socio)); ?>"
                                                 data-cargo="<?php echo htmlspecialchars($cargo); ?>"
                                                 data-perm-socios="<?php echo $permSocios ? '1' : '0'; ?>"
                                                 data-perm-pagos="<?php echo $permPagos ? '1' : '0'; ?>"
@@ -595,7 +605,7 @@ foreach ($data['calles'] as $calleItem) {
                                                     data-confirm-title="Restablecer contraseña"
                                                     data-confirm-variant="warning"
                                                     data-confirm-label="Enviar clave"
-                                                    data-confirm-message="Se le enviará una contraseña temporal al usuario <?php echo htmlspecialchars($socio->nombre); ?>. Usted no podrá ver la clave generada."
+                                                    data-confirm-message="Se le enviará una contraseña temporal al usuario <?php echo htmlspecialchars(cbNombreCompleto($socio)); ?>. Usted no podrá ver la clave generada."
                                                     title="Enviar clave temporal por correo"
                                                     style="padding: 0.4rem 0.6rem;">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
@@ -608,7 +618,7 @@ foreach ($data['calles'] as $calleItem) {
                                         <form action="<?php echo URLROOT; ?>/admin/socio_eliminar/<?php echo $socio->id; ?>" method="POST" style="margin: 0;">
                                             <button type="submit" 
                                                     class="btn btn-danger btn-sm confirm-action" 
-                                                    data-confirm-message="¿Estás seguro de que deseas dar de baja al socio '<?php echo htmlspecialchars($socio->nombre); ?>'? Se conservará su historial financiero pero no figurará en procesos activos."
+                                                    data-confirm-message="¿Estás seguro de que deseas dar de baja al socio '<?php echo htmlspecialchars(cbNombreCompleto($socio)); ?>'? Se conservará su historial financiero pero no figurará en procesos activos."
                                                     title="Dar de Baja"
                                                     style="padding: 0.4rem 0.6rem; display: flex; align-items: center; gap: 0.25rem;">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>
@@ -651,7 +661,7 @@ foreach ($data['calles'] as $calleItem) {
                                             <span style="font-size: 0.75rem; font-family: monospace; padding: 0.15rem 0.35rem; background: rgba(255,255,255,0.04); border-radius: 4px; border: 1px solid var(--border-color); margin-right: 0.4rem; color: var(--text-muted);">
                                                 #<?php echo htmlspecialchars($s_inact->id_socio ?? 'N/A'); ?>
                                             </span>
-                                            <?php echo htmlspecialchars($s_inact->nombre); ?>
+                                            <?php echo htmlspecialchars(cbNombreCompleto($s_inact)); ?>
                                         </td>
                                         <td style="font-family: monospace; color: var(--text-muted);"><?php echo htmlspecialchars($s_inact->rut); ?></td>
                                         <td style="color: var(--text-muted); font-size: 0.8rem;"><?php echo cbFormatFechaSocio($s_inact); ?></td>
@@ -659,7 +669,7 @@ foreach ($data['calles'] as $calleItem) {
                                             <form action="<?php echo URLROOT; ?>/admin/socio_reactivar/<?php echo $s_inact->id; ?>" method="POST" style="margin: 0;">
                                                 <button type="submit" 
                                                         class="btn btn-success btn-sm confirm-action" 
-                                                        data-confirm-message="¿Estás seguro de que quieres reactivar y dar de alta nuevamente al socio '<?php echo htmlspecialchars($s_inact->nombre); ?>'?"
+                                                        data-confirm-message="¿Estás seguro de que quieres reactivar y dar de alta nuevamente al socio '<?php echo htmlspecialchars(cbNombreCompleto($s_inact)); ?>'?"
                                                         style="padding: 0.3rem 0.5rem; font-size: 0.75rem; display: flex; align-items: center; gap: 0.25rem;">
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="16" y1="11" x2="22" y2="11"></line></svg>
                                                     Reactivar
