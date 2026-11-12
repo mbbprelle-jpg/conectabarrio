@@ -70,6 +70,19 @@ class Transaccion extends Model {
         return $map;
     }
 
+    /** Cuotas pagadas o eximidas de toda la organización. */
+    public function getCuotasRegistradasJunta(int $juntaId): array {
+        $this->db->query("SELECT socio_id, mes_pagado, categoria, monto, fecha
+            FROM transacciones
+            WHERE junta_id = :junta_id
+            AND categoria IN ('Cuota Socio', 'Cuota Condonada')
+            AND socio_id IS NOT NULL
+            AND mes_pagado IS NOT NULL AND mes_pagado <> ''
+            ORDER BY id ASC");
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->resultSet();
+    }
+
     public static function socioNombreCompleto($row): string {
         $parts = array_filter([
             trim($row->socio_nombre ?? ''),

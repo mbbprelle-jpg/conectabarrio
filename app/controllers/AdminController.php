@@ -2041,6 +2041,285 @@ class AdminController extends Controller {
     }
 
     /**
+     * Excel de dos hojas: resumen de quién está al día y detalle mes a mes.
+     */
+    public function cuotas_estado_exportar() {
+        $this->requireRegisterPayments();
+        $juntaId = $this->activeJuntaId();
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        $mesInicio = (string)$this->cierreModel->getMesInicioJunta($juntaId);
+        $mesActual = date('Y-m');
+        $meses = $this->generarListaMeses($mesInicio, $mesActual);
+        $configs = array_reverse($this->cuotaModel->getHistoryByJunta($juntaId));
+
+        $porSocio = [];
+        foreach ($this->transaccionModel->getCuotasRegistradasJunta($juntaId) as $row) {
+            $sid = (int)$row->socio_id;
+            $mes = (string)$row->mes_pagado;
+            if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+                continue;
+            }
+            if (isset($porSocio[$sid][$mes]) && ($porSocio[$sid][$mes]->categoria ?? '') === 'Cuota Socio') {
+                continue;
+            }
+            $porSocio[$sid][$mes] = $row;
+        }
+
+        $nombresMes = [
+            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
+            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
+            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
+        ];
+        $montoMes = function (string $mes) use ($configs): int {
+            $elegida = null;
+            foreach ($configs as $config) {
+                if ((string)($config->mes_inicio ?? '') <= $mes) {
+                    $elegida = $config;
+                }
+            }
+            if (!$elegida && !empty($configs)) {
+                $elegida = $configs[0];
+            }
+            return $elegida ? (int)$elegida->monto : 0;
+        };
+
+        $resumen = [];
+        $detalle = [];
+        $alDia = 0;
+        $conDeuda = 0;
+        $hanPagado = 0;
+        $sinPago = 0;
+
+        foreach ($this->userModel->getMiembrosCuotaByJunta($juntaId) as $m) {
+            $sid = (int)$m->id;
+            $nombre = trim(implode(' ', array_filter([
+                $m->nombre ?? '',
+                $m->apellido_paterno ?? '',
+                $m->apellido_materno ?? '',
+            ], static fn($p) => trim((string)$p) !== '')));
+            $registros = $porSocio[$sid] ?? [];
+            $pagados = 0;
+            $eximidos = 0;
+            $pendientes = 0;
+            $montoPagado = 0;
+            $montoPendiente = 0;
+            $haPagado = false;
+            foreach ($registros as $reg) {
+                if (($reg->categoria ?? '') === 'Cuota Socio') {
+                    $haPagado = true;
+                }
+            }
+            foreach ($meses as $mes) {
+                $reg = $registros[$mes] ?? null;
+                if ($reg && ($reg->categoria ?? '') === 'Cuota Condonada') {
+                    $estado = 'EXIMIDO';
+                    $monto = 0;
+                    $fecha = !empty($reg->fecha) ? date('d-m-Y', strtotime($reg->fecha)) : '';
+                    $eximidos++;
+                } elseif ($reg && ($reg->categoria ?? '') === 'Cuota Socio') {
+                    $estado = 'PAGADO';
+                    $monto = (int)($reg->monto ?? 0);
+                    $fecha = !empty($reg->fecha) ? date('d-m-Y', strtotime($reg->fecha)) : '';
+                    $pagados++;
+                    $montoPagado += $monto;
+                } else {
+                    $estado = 'PENDIENTE';
+                    $monto = $montoMes($mes);
+                    $fecha = '';
+                    $pendientes++;
+                    $montoPendiente += $monto;
+                }
+                $nMes = (int)substr($mes, 5, 2);
+                $detalle[] = [
+                    'id_socio' => (string)($m->id_socio ?? ''),
+                    'rut' => (string)($m->rut ?? ''),
+                    'nombre' => $nombre,
+                    'mes' => $mes,
+                    'mes_nombre' => ($nombresMes[$nMes] ?? $mes) . ' ' . substr($mes, 0, 4),
+                    'estado' => $estado,
+                    'monto' => $monto,
+                    'fecha' => $fecha,
+                ];
+            }
+            $estaAlDia = $pendientes === 0;
+            if ($estaAlDia) {
+                $alDia++;
+            } else {
+                $conDeuda++;
+            }
+            if ($haPagado) {
+                $hanPagado++;
+            } else {
+                $sinPago++;
+            }
+            if (($m->rol ?? '') === 'admin') {
+                $condicion = 'Administrador';
+            } elseif (($m->status ?? '') === 'prevalidar') {
+                $condicion = 'Alta provisional';
+            } else {
+                $condicion = 'Activo';
+            }
+            $resumen[] = [
+                'id_socio' => (string)($m->id_socio ?? ''),
+                'rut' => (string)($m->rut ?? ''),
+                'nombre' => $nombre,
+                'condicion' => $condicion,
+                'al_dia' => $estaAlDia ? 'SI' : 'NO',
+                'situacion' => $estaAlDia ? 'AL DÍA' : 'CON DEUDA',
+                'ha_pagado' => $haPagado ? 'SI' : 'NO',
+                'pagos' => $haPagado ? 'HA PAGADO' : 'NO HA PAGADO',
+                'corresponden' => count($meses),
+                'pagados' => $pagados,
+                'eximidos' => $eximidos,
+                'pendientes' => $pendientes,
+                'monto_pagado' => $montoPagado,
+                'monto_pendiente' => $montoPendiente,
+            ];
+        }
+
+        usort($resumen, static function (array $a, array $b): int {
+            $c = strcmp($a['al_dia'], $b['al_dia']);
+            if ($c !== 0) {
+                return $c;
+            }
+            $c = strcmp($a['ha_pagado'], $b['ha_pagado']);
+            if ($c !== 0) {
+                return $c;
+            }
+            return strcasecmp($a['nombre'], $b['nombre']);
+        });
+        usort($detalle, static function (array $a, array $b): int {
+            $c = strcasecmp($a['nombre'], $b['nombre']);
+            if ($c !== 0) {
+                return $c;
+            }
+            return strcmp($a['mes'], $b['mes']);
+        });
+
+        $this->exportEstadoCuotasExcel($junta, $mesInicio, $mesActual, [
+            'vecinos' => count($resumen),
+            'al_dia' => $alDia,
+            'con_deuda' => $conDeuda,
+            'han_pagado' => $hanPagado,
+            'sin_pago' => $sinPago,
+        ], $resumen, $detalle);
+    }
+
+    private function exportEstadoCuotasExcel($junta, string $mesInicio, string $mesActual, array $totales, array $resumen, array $detalle): void {
+        $nombreOrg = preg_replace('/[^a-zA-Z0-9_-]+/', '_', (string)($junta->nombre ?? 'organizacion'));
+        $filename = 'estado_cuotas_' . $nombreOrg . '_' . date('Ymd') . '.xls';
+        $esc = static function ($v): string {
+            return htmlspecialchars((string)$v, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        };
+        $cell = static function (string $type, $value) use ($esc): string {
+            if ($type === 'Number' && ($value === '' || $value === null)) {
+                return '<Cell><Data ss:Type="String"></Data></Cell>';
+            }
+            return '<Cell><Data ss:Type="' . $type . '">' . $esc($value) . '</Data></Cell>';
+        };
+        $rowXml = static function (array $cells): string {
+            return '<Row>' . implode('', $cells) . '</Row>';
+        };
+
+        $sheet1 = [];
+        $sheet1[] = $rowXml([
+            $cell('String', 'Estado de cuotas'),
+            $cell('String', (string)($junta->nombre ?? '')),
+        ]);
+        $sheet1[] = $rowXml([
+            $cell('String', 'Período'),
+            $cell('String', $mesInicio . ' a ' . $mesActual),
+        ]);
+        $sheet1[] = $rowXml([
+            $cell('String', 'Al día significa que no quedan meses pendientes hasta el mes actual. Un mes eximido está cubierto, pero no cuenta como pago.'),
+        ]);
+        $sheet1[] = $rowXml([$cell('String', '')]);
+        $sheet1[] = $rowXml([$cell('String', 'Vecinos'), $cell('Number', (int)$totales['vecinos'])]);
+        $sheet1[] = $rowXml([$cell('String', 'Al día'), $cell('Number', (int)$totales['al_dia'])]);
+        $sheet1[] = $rowXml([$cell('String', 'Con deuda'), $cell('Number', (int)$totales['con_deuda'])]);
+        $sheet1[] = $rowXml([$cell('String', 'Han pagado al menos una cuota'), $cell('Number', (int)$totales['han_pagado'])]);
+        $sheet1[] = $rowXml([$cell('String', 'No han pagado ninguna cuota'), $cell('Number', (int)$totales['sin_pago'])]);
+        $sheet1[] = $rowXml([$cell('String', '')]);
+        $sheet1[] = $rowXml([
+            $cell('String', 'ID socio'),
+            $cell('String', 'RUT'),
+            $cell('String', 'Nombre completo'),
+            $cell('String', 'Condición'),
+            $cell('String', 'Al día'),
+            $cell('String', 'Situación'),
+            $cell('String', 'Ha pagado'),
+            $cell('String', 'Pagos'),
+            $cell('String', 'Meses del período'),
+            $cell('String', 'Meses pagados'),
+            $cell('String', 'Meses eximidos'),
+            $cell('String', 'Meses pendientes'),
+            $cell('String', 'Monto pagado'),
+            $cell('String', 'Monto pendiente'),
+        ]);
+        foreach ($resumen as $r) {
+            $sheet1[] = $rowXml([
+                $cell('String', $r['id_socio']),
+                $cell('String', $r['rut']),
+                $cell('String', $r['nombre']),
+                $cell('String', $r['condicion']),
+                $cell('String', $r['al_dia']),
+                $cell('String', $r['situacion']),
+                $cell('String', $r['ha_pagado']),
+                $cell('String', $r['pagos']),
+                $cell('Number', (int)$r['corresponden']),
+                $cell('Number', (int)$r['pagados']),
+                $cell('Number', (int)$r['eximidos']),
+                $cell('Number', (int)$r['pendientes']),
+                $cell('Number', (int)$r['monto_pagado']),
+                $cell('Number', (int)$r['monto_pendiente']),
+            ]);
+        }
+
+        $sheet2 = [];
+        $sheet2[] = $rowXml([
+            $cell('String', 'ID socio'),
+            $cell('String', 'RUT'),
+            $cell('String', 'Nombre completo'),
+            $cell('String', 'Mes'),
+            $cell('String', 'Período'),
+            $cell('String', 'Estado'),
+            $cell('String', 'Monto'),
+            $cell('String', 'Fecha'),
+        ]);
+        foreach ($detalle as $d) {
+            $sheet2[] = $rowXml([
+                $cell('String', $d['id_socio']),
+                $cell('String', $d['rut']),
+                $cell('String', $d['nombre']),
+                $cell('String', $d['mes']),
+                $cell('String', $d['mes_nombre']),
+                $cell('String', $d['estado']),
+                $cell('Number', (int)$d['monto']),
+                $cell('String', $d['fecha']),
+            ]);
+        }
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . '<?mso-application progid="Excel.Sheet"?>' . "\n"
+            . '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+            . ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+            . '<Worksheet ss:Name="Resumen"><Table>'
+            . implode('', $sheet1)
+            . '</Table></Worksheet>'
+            . '<Worksheet ss:Name="Detalle"><Table>'
+            . implode('', $sheet2)
+            . '</Table></Worksheet>'
+            . '</Workbook>';
+
+        header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        echo $xml;
+        exit;
+    }
+
+    /**
      * Traspasar cuotas de un socio a otro (incluye meses cerrados).
      * Solo cambia socio_id; mantiene fecha/monto/mes_pagado para no alterar cierres.
      */

@@ -378,6 +378,9 @@ $mesInicioLabel = $data['mes_inicio'] ?? date('Y-m');
             <a href="<?php echo URLROOT; ?>/admin/reporte_movimientos" class="btn btn-secondary btn-sm" title="Reporte con RUT y nombre del socio en cuotas">
                 Ver reporte
             </a>
+            <a href="<?php echo URLROOT; ?>/admin/cuotas_estado_exportar" class="btn btn-secondary btn-sm" title="Excel con quién está al día y el detalle de cada mes">
+                Excel al día
+            </a>
             <a href="<?php echo URLROOT; ?>/admin/traspasar_cuotas" class="btn btn-secondary btn-sm" title="Corregir cuotas asignadas al socio equivocado">
                 Traspasar cuotas
             </a>

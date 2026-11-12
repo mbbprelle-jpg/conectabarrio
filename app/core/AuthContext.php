@@ -318,7 +318,7 @@ class AuthContext {
             'get_socio_cuotas', 'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar', 'cuotas_condonar_miembros',
             'conceptos_caja', 'concepto_caja', 'concepto_caja_crear',
             'concepto_caja_actualizar', 'concepto_caja_eliminar', 'comprobante',
-            'reporte_movimientos', 'traspasar_cuotas', 'traspasar_cuotas_aplicar',
+            'reporte_movimientos', 'cuotas_estado_exportar', 'traspasar_cuotas', 'traspasar_cuotas_aplicar',
         ];
     }
 
@@ -341,7 +341,7 @@ class AuthContext {
                 'cuotas_condonar', 'cuotas_condonar_preview', 'cuotas_condonar_aplicar', 'cuotas_condonar_miembros',
                 'guardar_saldo_inicial', 'conceptos_caja', 'concepto_caja', 'concepto_caja_crear',
                 'concepto_caja_actualizar', 'concepto_caja_eliminar',
-                'reporte_movimientos', 'traspasar_cuotas', 'traspasar_cuotas_aplicar',
+                'reporte_movimientos', 'cuotas_estado_exportar', 'traspasar_cuotas', 'traspasar_cuotas_aplicar',
             ]);
         }
         if (self::canViewFlujoCaja()) {

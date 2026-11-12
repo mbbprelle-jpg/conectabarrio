@@ -79,6 +79,7 @@ if (($filtros['desde'] ?? '') !== '' || ($filtros['hasta'] ?? '') !== '') {
         <div class="cb-rep-actions">
             <a href="<?php echo URLROOT; ?>/admin/finanzas" class="btn btn-secondary btn-sm">Volver a Movimientos</a>
             <a href="<?php echo URLROOT; ?>/admin/reporte_movimientos?<?php echo htmlspecialchars($qsBase . ($qsBase !== '' ? '&' : '') . 'export=csv'); ?>" class="btn btn-secondary btn-sm">Descargar CSV</a>
+            <a href="<?php echo URLROOT; ?>/admin/cuotas_estado_exportar" class="btn btn-secondary btn-sm">Excel: quién está al día</a>
             <button type="button" class="btn btn-primary btn-sm" onclick="window.print()">Imprimir</button>
         </div>
     </div>
