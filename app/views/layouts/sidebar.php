@@ -146,6 +146,12 @@
                     <span>Socios y Ajustes</span>
                 </a>
             </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'actividad_socios') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/actividad_socios">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+                    <span>Actividad de socios</span>
+                </a>
+            </li>
             <?php if (AuthContext::canViewCensoFamiliar()): ?>
             <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'censo_familiar') ? 'active' : ''; ?>">
                 <a href="<?php echo URLROOT; ?>/admin/censo_familiar">
@@ -272,6 +278,12 @@
                 <a href="<?php echo URLROOT; ?>/admin/socios">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     <span>Gestión de Socios</span>
+                </a>
+            </li>
+            <li class="sidebar-menu-item <?php echo (isset($data['active_menu']) && $data['active_menu'] === 'actividad_socios') ? 'active' : ''; ?>">
+                <a href="<?php echo URLROOT; ?>/admin/actividad_socios">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
+                    <span>Actividad de socios</span>
                 </a>
             </li>
             <?php endif; ?>

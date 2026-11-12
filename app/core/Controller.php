@@ -14,6 +14,7 @@ class Controller {
 
     // Cargar vista
     public function view($view, $data = []) {
+        $this->registrarVistaSocio((string)$view);
         // Verificar si existe el archivo de vista
         if (file_exists(APPROOT . '/views/' . $view . '.php')) {
             require_once APPROOT . '/views/' . $view . '.php';
@@ -56,5 +57,17 @@ class Controller {
             }
         }
         return $sanitized;
+    }
+
+    private function registrarVistaSocio(string $view): void {
+        if (($_SESSION['user_rol'] ?? '') !== 'socio' || $view === '') {
+            return;
+        }
+        $archivo = APPROOT . '/models/AccesoLog.php';
+        if (!is_file($archivo)) {
+            return;
+        }
+        require_once $archivo;
+        AccesoLog::registrarVista($view);
     }
 }

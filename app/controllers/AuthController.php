@@ -115,6 +115,7 @@ class AuthController extends Controller {
 
         if (count($membresias) === 1) {
             AuthContext::applyMembership($membresias[0], $user);
+            $this->registrarIngresoSocio();
             $this->redirectByRole($membresias[0]->rol);
             return;
         }
@@ -170,6 +171,7 @@ class AuthController extends Controller {
         $user = $this->userModel->getUserById($userId);
         unset($_SESSION['auth_pending_user_id']);
         AuthContext::applyMembership($membership, $user);
+        $this->registrarIngresoSocio();
         $this->userModel->db->query('UPDATE usuarios SET junta_id = :junta_id, rol = :rol WHERE id = :id');
         $this->userModel->db->bind(':junta_id', $membership->junta_id);
         $this->userModel->db->bind(':rol', $membership->rol);
@@ -225,7 +227,17 @@ class AuthController extends Controller {
             $_SESSION['user_junta_nombre'] = 'Global';
         }
 
+        $this->registrarIngresoSocio();
         $this->redirectByRole($user->rol);
+    }
+
+    private function registrarIngresoSocio(): void {
+        $archivo = APPROOT . '/models/AccesoLog.php';
+        if (!is_file($archivo)) {
+            return;
+        }
+        require_once $archivo;
+        AccesoLog::registrarIngreso();
     }
 
     // Crear sesión e inicializar variables de sesión (legacy)

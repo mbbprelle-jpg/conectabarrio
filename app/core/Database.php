@@ -73,6 +73,10 @@ class Database {
         return $this->stmt->execute();
     }
 
+    public function exec(string $sql): bool {
+        return $this->dbh->exec($sql) !== false;
+    }
+
     // Obtener un conjunto de registros (múltiples filas)
     public function resultSet() {
         $this->execute();

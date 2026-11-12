@@ -6145,4 +6145,28 @@ class AdminController extends Controller {
         readfile($abs);
         exit;
     }
+
+    public function actividad_socios() {
+        $this->requireManageSocios();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $log = $this->model('AccesoLog');
+        $socios = $log->resumenPorSocio($juntaId);
+        $usaron = 0;
+        foreach ($socios as $socio) {
+            if ((int)$socio->ingresos > 0) {
+                $usaron++;
+            }
+        }
+        $this->view('admin/actividad_socios', [
+            'title' => 'Actividad de socios',
+            'header_title' => 'Actividad de socios',
+            'header_subtitle' => 'Quién ha entrado a la plataforma y qué secciones revisa',
+            'active_menu' => 'actividad_socios',
+            'socios' => $socios,
+            'usaron' => $usaron,
+            'nunca' => count($socios) - $usaron,
+            'secciones' => $log->interesPorSeccion($juntaId),
+            'recientes' => $log->recientes($juntaId),
+        ]);
+    }
 }
