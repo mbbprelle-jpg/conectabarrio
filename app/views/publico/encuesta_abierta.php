@@ -55,12 +55,30 @@ $generosOld = is_array($old['genero'] ?? null) ? array_values($old['genero']) : 
                 <div class="alert alert-danger"><span><?php echo htmlspecialchars((string)$data['error']); ?></span></div>
             <?php endif; ?>
 
-            <?php if ($socio): ?>
-                <p style="font-size:0.9rem;">Usted figura como socio de esta organización. Confirme o corrija su nombre, correo y teléfono. Si cambia el correo o el teléfono, se actualiza su ficha.</p>
+            <?php $paso = (string)($data['paso'] ?? 'formulario'); ?>
+            <?php if ($paso === 'pregunta'): ?>
+                <p style="font-size:0.95rem;">Antes de responder, indique si es socio de esta organización.</p>
+                <div style="display:flex;flex-direction:column;gap:0.65rem;margin-top:1rem;">
+                    <a class="btn btn-secondary" href="<?php echo htmlspecialchars((string)$data['invitado_url']); ?>">No soy socio</a>
+                    <a class="btn btn-primary" href="<?php echo htmlspecialchars((string)$data['socio_url']); ?>">Sí, soy socio</a>
+                </div>
+            <?php elseif ($paso === 'socio'): ?>
+                <p style="font-size:0.95rem;">Puede ingresar para completar la encuesta con el nombre, correo y teléfono que ya tiene la organización. Si prefiere no ingresar, continúe y escriba esos datos usted.</p>
+                <?php if (!empty($data['sesion_otra'])): ?>
+                    <p style="font-size:0.85rem;color:var(--text-muted);">La sesión actual no corresponde a esta organización. Ingrese con el RUT del socio o continúe escribiendo los datos.</p>
+                <?php endif; ?>
+                <div style="display:flex;flex-direction:column;gap:0.65rem;margin-top:1rem;">
+                    <a class="btn btn-primary" href="<?php echo htmlspecialchars((string)$data['login_url']); ?>">Ingresar y completar con mis datos</a>
+                    <a class="btn btn-secondary" href="<?php echo htmlspecialchars((string)$data['invitado_url']); ?>">Seguir sin ingresar</a>
+                    <a href="<?php echo htmlspecialchars((string)$data['reiniciar_url']); ?>" style="font-size:0.85rem;">Volver</a>
+                </div>
             <?php else: ?>
-                <p style="font-size:0.9rem;">Puede participar aunque no sea socio. Indique su nombre y apellidos, correo y teléfono.</p>
-                <p style="font-size:0.85rem;"><a href="<?php echo htmlspecialchars((string)$data['login_url']); ?>">Soy socio: ingresar para confirmar los datos que ya tiene la junta</a></p>
+            <?php if ($socio): ?>
+                <p style="font-size:0.9rem;">Confirme o corrija su nombre, correo y teléfono. Si cambia el correo o el teléfono, se actualiza su ficha.</p>
+            <?php else: ?>
+                <p style="font-size:0.9rem;">Indique su nombre y apellidos, correo y teléfono.</p>
             <?php endif; ?>
+            <p style="font-size:0.85rem;margin-top:0;"><a href="<?php echo htmlspecialchars((string)$data['reiniciar_url']); ?>">Cambiar si soy socio</a></p>
 
             <form method="POST" action="<?php echo URLROOT; ?>/votacion/l/<?php echo rawurlencode((string)$v->token_publico); ?>" id="formEncuesta">
                 <?php if ($socio): ?>
@@ -94,7 +112,7 @@ $generosOld = is_array($old['genero'] ?? null) ? array_values($old['genero']) : 
                 <?php if ($inscribe): ?>
                     <div class="form-group">
                         <label class="form-label">¿Cuántos niños o niñas va a registrar? *</label>
-                        <input type="number" name="cantidad_ninos" id="cantidadNinos" class="form-control" min="1" max="12" required value="<?php echo $cantidad; ?>">
+                        <input type="text" name="cantidad_ninos" id="cantidadNinos" class="form-control" inputmode="numeric" maxlength="2" required value="<?php echo $cantidad; ?>" autocomplete="off">
                         <p style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">Por cada uno se pide la edad y el género: Femenino, Masculino o No responder.</p>
                     </div>
                     <div id="ninosBox"></div>
@@ -135,10 +153,11 @@ $generosOld = is_array($old['genero'] ?? null) ? array_values($old['genero']) : 
 
                 <button type="submit" class="btn btn-primary">Enviar inscripción</button>
             </form>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 </div>
-<?php if ($activa && !$ok && $inscribe): ?>
+<?php if ($activa && !$ok && $inscribe && (($data['paso'] ?? '') === 'formulario')): ?>
 <script>
 (function () {
     var cantidad = document.getElementById('cantidadNinos');
@@ -164,7 +183,15 @@ $generosOld = is_array($old['genero'] ?? null) ? array_values($old['genero']) : 
             + '</select></div>';
         return wrap;
     }
+    function leerNumero() {
+        var raw = String(cantidad.value).trim();
+        if (!/^\d+$/.test(raw)) return 0;
+        return parseInt(raw, 10);
+    }
     function dibujar() {
+        var n = leerNumero();
+        if (n < 1) return;
+        if (n > 12) n = 12;
         var previas = [];
         box.querySelectorAll('.nino-row').forEach(function (row) {
             previas.push({
@@ -172,10 +199,7 @@ $generosOld = is_array($old['genero'] ?? null) ? array_values($old['genero']) : 
                 genero: row.querySelector('select').value
             });
         });
-        var n = parseInt(cantidad.value, 10);
-        if (!n || n < 1) n = 1;
-        if (n > 12) n = 12;
-        cantidad.value = String(n);
+        if (previas.length === n) return;
         box.innerHTML = '';
         for (var i = 0; i < n; i++) {
             var edad = previas[i] ? previas[i].edad : (edades[i] || '');
@@ -186,11 +210,18 @@ $generosOld = is_array($old['genero'] ?? null) ? array_values($old['genero']) : 
         generos = [];
     }
     cantidad.addEventListener('input', dibujar);
+    cantidad.addEventListener('blur', function () {
+        var n = leerNumero();
+        if (n < 1) n = box.querySelectorAll('.nino-row').length || 1;
+        if (n > 12) n = 12;
+        cantidad.value = String(n);
+        dibujar();
+    });
     dibujar();
 })();
 </script>
 <?php endif; ?>
-<?php if ($activa && !$ok && !$inscribe): ?>
+<?php if ($activa && !$ok && !$inscribe && (($data['paso'] ?? '') === 'formulario')): ?>
 <style>
 .opcion-label { display:flex; align-items:flex-start; gap:0.75rem; padding:0.75rem; border:1px solid var(--border-color); border-radius:8px; cursor:pointer; }
 .opcion-block .followup { display:none; margin:0.5rem 0 0.25rem 0.35rem; padding:0.75rem; border-left:2px solid var(--primary, #4f46e5); }

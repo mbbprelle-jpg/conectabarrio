@@ -63,10 +63,32 @@ class VotacionLinkController extends Controller {
         $claveOk = 'encuesta_ok_' . $token;
         $claveError = 'encuesta_error_' . $token;
         $claveOld = 'encuesta_old_' . $token;
+        $claveModo = 'encuesta_modo_' . $token;
         $ok = $_SESSION[$claveOk] ?? null;
         $error = (string)($_SESSION[$claveError] ?? '');
         $old = $_SESSION[$claveOld] ?? [];
         unset($_SESSION[$claveOk], $_SESSION[$claveError], $_SESSION[$claveOld]);
+
+        $como = (string)($_GET['como'] ?? '');
+        if ($como === 'reiniciar') {
+            unset($_SESSION[$claveModo]);
+            header('Location: ' . URLROOT . '/votacion/l/' . rawurlencode($token));
+            exit;
+        }
+        if ($como === 'invitado') {
+            $_SESSION[$claveModo] = 'invitado';
+            header('Location: ' . URLROOT . '/votacion/l/' . rawurlencode($token));
+            exit;
+        }
+        if ($como === 'socio') {
+            $_SESSION[$claveModo] = 'socio';
+            if (empty($_SESSION['user_id'])) {
+                $this->mostrarLogin($v, $model);
+                return;
+            }
+            header('Location: ' . URLROOT . '/votacion/l/' . rawurlencode($token));
+            exit;
+        }
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && $model->isActiva($v)) {
             $resultado = $this->guardarEncuestaAbierta($model, $v, $_POST);
@@ -74,15 +96,24 @@ class VotacionLinkController extends Controller {
                 $_SESSION[$claveError] = $resultado['error'];
                 $_SESSION[$claveOld] = $resultado['old'];
             } else {
-                unset($_SESSION['pending_votacion_token']);
+                unset($_SESSION['pending_votacion_token'], $_SESSION[$claveModo]);
                 $_SESSION[$claveOk] = $resultado['ok'];
             }
             header('Location: ' . URLROOT . '/votacion/l/' . rawurlencode($token));
             exit;
         }
 
-        $socio = $this->socioDeLaJunta($model, $v);
+        $modo = (string)($_SESSION[$claveModo] ?? '');
+        $socio = $modo === 'socio' ? $this->socioDeLaJunta($model, $v) : null;
+        if ($modo === 'invitado' || ($modo === 'socio' && $socio)) {
+            $paso = 'formulario';
+        } elseif ($modo === 'socio' || (string)($_GET['paso'] ?? '') === 'socio') {
+            $paso = 'socio';
+        } else {
+            $paso = 'pregunta';
+        }
         $opciones = !empty($v->inscribe_ninos) ? [] : $model->getOpcionesConSeguimiento((int)$v->id);
+        $enlace = URLROOT . '/votacion/l/' . rawurlencode($token);
         $this->view('publico/encuesta_abierta', [
             'title' => (string)$v->titulo,
             'public_layout' => true,
@@ -90,11 +121,16 @@ class VotacionLinkController extends Controller {
             'votacion' => $v,
             'activa' => $model->isActiva($v),
             'socio' => $socio,
+            'paso' => $paso,
             'opciones' => $opciones,
             'ok' => is_array($ok) ? $ok : null,
             'error' => $error,
             'old' => is_array($old) ? $old : [],
-            'login_url' => URLROOT . '/votacion/l/' . rawurlencode($token) . '?ingresar=1',
+            'login_url' => $enlace . '?como=socio',
+            'invitado_url' => $enlace . '?como=invitado',
+            'socio_url' => $enlace . '?paso=socio',
+            'reiniciar_url' => $enlace . '?como=reiniciar',
+            'sesion_otra' => $modo === 'socio' && !$socio && !empty($_SESSION['user_id']),
         ]);
     }
 
@@ -105,7 +141,8 @@ class VotacionLinkController extends Controller {
         require_once APPROOT . '/core/Mailer.php';
 
         $juntaId = (int)$v->junta_id;
-        $socio = $this->socioDeLaJunta($model, $v);
+        $modo = (string)($_SESSION['encuesta_modo_' . (string)$v->token_publico] ?? '');
+        $socio = $modo === 'socio' ? $this->socioDeLaJunta($model, $v) : null;
         $old = $post;
         $old['edad'] = $post['edad'] ?? [];
         $old['genero'] = $post['genero'] ?? [];
@@ -147,25 +184,12 @@ class VotacionLinkController extends Controller {
         }
 
         $usuarioId = $socio ? (int)$socio->id : 0;
-        $esSocio = $socio ? true : false;
-        if (!$esSocio) {
-            $porCorreo = $model->miembroPorCorreo($juntaId, $email);
-            if ($porCorreo) {
-                $esSocio = true;
-                $usuarioId = (int)$porCorreo->id;
-                if ($model->usuarioYaParticipo((int)$v->id, $usuarioId)) {
-                    return ['error' => 'Este socio ya quedó registrado en la encuesta.', 'old' => $old];
-                }
-            }
-        }
-
+        $esSocio = (bool)$socio;
         if ($esSocio && $socio) {
             $errorContacto = $model->actualizarContactoSocio($usuarioId, $juntaId, $nombres, $apPat, $apMat, $email, $telefono);
             if ($errorContacto !== null) {
                 return ['error' => $errorContacto, 'old' => $old];
             }
-        } elseif ($esSocio && $usuarioId > 0) {
-            $model->actualizarTelefonoMiembro($usuarioId, $juntaId, $telefono);
         }
 
         $ninos = [];
@@ -313,6 +337,9 @@ class VotacionLinkController extends Controller {
 
     private function avisoIngreso(object $v, bool $abierta): string {
         $nombre = ($v->tipo ?? '') === 'encuesta' ? 'encuesta' : 'votación';
+        if (($v->participacion ?? '') === 'abierta') {
+            return 'Ingrese con su RUT o correo. Al entrar, la encuesta se completa con el nombre, correo y teléfono que ya tiene la organización.';
+        }
         if ($abierta) {
             return 'El enlace está bien. Para participar en esta ' . $nombre . ' primero debe autenticarse con su RUT o correo. Al ingresar se abre la consulta.';
         }
