@@ -18,7 +18,9 @@
                 ?>
                 <?php echo date('d/m/Y H:i', strtotime($v->fecha_inicio)); ?> — <?php echo date('d/m/Y H:i', strtotime($v->fecha_fin)); ?>
                 (hora de Chile, ahora <?php echo date('d/m/Y H:i'); ?>)
-                · Audiencia: <?php echo htmlspecialchars(str_replace('_', ' ', $v->audiencia_tipo)); ?>
+                · <?php echo ($v->participacion ?? '') === 'abierta' ? 'Abierta al público' : ('Audiencia: ' . htmlspecialchars(str_replace('_', ' ', $v->audiencia_tipo))); ?>
+                <?php if (!empty($v->inscribe_ninos)): ?> · Inscripción de niños<?php endif; ?>
+                <?php if (!empty($v->bcc_correo)): ?> · Copia oculta a <?php echo htmlspecialchars((string)$v->bcc_correo); ?><?php endif; ?>
                 · <?php echo htmlspecialchars($visLabel); ?>
             </p>
         </div>
@@ -55,15 +57,17 @@
 </div>
 
 <div class="card card-warning" style="margin-bottom:1.5rem;">
-    <h3 class="card-title">Enlace para electores</h3>
-    <p style="font-size:0.85rem;color:var(--text-muted);">Comparta este enlace por correo o WhatsApp. Quien no haya iniciado sesión verá una pantalla para autenticarse y, al entrar, se abre la consulta.</p>
+    <h3 class="card-title"><?php echo ($v->participacion ?? '') === 'abierta' ? 'Enlace de la encuesta abierta' : 'Enlace para electores'; ?></h3>
+    <p style="font-size:0.85rem;color:var(--text-muted);"><?php echo ($v->participacion ?? '') === 'abierta'
+        ? 'Comparta este enlace por correo o WhatsApp. Quien es socio y ya inició sesión confirma su nombre, correo y teléfono. Quien no es socio completa nombre y apellidos, correo y teléfono, y puede participar igual.'
+        : 'Comparta este enlace por correo o WhatsApp. Quien no haya iniciado sesión verá una pantalla para autenticarse y, al entrar, se abre la consulta.'; ?></p>
     <input type="text" class="form-control" readonly value="<?php echo htmlspecialchars($data['link_publico']); ?>" onclick="this.select();">
     <form action="<?php echo URLROOT; ?>/admin/votacion_probar_correo" method="POST" style="margin-top:0.75rem;">
         <input type="hidden" name="votacion_id" value="<?php echo (int)$v->id; ?>">
         <button type="submit" class="btn btn-secondary btn-sm">Enviarme un correo de prueba</button>
     </form>
     <p style="font-size:0.75rem;color:var(--text-muted);margin:0.4rem 0 0;">Llega solo a su correo, para ver el aviso tal como lo recibe un socio. No avisa al resto.</p>
-    <?php if ($v->estado === 'activa'): ?>
+    <?php if ($v->estado === 'activa' && ($v->participacion ?? '') !== 'abierta'): ?>
         <?php $sinVotar = (int)($data['sin_votar'] ?? 0); ?>
         <?php if ($sinVotar > 0): ?>
         <form action="<?php echo URLROOT; ?>/admin/votacion_recordar" method="POST" style="margin-top:1rem;"
@@ -77,6 +81,74 @@
         <?php endif; ?>
     <?php endif; ?>
 </div>
+
+<?php if (($v->participacion ?? '') === 'abierta'):
+    $resumen = $data['resumen_ninos'] ?? ['personas' => 0, 'ninos' => 0, 'femenino' => 0, 'masculino' => 0, 'no_responder' => 0, 'edades' => []];
+    $participaciones = $data['participaciones'] ?? [];
+?>
+<div class="card card-success" style="margin-bottom:1.5rem;">
+    <h3 class="card-title"><?php echo !empty($v->inscribe_ninos) ? 'Niños y niñas inscritos' : 'Respuestas de la encuesta abierta'; ?></h3>
+    <div class="grid-2col" style="margin-bottom:1rem;">
+        <div><strong><?php echo (int)$resumen['personas']; ?></strong><br><span style="color:var(--text-muted);font-size:0.85rem;">Personas que respondieron</span></div>
+        <?php if (!empty($v->inscribe_ninos)): ?>
+        <div><strong><?php echo (int)$resumen['ninos']; ?></strong><br><span style="color:var(--text-muted);font-size:0.85rem;">Niños y niñas</span></div>
+        <div><strong><?php echo (int)$resumen['femenino']; ?></strong> Femenino · <strong><?php echo (int)$resumen['masculino']; ?></strong> Masculino · <strong><?php echo (int)$resumen['no_responder']; ?></strong> No responder</div>
+        <?php endif; ?>
+    </div>
+    <?php if (!empty($v->inscribe_ninos) && !empty($resumen['edades'])): ?>
+        <p style="font-size:0.85rem;margin-top:0;">
+            <?php
+            $trozos = [];
+            foreach ($resumen['edades'] as $edad => $cant) {
+                $trozos[] = (int)$edad . ' años: ' . (int)$cant;
+            }
+            echo htmlspecialchars(implode(' · ', $trozos));
+            ?>
+        </p>
+    <?php endif; ?>
+    <?php if (!empty($v->inscribe_ninos)): ?>
+        <p style="margin:0 0 0.75rem;"><a class="btn btn-secondary btn-sm" href="<?php echo URLROOT; ?>/admin/votacion_ninos_exportar/<?php echo (int)$v->id; ?>">Excel de niños</a></p>
+    <?php endif; ?>
+    <?php if (empty($participaciones)): ?>
+        <p style="color:var(--text-muted);">Todavía no hay respuestas.</p>
+    <?php else: ?>
+    <div class="table-responsive">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Nombre y apellidos</th>
+                    <th>Correo</th>
+                    <th>Teléfono</th>
+                    <th>Socio</th>
+                    <?php if (!empty($v->inscribe_ninos)): ?><th>Niños</th><?php endif; ?>
+                    <th>Fecha</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($participaciones as $p): ?>
+                <tr>
+                    <td><?php echo htmlspecialchars((string)$p->nombre); ?></td>
+                    <td><?php echo htmlspecialchars((string)$p->email); ?></td>
+                    <td><?php echo htmlspecialchars((string)$p->telefono); ?></td>
+                    <td><?php echo !empty($p->es_socio) ? 'Sí' : 'No'; ?></td>
+                    <?php if (!empty($v->inscribe_ninos)): ?>
+                    <td>
+                        <?php if (empty($p->ninos)): ?>—<?php else: ?>
+                            <?php foreach ($p->ninos as $nino): ?>
+                                <div><?php echo (int)$nino->edad; ?> años · <?php echo htmlspecialchars(Votacion::etiquetaGenero((string)$nino->genero)); ?></div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </td>
+                    <?php endif; ?>
+                    <td><?php echo date('d/m/Y H:i', strtotime((string)$p->created_at)); ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <div style="margin-bottom:0.75rem;">
     <a href="<?php echo URLROOT; ?>/admin/votacion_exportar/<?php echo (int)$v->id; ?>" class="btn btn-secondary btn-sm">Exportar respuestas (Excel)</a>

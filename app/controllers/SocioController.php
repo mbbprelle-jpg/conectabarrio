@@ -462,6 +462,10 @@ class SocioController extends Controller {
             $this->redirect('/socio/votaciones');
             return;
         }
+        if (($v->participacion ?? '') === 'abierta') {
+            header('Location: ' . URLROOT . '/votacion/l/' . rawurlencode((string)$v->token_publico));
+            exit;
+        }
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $error = $this->votacionModel->submitVote($v, $uid, $juntaId, $this->sanitizePost());
             if ($error) {

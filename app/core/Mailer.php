@@ -18,7 +18,7 @@ class Mailer
     /**
      * @return array{ok: bool, error?: string}
      */
-    public static function send(string $to, string $subject, string $htmlBody, ?string $replyTo = null): array
+    public static function send(string $to, string $subject, string $htmlBody, ?string $replyTo = null, ?string $bcc = null): array
     {
         if (!self::isConfigured()) {
             return ['ok' => false, 'error' => 'SMTP no configurado (SMTP_HOST, SMTP_USER, SMTP_PASS).'];
@@ -53,6 +53,9 @@ class Mailer
                 $mail->addReplyTo($replyTo);
             }
             $mail->addAddress($to);
+            if ($bcc !== null && $bcc !== '' && strcasecmp($bcc, $to) !== 0 && filter_var($bcc, FILTER_VALIDATE_EMAIL)) {
+                $mail->addBCC($bcc);
+            }
             $mail->isHTML(true);
             $mail->Subject = $subject;
             $mail->Body = $htmlBody;

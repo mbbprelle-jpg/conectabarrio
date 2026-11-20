@@ -22,6 +22,13 @@ $fechaFin = $usarDraft
 $tipoVal = $campo('tipo', $edit?->tipo ?? 'votacion') ?: 'votacion';
 $audienciaVal = $campo('audiencia_tipo', $edit?->audiencia_tipo ?? 'todos_socios') ?: 'todos_socios';
 $vis = $campo('resultados_visibilidad', $edit?->resultados_visibilidad ?? 'al_votar') ?: 'al_votar';
+$participacionVal = $campo('participacion', $edit?->participacion ?? 'socios') ?: 'socios';
+if (!in_array($participacionVal, ['socios', 'abierta'], true)) {
+    $participacionVal = 'socios';
+}
+$inscribeNinos = $usarDraft ? !empty($draft['inscribe_ninos']) : !empty($edit?->inscribe_ninos);
+$bccCorreo = $campo('bcc_correo', $edit?->bcc_correo ?? '');
+$bccActivo = $usarDraft ? !empty($draft['bcc_activo']) : ($bccCorreo !== '');
 $publicarMarcado = $usarDraft ? !empty($draft['publicar']) : true;
 $filas = [];
 if ($usarDraft) {
@@ -70,7 +77,7 @@ while (count($filas) < 2) {
                 <label class="form-label">Pregunta principal *</label>
                 <textarea name="titulo" id="preguntaPrincipal" class="form-control" maxlength="500" rows="4"
                     placeholder="Ej. ¿Está de acuerdo con que la junta realice la actividad de Navidad usando fondos de la comunidad?"><?php echo htmlspecialchars($campo('titulo', $edit?->titulo ?? '')); ?></textarea>
-                <p id="contadorPregunta" style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">Es el texto que verán los socios. Hasta 500 caracteres.</p>
+                <p id="contadorPregunta" style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">Es el texto que verán quienes participen. Hasta 500 caracteres. Para Navidad puede usar, por ejemplo: Inscripción de niños y niñas para la actividad de Navidad.</p>
             </div>
             <div class="form-group">
                 <label class="form-label">Descripción</label>
@@ -84,14 +91,41 @@ while (count($filas) < 2) {
                 </select>
             </div>
             <div class="form-group">
-                <label class="form-label">Quién puede votar</label>
+                <label class="form-label">Quién puede responder</label>
+                <select name="participacion" class="form-control" id="participacionTipo">
+                    <option value="socios" <?php echo $participacionVal !== 'abierta' ? 'selected' : ''; ?>>Solo socios de la organización</option>
+                    <option value="abierta" <?php echo $participacionVal === 'abierta' ? 'selected' : ''; ?>>Abierta: cualquier persona con el enlace</option>
+                </select>
+                <p style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">En una encuesta abierta el socio confirma nombre, correo y teléfono. Quien no es socio igual puede participar e indica nombre y apellidos, correo y teléfono.</p>
+            </div>
+            <div id="abiertaBox" style="<?php echo $participacionVal === 'abierta' ? '' : 'display:none;'; ?>">
+                <div class="form-group">
+                    <label style="display:flex;gap:0.5rem;align-items:flex-start;">
+                        <input type="checkbox" name="inscribe_ninos" id="inscribeNinos" value="1" <?php echo $inscribeNinos ? 'checked' : ''; ?>>
+                        <span>Inscripción de niños y niñas. Pregunta cuántos son y, por cada uno, la edad y el género (Femenino, Masculino o No responder).</span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label style="display:flex;gap:0.5rem;align-items:flex-start;">
+                        <input type="checkbox" name="bcc_activo" id="bccActivo" value="1" <?php echo $bccActivo ? 'checked' : ''; ?>>
+                        <span>Recibir una copia oculta de cada correo de confirmación</span>
+                    </label>
+                    <div id="bccBox" style="margin-top:0.5rem;<?php echo $bccActivo ? '' : 'display:none;'; ?>">
+                        <label class="form-label">Correo que recibe la copia oculta</label>
+                        <input type="email" name="bcc_correo" id="bccCorreo" class="form-control" maxlength="150" value="<?php echo htmlspecialchars($bccCorreo); ?>" placeholder="directiva@correo.cl">
+                        <p style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">Quien responde recibe el aviso de que quedó registrado y no ve esta dirección. Cada copia llega cuando alguien termina, así puede contar las respuestas al tiro.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group" id="boxAudiencia" style="<?php echo $participacionVal === 'abierta' ? 'display:none;' : ''; ?>">
+                <label class="form-label">Si es solo para socios, quién puede votar</label>
                 <select name="audiencia_tipo" class="form-control" id="audienciaTipo">
                     <option value="todos_socios" <?php echo $audienciaVal === 'todos_socios' ? 'selected' : ''; ?>>Todos los socios</option>
                     <option value="directiva" <?php echo $audienciaVal === 'directiva' ? 'selected' : ''; ?>>Solo directiva</option>
                     <option value="seleccionados" <?php echo $audienciaVal === 'seleccionados' ? 'selected' : ''; ?>>Socios seleccionados</option>
                 </select>
             </div>
-            <div class="form-group" id="electoresBox" style="<?php echo $audienciaVal === 'seleccionados' ? '' : 'display:none;'; ?>">
+            <div class="form-group" id="electoresBox" style="<?php echo ($participacionVal !== 'abierta' && $audienciaVal === 'seleccionados') ? '' : 'display:none;'; ?>">
                 <label class="form-label">Electores</label>
                 <div style="max-height:140px;overflow:auto;border:1px solid var(--border-color);border-radius:8px;padding:0.5rem;">
                     <?php foreach ($miembros as $m): ?>
@@ -124,7 +158,7 @@ while (count($filas) < 2) {
                 </select>
                 <p style="font-size:0.75rem;color:var(--text-muted);margin:0.35rem 0 0;">Los porcentajes nunca muestran el nombre de quien votó.</p>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="opcionesGroup" style="<?php echo ($participacionVal === 'abierta' && $inscribeNinos) ? 'display:none;' : ''; ?>">
                 <label class="form-label">Opciones de respuesta * (mínimo 2)</label>
                 <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0;">Si alguien elige Sí, No u otra opción, puede hacerle una segunda pregunta solo en ese caso.</p>
                 <div id="opcionesList">
@@ -174,7 +208,7 @@ while (count($filas) < 2) {
                 <tbody>
                 <?php foreach ($data['votaciones'] as $v): ?>
                     <tr>
-                        <td><strong><?php echo htmlspecialchars($v->titulo); ?></strong><br><span style="font-size:0.75rem;color:var(--text-muted);"><?php echo ucfirst($v->tipo); ?></span></td>
+                        <td><strong><?php echo htmlspecialchars($v->titulo); ?></strong><br><span style="font-size:0.75rem;color:var(--text-muted);"><?php echo ucfirst($v->tipo); ?><?php echo ($v->participacion ?? '') === 'abierta' ? ' · Abierta' : ''; ?><?php echo !empty($v->inscribe_ninos) ? ' · Niños' : ''; ?></span></td>
                         <td><span class="badge badge-<?php echo $v->estado === 'activa' ? 'success' : ($v->estado === 'cerrada' ? 'secondary' : 'warning'); ?>"><?php echo htmlspecialchars($v->estado); ?></span></td>
                         <td><?php echo (int)$v->total_votos; ?></td>
                         <td>
@@ -278,8 +312,33 @@ function revisarFormulario() {
         var msg = revisarOpcion(editor);
         if (msg) errores.push(msg);
     });
-    if (conTexto < 2) errores.push('Escriba al menos 2 opciones de respuesta.');
+    var abierta = document.getElementById('participacionTipo') && document.getElementById('participacionTipo').value === 'abierta';
+    var ninos = document.getElementById('inscribeNinos') && document.getElementById('inscribeNinos').checked;
+    if (!(abierta && ninos) && conTexto < 2) errores.push('Escriba al menos 2 opciones de respuesta.');
+    if (abierta && document.getElementById('bccActivo') && document.getElementById('bccActivo').checked) {
+        var bcc = document.getElementById('bccCorreo');
+        if (!bcc.value.trim() || bcc.value.indexOf('@') < 1) {
+            errores.push('Indique el correo que recibirá la copia oculta.');
+            marcarCampo(bcc, true);
+        } else {
+            marcarCampo(bcc, false);
+        }
+    }
     return errores;
+}
+
+function syncApertura() {
+    var abierta = document.getElementById('participacionTipo').value === 'abierta';
+    document.getElementById('abiertaBox').style.display = abierta ? '' : 'none';
+    document.getElementById('boxAudiencia').style.display = abierta ? 'none' : '';
+    if (abierta) {
+        document.getElementById('electoresBox').style.display = 'none';
+    } else if (document.getElementById('audienciaTipo').value === 'seleccionados') {
+        document.getElementById('electoresBox').style.display = '';
+    }
+    var ninos = abierta && document.getElementById('inscribeNinos').checked;
+    document.getElementById('opcionesGroup').style.display = ninos ? 'none' : '';
+    document.getElementById('bccBox').style.display = (abierta && document.getElementById('bccActivo').checked) ? '' : 'none';
 }
 
 function mostrarErrores(errores) {
@@ -295,8 +354,13 @@ function mostrarErrores(errores) {
 }
 
 document.getElementById('audienciaTipo')?.addEventListener('change', function() {
+    if (document.getElementById('participacionTipo').value === 'abierta') return;
     document.getElementById('electoresBox').style.display = this.value === 'seleccionados' ? '' : 'none';
 });
+document.getElementById('participacionTipo')?.addEventListener('change', syncApertura);
+document.getElementById('inscribeNinos')?.addEventListener('change', syncApertura);
+document.getElementById('bccActivo')?.addEventListener('change', syncApertura);
+syncApertura();
 
 document.getElementById('preguntaPrincipal')?.addEventListener('input', function () {
     var n = this.value.length;

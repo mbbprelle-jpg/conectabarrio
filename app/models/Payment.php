@@ -250,6 +250,81 @@ class Payment extends Model {
         return ['registered' => $registered, 'total' => $total, 'correlativo' => $correlativo];
     }
 
+    public function getById(int $id) {
+        $joinComprobante = $this->hasComprobantesTable() && $this->hasComprobanteIdColumn()
+            ? ' LEFT JOIN suscripcion_comprobantes sc ON sc.id = p.comprobante_id'
+            : '';
+        $selectCorrelativo = $joinComprobante ? ', sc.correlativo AS comprobante_correlativo' : '';
+        $this->db->query("SELECT p.*, j.nombre AS org_nombre{$selectCorrelativo}
+            FROM payments p
+            INNER JOIN juntas_vecinos j ON j.id = p.org_id{$joinComprobante}
+            WHERE p.id = :id
+            LIMIT 1");
+        $this->db->bind(':id', $id);
+        return $this->db->single();
+    }
+
+    /**
+     * Corrige un pago ya registrado. Devuelve null si se guardó, o el motivo del rechazo.
+     */
+    public function updateRegistro(int $id, string $mes, int $amount, string $fechaPago, string $metodoPago, string $status): ?string {
+        $row = $this->getById($id);
+        if (!$row) {
+            return 'El pago no existe.';
+        }
+        if (!preg_match('/^\d{4}-\d{2}$/', $mes)) {
+            return 'El período debe tener el formato año-mes.';
+        }
+        if (!in_array($status, ['paid', 'pending', 'overdue'], true)) {
+            return 'El estado no es válido.';
+        }
+        $otro = $this->getByOrgMonth((int)$row->org_id, $mes);
+        if ($otro && (int)$otro->id !== $id) {
+            return 'Esa organización ya tiene un pago en ' . $mes . '.';
+        }
+
+        $amount = max(0, $amount);
+        $dueDate = date('Y-m-t', strtotime($mes . '-01'));
+        $sets = ['amount = :amount', 'due_date = :due_date', 'paid_at = :paid_at', 'status = :status'];
+        if ($this->hasMesPeriodoColumn()) {
+            $sets[] = 'mes_periodo = :mes_periodo';
+        }
+        if ($this->hasMetodoPagoColumn()) {
+            $sets[] = 'metodo_pago = :metodo_pago';
+        }
+        $this->db->query('UPDATE payments SET ' . implode(', ', $sets) . ' WHERE id = :id');
+        $this->db->bind(':amount', $amount);
+        $this->db->bind(':due_date', $dueDate);
+        $this->db->bind(':paid_at', $fechaPago);
+        $this->db->bind(':status', $status);
+        if ($this->hasMesPeriodoColumn()) {
+            $this->db->bind(':mes_periodo', $mes);
+        }
+        if ($this->hasMetodoPagoColumn()) {
+            $this->db->bind(':metodo_pago', $metodoPago !== '' ? $metodoPago : null);
+        }
+        $this->db->bind(':id', $id);
+        if (!$this->db->execute()) {
+            return 'No se pudo guardar la corrección.';
+        }
+
+        if (!empty($row->comprobante_id) && $this->hasComprobantesTable()) {
+            $this->db->query('SELECT COALESCE(SUM(amount), 0) AS total FROM payments WHERE comprobante_id = :cid');
+            $this->db->bind(':cid', (int)$row->comprobante_id);
+            $suma = $this->db->single();
+            $this->db->query('UPDATE suscripcion_comprobantes
+                SET total_amount = :total, fecha_pago = :fecha, metodo_pago = :metodo
+                WHERE id = :id');
+            $this->db->bind(':total', (int)($suma->total ?? $amount));
+            $this->db->bind(':fecha', $fechaPago);
+            $this->db->bind(':metodo', $metodoPago !== '' ? $metodoPago : null);
+            $this->db->bind(':id', (int)$row->comprobante_id);
+            $this->db->execute();
+        }
+
+        return null;
+    }
+
     public function getAllWithOrg() {
         $orderExpr = $this->hasMesPeriodoColumn()
             ? "COALESCE(p.mes_periodo, DATE_FORMAT(p.due_date, '%Y-%m'))"

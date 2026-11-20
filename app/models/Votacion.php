@@ -4,6 +4,7 @@ class Votacion extends Model {
     private static $tablesReady = null;
     private static $schemaReady = null;
     private static $ensureAttempted = false;
+    private static $abiertaReady = null;
 
     public function tablesExist(): bool {
         if (self::$tablesReady === null) {
@@ -241,8 +242,12 @@ class Votacion extends Model {
         if (!$this->tablesExist()) {
             return [];
         }
+        $this->ensureAbierta();
+        $votosAbiertos = ($this->columnExists('votaciones', 'participacion') && $this->tableExists('votacion_participaciones'))
+            ? ' + (SELECT COUNT(*) FROM votacion_participaciones p WHERE p.votacion_id = v.id)'
+            : '';
         $this->db->query('SELECT v.*, u.nombre AS creador_nombre,
-            (SELECT COUNT(*) FROM votacion_respuestas WHERE votacion_id = v.id) AS total_votos
+            (SELECT COUNT(*) FROM votacion_respuestas WHERE votacion_id = v.id)' . $votosAbiertos . ' AS total_votos
             FROM votaciones v
             INNER JOIN usuarios u ON u.id = v.creado_por
             WHERE v.junta_id = :junta_id
@@ -301,6 +306,10 @@ class Votacion extends Model {
     public function canUserParticipate(object $v, int $usuarioId, int $juntaId): bool {
         if ((int)$v->junta_id !== $juntaId || !$this->isActiva($v)) {
             return false;
+        }
+        if (($v->participacion ?? 'socios') === 'abierta') {
+            return $this->userIsActiveMember($usuarioId, $juntaId)
+                && !$this->usuarioYaParticipo((int)$v->id, $usuarioId);
         }
         if ($this->hasUserVoted((int)$v->id, $usuarioId)) {
             return false;
@@ -543,12 +552,42 @@ class Votacion extends Model {
             }
         }
 
+        $extraOpcion = [];
+        $extraSeg = [];
+        $extraTextos = [];
+        if ($this->tableExists('votacion_participaciones') && $this->columnExists('votacion_participaciones', 'opcion_id')) {
+            $this->db->query('SELECT opcion_id, COUNT(*) AS c FROM votacion_participaciones
+                WHERE votacion_id = :vid AND opcion_id IS NOT NULL GROUP BY opcion_id');
+            $this->db->bind(':vid', $votacionId);
+            foreach ($this->db->resultSet() as $row) {
+                $extraOpcion[(int)$row->opcion_id] = (int)$row->c;
+                $total += (int)$row->c;
+            }
+            if ($this->columnExists('votacion_participaciones', 'seguimiento_opcion_id')) {
+                $this->db->query('SELECT seguimiento_opcion_id, COUNT(*) AS c FROM votacion_participaciones
+                    WHERE votacion_id = :vid AND seguimiento_opcion_id IS NOT NULL GROUP BY seguimiento_opcion_id');
+                $this->db->bind(':vid', $votacionId);
+                foreach ($this->db->resultSet() as $row) {
+                    $extraSeg[(int)$row->seguimiento_opcion_id] = (int)$row->c;
+                }
+            }
+            if ($this->columnExists('votacion_participaciones', 'seguimiento_texto')) {
+                $this->db->query("SELECT opcion_id, COUNT(*) AS c FROM votacion_participaciones
+                    WHERE votacion_id = :vid AND seguimiento_texto IS NOT NULL AND TRIM(seguimiento_texto) <> ''
+                    GROUP BY opcion_id");
+                $this->db->bind(':vid', $votacionId);
+                foreach ($this->db->resultSet() as $row) {
+                    $extraTextos[(int)$row->opcion_id] = (int)$row->c;
+                }
+            }
+        }
+
         $opciones = [];
         foreach ($ops as $o) {
-            $votos = (int)$o->votos;
+            $votos = (int)$o->votos + ($extraOpcion[(int)$o->id] ?? 0);
             $items = [];
             foreach ($segByOpcion[(int)$o->id] ?? [] as $s) {
-                $sv = (int)$s->votos;
+                $sv = (int)$s->votos + ($extraSeg[(int)$s->id] ?? 0);
                 $items[] = [
                     'texto' => (string)$s->texto,
                     'votos' => $sv,
@@ -562,7 +601,7 @@ class Votacion extends Model {
                 'pregunta' => (string)($o->seguimiento_pregunta ?? ''),
                 'tipo' => (string)($o->seguimiento_tipo ?? 'ninguno'),
                 'items' => $items,
-                'textos' => (int)($o->textos ?? 0),
+                'textos' => (int)($o->textos ?? 0) + ($extraTextos[(int)$o->id] ?? 0),
             ];
         }
 
@@ -798,5 +837,271 @@ class Votacion extends Model {
         $this->db->query('SELECT usuario_id FROM votacion_electores WHERE votacion_id = :vid');
         $this->db->bind(':vid', $votacionId);
         return array_map(static fn($r) => (int)$r->usuario_id, $this->db->resultSet());
+    }
+
+    public function ensureAbierta(): bool {
+        if (self::$abiertaReady === true) {
+            return true;
+        }
+        if (!$this->tablesExist()) {
+            return false;
+        }
+        try {
+            if (!$this->columnExists('votaciones', 'participacion')) {
+                $this->db->exec("ALTER TABLE votaciones
+                    ADD COLUMN participacion ENUM('socios','abierta') NOT NULL DEFAULT 'socios' AFTER audiencia_tipo");
+            }
+            if (!$this->columnExists('votaciones', 'inscribe_ninos')) {
+                $this->db->exec('ALTER TABLE votaciones ADD COLUMN inscribe_ninos TINYINT(1) NOT NULL DEFAULT 0 AFTER participacion');
+            }
+            if (!$this->columnExists('votaciones', 'bcc_correo')) {
+                $this->db->exec('ALTER TABLE votaciones ADD COLUMN bcc_correo VARCHAR(150) NULL AFTER inscribe_ninos');
+            }
+            if (!$this->tableExists('votacion_participaciones')) {
+                $this->db->exec("CREATE TABLE votacion_participaciones (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    votacion_id INT NOT NULL,
+                    usuario_id INT NULL,
+                    es_socio TINYINT(1) NOT NULL DEFAULT 0,
+                    nombre VARCHAR(200) NOT NULL,
+                    email VARCHAR(150) NOT NULL,
+                    telefono VARCHAR(30) NOT NULL,
+                    cantidad_ninos INT NOT NULL DEFAULT 0,
+                    opcion_id INT NULL,
+                    respuesta_texto TEXT NULL,
+                    seguimiento_texto TEXT NULL,
+                    seguimiento_opcion_id INT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_votacion_part_email (votacion_id, email),
+                    KEY idx_part_votacion (votacion_id),
+                    KEY idx_part_usuario (votacion_id, usuario_id)
+                ) ENGINE=InnoDB");
+            }
+            if (!$this->tableExists('votacion_ninos')) {
+                $this->db->exec("CREATE TABLE votacion_ninos (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    participacion_id INT NOT NULL,
+                    orden INT NOT NULL DEFAULT 1,
+                    edad TINYINT UNSIGNED NOT NULL,
+                    genero ENUM('femenino','masculino','no_responder') NOT NULL,
+                    KEY idx_nino_part (participacion_id)
+                ) ENGINE=InnoDB");
+            }
+        } catch (Throwable $e) {
+            self::$abiertaReady = false;
+            return false;
+        }
+        self::$abiertaReady = $this->columnExists('votaciones', 'participacion')
+            && $this->columnExists('votaciones', 'inscribe_ninos')
+            && $this->columnExists('votaciones', 'bcc_correo')
+            && $this->tableExists('votacion_participaciones')
+            && $this->tableExists('votacion_ninos');
+        return self::$abiertaReady;
+    }
+
+    public function guardarApertura(int $id, int $juntaId, string $participacion, int $inscribeNinos, ?string $bcc): bool {
+        if (!$this->ensureAbierta()) {
+            return false;
+        }
+        $participacion = $participacion === 'abierta' ? 'abierta' : 'socios';
+        $inscribeNinos = ($participacion === 'abierta' && $inscribeNinos === 1) ? 1 : 0;
+        $this->db->query('UPDATE votaciones SET participacion = :participacion, inscribe_ninos = :ninos, bcc_correo = :bcc
+            WHERE id = :id AND junta_id = :junta_id');
+        $this->db->bind(':participacion', $participacion);
+        $this->db->bind(':ninos', $inscribeNinos);
+        $this->db->bind(':bcc', ($bcc !== null && $bcc !== '') ? $bcc : null);
+        $this->db->bind(':id', $id);
+        $this->db->bind(':junta_id', $juntaId);
+        return $this->db->execute();
+    }
+
+    public function usuarioYaParticipo(int $votacionId, int $usuarioId): bool {
+        if ($usuarioId <= 0 || !$this->tableExists('votacion_participaciones')) {
+            return false;
+        }
+        $this->db->query('SELECT id FROM votacion_participaciones WHERE votacion_id = :vid AND usuario_id = :uid LIMIT 1');
+        $this->db->bind(':vid', $votacionId);
+        $this->db->bind(':uid', $usuarioId);
+        return (bool)$this->db->single();
+    }
+
+    public function emailYaParticipo(int $votacionId, string $email): bool {
+        $email = strtolower(trim($email));
+        if ($email === '' || !$this->tableExists('votacion_participaciones')) {
+            return false;
+        }
+        $this->db->query('SELECT id FROM votacion_participaciones WHERE votacion_id = :vid AND email = :email LIMIT 1');
+        $this->db->bind(':vid', $votacionId);
+        $this->db->bind(':email', $email);
+        return (bool)$this->db->single();
+    }
+
+    public function miembroPorCorreo(int $juntaId, string $email) {
+        $this->db->query('SELECT u.* FROM usuarios u
+            INNER JOIN usuario_membresias m ON m.usuario_id = u.id AND m.junta_id = :jid AND m.estado = 1
+            WHERE LOWER(u.email) = :email LIMIT 1');
+        $this->db->bind(':jid', $juntaId);
+        $this->db->bind(':email', strtolower(trim($email)));
+        return $this->db->single();
+    }
+
+    public function miembroPorId(int $juntaId, int $usuarioId) {
+        if ($usuarioId <= 0) {
+            return null;
+        }
+        $this->db->query('SELECT u.* FROM usuarios u
+            INNER JOIN usuario_membresias m ON m.usuario_id = u.id AND m.junta_id = :jid AND m.estado = 1
+            WHERE u.id = :id LIMIT 1');
+        $this->db->bind(':jid', $juntaId);
+        $this->db->bind(':id', $usuarioId);
+        return $this->db->single();
+    }
+
+    /** @return string|null Mensaje de error */
+    public function actualizarContactoSocio(int $usuarioId, int $juntaId, string $nombre, string $apellidoPaterno, string $apellidoMaterno, string $email, string $telefono): ?string {
+        $email = strtolower(trim($email));
+        $this->db->query('SELECT id FROM usuarios WHERE email = :email AND id <> :id LIMIT 1');
+        $this->db->bind(':email', $email);
+        $this->db->bind(':id', $usuarioId);
+        if ($this->db->single()) {
+            return 'Ese correo ya está usado por otra cuenta. Indique el correo del socio o uno que no esté ocupado.';
+        }
+        $this->db->query('UPDATE usuarios u
+            INNER JOIN usuario_membresias m ON m.usuario_id = u.id AND m.junta_id = :jid AND m.estado = 1
+            SET u.nombre = :nombre, u.apellido_paterno = :ap, u.apellido_materno = :am, u.email = :email, u.telefono = :tel
+            WHERE u.id = :id');
+        $this->db->bind(':jid', $juntaId);
+        $this->db->bind(':nombre', $nombre);
+        $this->db->bind(':ap', $apellidoPaterno);
+        $this->db->bind(':am', $apellidoMaterno);
+        $this->db->bind(':email', $email);
+        $this->db->bind(':tel', $telefono);
+        $this->db->bind(':id', $usuarioId);
+        if (!$this->db->execute()) {
+            return 'No se pudieron actualizar los datos del socio.';
+        }
+        return null;
+    }
+
+    public function actualizarTelefonoMiembro(int $usuarioId, int $juntaId, string $telefono): void {
+        $this->db->query('UPDATE usuarios u
+            INNER JOIN usuario_membresias m ON m.usuario_id = u.id AND m.junta_id = :jid AND m.estado = 1
+            SET u.telefono = :tel
+            WHERE u.id = :id');
+        $this->db->bind(':jid', $juntaId);
+        $this->db->bind(':tel', $telefono);
+        $this->db->bind(':id', $usuarioId);
+        $this->db->execute();
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     * @param array<int, array{edad:int, genero:string}> $ninos
+     */
+    public function guardarParticipacion(int $votacionId, array $data, array $ninos): int {
+        if (!$this->ensureAbierta()) {
+            return 0;
+        }
+        $this->db->beginTransaction();
+        try {
+            $this->db->query('INSERT INTO votacion_participaciones
+                (votacion_id, usuario_id, es_socio, nombre, email, telefono, cantidad_ninos, opcion_id, respuesta_texto, seguimiento_texto, seguimiento_opcion_id)
+                VALUES (:vid, :uid, :socio, :nombre, :email, :tel, :cant, :oid, :txt, :stxt, :soid)');
+            $this->db->bind(':vid', $votacionId);
+            $this->db->bind(':uid', !empty($data['usuario_id']) ? (int)$data['usuario_id'] : null);
+            $this->db->bind(':socio', !empty($data['es_socio']) ? 1 : 0);
+            $this->db->bind(':nombre', (string)$data['nombre']);
+            $this->db->bind(':email', strtolower(trim((string)$data['email'])));
+            $this->db->bind(':tel', (string)$data['telefono']);
+            $this->db->bind(':cant', count($ninos));
+            $this->db->bind(':oid', !empty($data['opcion_id']) ? (int)$data['opcion_id'] : null);
+            $this->db->bind(':txt', ($data['respuesta_texto'] ?? '') !== '' ? (string)$data['respuesta_texto'] : null);
+            $this->db->bind(':stxt', ($data['seguimiento_texto'] ?? '') !== '' ? (string)$data['seguimiento_texto'] : null);
+            $this->db->bind(':soid', !empty($data['seguimiento_opcion_id']) ? (int)$data['seguimiento_opcion_id'] : null);
+            if (!$this->db->execute()) {
+                $this->db->rollBack();
+                return 0;
+            }
+            $partId = (int)$this->db->lastInsertId();
+            $orden = 1;
+            foreach ($ninos as $nino) {
+                $this->db->query('INSERT INTO votacion_ninos (participacion_id, orden, edad, genero) VALUES (:pid, :orden, :edad, :genero)');
+                $this->db->bind(':pid', $partId);
+                $this->db->bind(':orden', $orden);
+                $this->db->bind(':edad', (int)$nino['edad']);
+                $this->db->bind(':genero', (string)$nino['genero']);
+                if (!$this->db->execute()) {
+                    $this->db->rollBack();
+                    return 0;
+                }
+                $orden++;
+            }
+            $this->db->commit();
+            return $partId;
+        } catch (Throwable $e) {
+            $this->db->rollBack();
+            return 0;
+        }
+    }
+
+    public function listarParticipaciones(int $votacionId): array {
+        if (!$this->ensureAbierta()) {
+            return [];
+        }
+        $this->db->query('SELECT * FROM votacion_participaciones WHERE votacion_id = :vid ORDER BY created_at DESC, id DESC');
+        $this->db->bind(':vid', $votacionId);
+        $rows = $this->db->resultSet();
+        if (!$rows) {
+            return [];
+        }
+        $ids = array_map(static fn($r) => (int)$r->id, $rows);
+        $this->db->query('SELECT * FROM votacion_ninos WHERE participacion_id IN (' . implode(',', $ids) . ') ORDER BY orden ASC, id ASC');
+        $porPart = [];
+        foreach ($this->db->resultSet() as $nino) {
+            $porPart[(int)$nino->participacion_id][] = $nino;
+        }
+        foreach ($rows as $row) {
+            $row->ninos = $porPart[(int)$row->id] ?? [];
+        }
+        return $rows;
+    }
+
+    /** @param array<int, object> $participaciones */
+    public static function resumenNinos(array $participaciones): array {
+        $femenino = 0;
+        $masculino = 0;
+        $noResponder = 0;
+        $edades = [];
+        foreach ($participaciones as $p) {
+            foreach ($p->ninos ?? [] as $nino) {
+                $genero = (string)($nino->genero ?? '');
+                if ($genero === 'femenino') {
+                    $femenino++;
+                } elseif ($genero === 'masculino') {
+                    $masculino++;
+                } else {
+                    $noResponder++;
+                }
+                $edad = (int)($nino->edad ?? 0);
+                $edades[$edad] = ($edades[$edad] ?? 0) + 1;
+            }
+        }
+        ksort($edades);
+        return [
+            'personas' => count($participaciones),
+            'ninos' => $femenino + $masculino + $noResponder,
+            'femenino' => $femenino,
+            'masculino' => $masculino,
+            'no_responder' => $noResponder,
+            'edades' => $edades,
+        ];
+    }
+
+    public static function etiquetaGenero(string $genero): string {
+        return [
+            'femenino' => 'Femenino',
+            'masculino' => 'Masculino',
+            'no_responder' => 'No responder',
+        ][$genero] ?? 'No responder';
     }
 }

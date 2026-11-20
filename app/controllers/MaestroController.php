@@ -279,9 +279,51 @@ class MaestroController extends Controller {
             'active_menu' => 'payments',
             'payments' => $this->paymentModel->getAllWithOrg(),
             'summary' => $this->paymentModel->summarizeGlobal(),
-            'metodo_labels' => Payment::metodoPagoLabels()
+            'metodo_labels' => Payment::metodoPagoLabels(),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
         ];
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
         $this->view('maestro/payments', $data);
+    }
+
+    public function pago_actualizar() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/maestro/payments');
+            return;
+        }
+        $post = $this->sanitizePost();
+        $id = (int)($post['payment_id'] ?? 0);
+        $mes = trim((string)($post['mes_periodo'] ?? ''));
+        $amount = (int)($post['amount'] ?? 0);
+        $fecha = trim((string)($post['paid_at'] ?? ''));
+        $metodo = trim((string)($post['metodo_pago'] ?? ''));
+        $status = trim((string)($post['status'] ?? 'paid'));
+        $metodosValidos = array_keys(Payment::metodoPagoLabels());
+
+        if ($id <= 0) {
+            $_SESSION['error_msg'] = 'No se identificó el pago a corregir.';
+            $this->redirect('/maestro/payments');
+            return;
+        }
+        if ($fecha === '' || strtotime($fecha) === false) {
+            $_SESSION['error_msg'] = 'Indique una fecha de pago válida.';
+            $this->redirect('/maestro/payments');
+            return;
+        }
+        if ($metodo !== '' && !in_array($metodo, $metodosValidos, true)) {
+            $_SESSION['error_msg'] = 'El método de pago no es válido.';
+            $this->redirect('/maestro/payments');
+            return;
+        }
+        $fecha = date('Y-m-d', strtotime($fecha));
+        $error = $this->paymentModel->updateRegistro($id, $mes, $amount, $fecha, $metodo, $status);
+        if ($error !== null) {
+            $_SESSION['error_msg'] = $error;
+        } else {
+            $_SESSION['success_msg'] = 'Pago actualizado. Período ' . $mes . ', monto $' . number_format(max(0, $amount), 0, ',', '.') . '.';
+        }
+        $this->redirect('/maestro/payments');
     }
 
     public function get_org_pagos($orgId = null) {

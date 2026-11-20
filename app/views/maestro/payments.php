@@ -62,6 +62,7 @@
                         <th>Método</th>
                         <th>Fecha de pago</th>
                         <th>Estado</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -84,6 +85,19 @@
                             <td><?php echo $metodo ? htmlspecialchars($metodoLabels[$metodo] ?? $metodo) : '—'; ?></td>
                             <td><?php echo !empty($p->paid_at) ? date('d-m-Y', strtotime($p->paid_at)) : '—'; ?></td>
                             <td><span class="badge <?php echo $estadoClasses[$estado] ?? 'badge-secondary'; ?>"><?php echo $estadoLabels[$estado] ?? $estado; ?></span></td>
+                            <td>
+                                <button type="button" class="btn btn-secondary btn-sm btn-corregir-pago"
+                                    data-id="<?php echo (int)$p->id; ?>"
+                                    data-org="<?php echo htmlspecialchars($p->org_nombre, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-mes="<?php echo htmlspecialchars($periodo, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-monto="<?php echo (int)$p->amount; ?>"
+                                    data-metodo="<?php echo htmlspecialchars((string)($p->metodo_pago ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-fecha="<?php echo !empty($p->paid_at) ? date('Y-m-d', strtotime($p->paid_at)) : ''; ?>"
+                                    data-estado="<?php echo htmlspecialchars($estado, ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-comprobante="<?php echo htmlspecialchars((string)($p->comprobante_correlativo ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                                    Corregir
+                                </button>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -91,5 +105,72 @@
         </div>
     <?php endif; ?>
 </div>
+
+<div id="corregirPagoModal" class="glass-modal-overlay">
+    <div class="glass-modal-container" style="max-width: 480px;">
+        <button type="button" class="modal-close-btn" data-close-modal="corregirPagoModal" aria-label="Cerrar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <h3 style="margin-bottom: 0.35rem;">Corregir pago</h3>
+        <p id="corregirPagoOrg" style="margin: 0 0 1rem; color: var(--text-muted); font-size: 0.9rem;"></p>
+        <form action="<?php echo URLROOT; ?>/maestro/pago_actualizar" method="POST">
+            <input type="hidden" name="payment_id" id="corregir_payment_id">
+            <div class="form-group">
+                <label class="form-label" for="corregir_mes">Período</label>
+                <input type="month" name="mes_periodo" id="corregir_mes" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="corregir_monto">Monto (CLP)</label>
+                <input type="number" name="amount" id="corregir_monto" class="form-control" min="0" step="1" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="corregir_fecha">Fecha de pago</label>
+                <input type="date" name="paid_at" id="corregir_fecha" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="corregir_metodo">Método</label>
+                <select name="metodo_pago" id="corregir_metodo" class="form-control">
+                    <option value="">Sin método</option>
+                    <?php foreach ($data['metodo_labels'] as $clave => $etiqueta): ?>
+                        <option value="<?php echo htmlspecialchars($clave); ?>"><?php echo htmlspecialchars($etiqueta); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="corregir_estado">Estado</label>
+                <select name="status" id="corregir_estado" class="form-control">
+                    <option value="paid">Pagado</option>
+                    <option value="pending">Pendiente</option>
+                    <option value="overdue">Vencido</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Guardar corrección</button>
+        </form>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.btn-corregir-pago').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.getElementById('corregir_payment_id').value = btn.dataset.id || '';
+        document.getElementById('corregir_mes').value = btn.dataset.mes || '';
+        document.getElementById('corregir_monto').value = btn.dataset.monto || '0';
+        document.getElementById('corregir_fecha').value = btn.dataset.fecha || '';
+        document.getElementById('corregir_metodo').value = btn.dataset.metodo || '';
+        document.getElementById('corregir_estado').value = btn.dataset.estado || 'paid';
+        var extra = btn.dataset.comprobante ? ' · Comprobante ' + btn.dataset.comprobante : '';
+        document.getElementById('corregirPagoOrg').textContent = (btn.dataset.org || '') + extra;
+        var modal = document.getElementById('corregirPagoModal');
+        modal.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+    });
+});
+document.querySelectorAll('[data-close-modal="corregirPagoModal"]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        document.getElementById('corregirPagoModal').classList.remove('is-open');
+        document.body.style.overflow = '';
+    });
+});
+</script>
 
 <?php require_once APPROOT . '/views/layouts/footer.php'; ?>

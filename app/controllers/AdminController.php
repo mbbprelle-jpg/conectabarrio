@@ -3727,12 +3727,18 @@ class AdminController extends Controller {
             'titulo' => trim($post['titulo'] ?? ''),
             'descripcion' => trim($post['descripcion'] ?? ''),
             'tipo' => ($post['tipo'] ?? '') === 'encuesta' ? 'encuesta' : 'votacion',
-            'audiencia_tipo' => in_array($post['audiencia_tipo'] ?? '', ['directiva', 'seleccionados', 'todos_socios'], true)
-                ? $post['audiencia_tipo'] : 'todos_socios',
+            'audiencia_tipo' => (($post['participacion'] ?? '') === 'abierta')
+                ? 'todos_socios'
+                : (in_array($post['audiencia_tipo'] ?? '', ['directiva', 'seleccionados', 'todos_socios'], true)
+                    ? $post['audiencia_tipo'] : 'todos_socios'),
             'fecha_inicio' => $inicio !== '' ? str_replace('T', ' ', $inicio) . ':00' : '',
             'fecha_fin' => $fin !== '' ? str_replace('T', ' ', $fin) . ':00' : '',
             'resultados_visibilidad' => in_array($post['resultados_visibilidad'] ?? '', ['directiva', 'todos', 'al_votar'], true)
                 ? $post['resultados_visibilidad'] : 'al_votar',
+            'participacion' => ($post['participacion'] ?? '') === 'abierta' ? 'abierta' : 'socios',
+            'inscribe_ninos' => (($post['participacion'] ?? '') === 'abierta' && !empty($post['inscribe_ninos'])) ? 1 : 0,
+            'bcc_activo' => ($post['participacion'] ?? '') === 'abierta' && !empty($post['bcc_activo']),
+            'bcc_correo' => trim((string)($post['bcc_correo'] ?? '')),
             'opciones' => $opciones['items'],
             'opciones_error' => $opciones['error'],
             'publicar' => !empty($post['publicar']),
@@ -3743,8 +3749,19 @@ class AdminController extends Controller {
         if (($parsed['opciones_error'] ?? '') !== '') {
             return $parsed['opciones_error'];
         }
-        if ($parsed['titulo'] === '' || $parsed['fecha_inicio'] === '' || $parsed['fecha_fin'] === '' || count($parsed['opciones']) < 2) {
-            return 'Complete la pregunta principal, las fechas y al menos 2 opciones.';
+        $esNinos = !empty($parsed['inscribe_ninos']);
+        if ($parsed['titulo'] === '' || $parsed['fecha_inicio'] === '' || $parsed['fecha_fin'] === '' || (!$esNinos && count($parsed['opciones']) < 2)) {
+            return $esNinos
+                ? 'Complete la pregunta principal y las fechas.'
+                : 'Complete la pregunta principal, las fechas y al menos 2 opciones.';
+        }
+        if (($parsed['participacion'] ?? '') === 'abierta' && !$this->votacionModel->ensureAbierta()) {
+            return 'No se pudo preparar la encuesta abierta. Ejecute sql/add_votacion_abierta.sql y vuelva a intentar.';
+        }
+        if (!empty($parsed['bcc_activo'])) {
+            if ($parsed['bcc_correo'] === '' || !filter_var($parsed['bcc_correo'], FILTER_VALIDATE_EMAIL)) {
+                return 'Indique un correo válido para la copia oculta.';
+            }
         }
         $this->votacionModel->ensureSeguimiento();
         $max = $this->votacionModel->tituloMaxLength();
@@ -3830,6 +3847,10 @@ class AdminController extends Controller {
             'fecha_inicio' => (string)($post['fecha_inicio'] ?? ''),
             'fecha_fin' => (string)($post['fecha_fin'] ?? ''),
             'resultados_visibilidad' => (string)($post['resultados_visibilidad'] ?? 'al_votar'),
+            'participacion' => (string)($post['participacion'] ?? 'socios'),
+            'inscribe_ninos' => !empty($post['inscribe_ninos']) ? 1 : 0,
+            'bcc_activo' => !empty($post['bcc_activo']),
+            'bcc_correo' => (string)($post['bcc_correo'] ?? ''),
             'publicar' => !empty($post['publicar']),
             'electores' => array_map('intval', $post['electores'] ?? []),
             'opciones' => $filas,
@@ -3882,6 +3903,7 @@ class AdminController extends Controller {
     public function votaciones($id = null) {
         $this->requireManageVotaciones();
         $juntaId = (int)$_SESSION['user_junta_id'];
+        $this->votacionModel->ensureAbierta();
         $this->votacionModel->syncEstadosActivas();
         $editId = $id ? (int)$id : (int)($_GET['editar'] ?? 0);
         $data = [
@@ -3954,7 +3976,16 @@ class AdminController extends Controller {
             return;
         }
         unset($_SESSION['votacion_form_draft']);
-        $this->votacionModel->syncOpciones($vid, $parsed['opciones']);
+        $this->votacionModel->guardarApertura(
+            $vid,
+            $juntaId,
+            $parsed['participacion'],
+            (int)$parsed['inscribe_ninos'],
+            !empty($parsed['bcc_activo']) ? $parsed['bcc_correo'] : null
+        );
+        if (count($parsed['opciones']) >= 2) {
+            $this->votacionModel->syncOpciones($vid, $parsed['opciones']);
+        }
         if ($parsed['audiencia_tipo'] === 'seleccionados') {
             $this->votacionModel->replaceElectores($vid, $this->resolveElectoresFromPost($this->sanitizePost(), $juntaId));
         }
@@ -3993,6 +4024,13 @@ class AdminController extends Controller {
             $this->redirect('/admin/votaciones?editar=' . $id);
             return;
         }
+        $this->votacionModel->guardarApertura(
+            $id,
+            $juntaId,
+            $parsed['participacion'],
+            (int)$parsed['inscribe_ninos'],
+            !empty($parsed['bcc_activo']) ? $parsed['bcc_correo'] : null
+        );
         if (count($parsed['opciones']) >= 2) {
             $this->votacionModel->syncOpciones($id, $parsed['opciones']);
         }
@@ -4023,6 +4061,9 @@ class AdminController extends Controller {
             return;
         }
         $link = URLROOT . '/votacion/l/' . $v->token_publico;
+        $participaciones = (($v->participacion ?? '') === 'abierta')
+            ? $this->votacionModel->listarParticipaciones($id)
+            : [];
         $data = [
             'title' => $v->titulo,
             'header_title' => $v->titulo,
@@ -4035,6 +4076,8 @@ class AdminController extends Controller {
             'sin_votar' => count($this->votacionModel->getElectoresSinVotar($id, $juntaId, $v->audiencia_tipo)),
             'puede_ver_detalle' => $this->votacionModel->canViewVoterDetail($v, (int)$_SESSION['user_id'], AuthContext::isFullAdmin()),
             'detalle_votantes' => [],
+            'participaciones' => $participaciones,
+            'resumen_ninos' => Votacion::resumenNinos($participaciones),
             'success' => $_SESSION['success_msg'] ?? '',
             'error' => $_SESSION['error_msg'] ?? '',
         ];
@@ -4062,6 +4105,68 @@ class AdminController extends Controller {
             $this->votacionModel->getResultadosPayload($id),
             $conDetalle ? $this->votacionModel->getDetalleVotantes($id, $juntaId) : null
         );
+    }
+
+    public function votacion_ninos_exportar($id = 0) {
+        $this->requireManageVotaciones();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)$id;
+        $v = $this->votacionModel->getByIdAndJunta($id, $juntaId);
+        if (!$v) {
+            $_SESSION['error_msg'] = 'Votación no encontrada.';
+            $this->redirect('/admin/votaciones');
+            return;
+        }
+        $participaciones = $this->votacionModel->listarParticipaciones($id);
+        $resumen = Votacion::resumenNinos($participaciones);
+        $filename = 'encuesta_' . $id . '_ninos_' . date('Ymd_His') . '.csv';
+        header('Content-Type: text/csv; charset=UTF-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
+        $sep = ';';
+        fputcsv($out, ['Consulta', (string)$v->titulo], $sep);
+        fputcsv($out, ['Personas que respondieron', (string)$resumen['personas']], $sep);
+        fputcsv($out, ['Niños y niñas', (string)$resumen['ninos']], $sep);
+        fputcsv($out, ['Femenino', (string)$resumen['femenino']], $sep);
+        fputcsv($out, ['Masculino', (string)$resumen['masculino']], $sep);
+        fputcsv($out, ['No responder', (string)$resumen['no_responder']], $sep);
+        fputcsv($out, [], $sep);
+        fputcsv($out, ['Inscripción', 'Fecha', 'Nombre y apellidos', 'Correo', 'Teléfono', 'Es socio', 'Niño', 'Edad', 'Género'], $sep);
+        foreach ($participaciones as $p) {
+            $ninos = $p->ninos ?? [];
+            if (!$ninos) {
+                fputcsv($out, [
+                    (int)$p->id,
+                    date('d/m/Y H:i', strtotime((string)$p->created_at)),
+                    (string)$p->nombre,
+                    (string)$p->email,
+                    (string)$p->telefono,
+                    !empty($p->es_socio) ? 'Sí' : 'No',
+                    '',
+                    '',
+                    '',
+                ], $sep);
+                continue;
+            }
+            foreach ($ninos as $nino) {
+                fputcsv($out, [
+                    (int)$p->id,
+                    date('d/m/Y H:i', strtotime((string)$p->created_at)),
+                    (string)$p->nombre,
+                    (string)$p->email,
+                    (string)$p->telefono,
+                    !empty($p->es_socio) ? 'Sí' : 'No',
+                    (int)$nino->orden,
+                    (int)$nino->edad,
+                    Votacion::etiquetaGenero((string)$nino->genero),
+                ], $sep);
+            }
+        }
+        fclose($out);
+        exit;
     }
 
     private function exportarVotacionCsv(object $v, array $resultados, ?array $detalle): void {
@@ -4371,6 +4476,10 @@ class AdminController extends Controller {
             $_SESSION['error_msg'] = 'Votación no encontrada.';
             $this->redirectUserHome();
             return;
+        }
+        if (($v->participacion ?? '') === 'abierta') {
+            header('Location: ' . URLROOT . '/votacion/l/' . rawurlencode((string)$v->token_publico));
+            exit;
         }
         if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             $error = $this->votacionModel->submitVote($v, $uid, $juntaId, $this->sanitizePost());
