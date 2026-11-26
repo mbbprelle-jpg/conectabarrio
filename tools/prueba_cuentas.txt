@@ -1,0 +1,8 @@
+base=conectabarrio_prueba
+clave=admin123
+presidente=16123456-7 presidente@prueba.local
+socio=17123456-5 socio@prueba.local
+maria_socio=18123456-3 maria@prueba.local
+rut_hogar_no_socio=19123456-1
+rut_publico_no_socio=20123456-5
+calle_aromos_id=1
