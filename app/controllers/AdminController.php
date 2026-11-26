@@ -6278,4 +6278,186 @@ class AdminController extends Controller {
             'recientes' => $log->recientes($juntaId),
         ]);
     }
+
+    private function certificadoModel(): CertificadoResidencia {
+        require_once APPROOT . '/models/CertificadoResidencia.php';
+        require_once APPROOT . '/core/AuthContext.php';
+        if (!AuthContext::canEmitirCertificado()) {
+            $_SESSION['error_msg'] = 'Solo presidencia, secretaría o quien tiene el permiso puede gestionar certificados.';
+            $this->redirectUserHome();
+            exit;
+        }
+        $model = new CertificadoResidencia();
+        if (!$model->ready()) {
+            $_SESSION['error_msg'] = 'No se pudo preparar el módulo de certificados.';
+            $this->redirect('/admin/dashboard');
+            exit;
+        }
+        return $model;
+    }
+
+    public function certificados() {
+        $model = $this->certificadoModel();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $token = $model->asegurarToken($juntaId);
+        $this->view('admin/certificados', [
+            'title' => 'Certificados de residencia',
+            'header_title' => 'Certificados de residencia',
+            'header_subtitle' => 'Revise la solicitud, registre el pago e imprima',
+            'active_menu' => 'certificados',
+            'solicitudes' => $model->listarJunta($juntaId),
+            'folio_actual' => $model->folioActual($juntaId),
+            'link_publico' => URLROOT . '/publico/certificado/' . $token,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ]);
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+    }
+
+    public function certificado_folio() {
+        $model = $this->certificadoModel();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $ultimo = (int)($_POST['folio_actual'] ?? 0);
+        if ($model->guardarFolioActual((int)$_SESSION['user_junta_id'], $ultimo)) {
+            $_SESSION['success_msg'] = 'El próximo certificado impreso será el folio ' . ($ultimo + 1) . '.';
+        } else {
+            $_SESSION['error_msg'] = 'No se pudo guardar el folio.';
+        }
+        $this->redirect('/admin/certificados');
+    }
+
+    public function certificado_ver($id = 0) {
+        require_once APPROOT . '/core/RutChile.php';
+        $model = $this->certificadoModel();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $cert = $model->getByIdJunta((int)$id, $juntaId);
+        if (!$cert) {
+            $_SESSION['error_msg'] = 'Solicitud no encontrada.';
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $this->view('admin/certificado_ver', [
+            'title' => 'Certificado de residencia',
+            'header_title' => 'Revisar certificado',
+            'header_subtitle' => 'Puede corregir los datos antes de imprimir',
+            'active_menu' => 'certificados',
+            'cert' => $cert,
+            'hoy' => date('Y-m-d'),
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ]);
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+    }
+
+    public function certificado_corregir() {
+        require_once APPROOT . '/core/RutChile.php';
+        $model = $this->certificadoModel();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($_POST['id'] ?? 0);
+        $cert = $model->getByIdJunta($id, $juntaId);
+        if (!$cert || $cert->estado !== 'pendiente') {
+            $_SESSION['error_msg'] = 'Esta solicitud ya no se puede corregir.';
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $nombre = trim((string)($_POST['beneficiario_nombre'] ?? ''));
+        $rut = RutChile::normalize((string)($_POST['beneficiario_rut'] ?? ''));
+        $direccion = trim((string)($_POST['direccion'] ?? ''));
+        $motivo = trim((string)($_POST['motivo'] ?? ''));
+        $esSocio = (($_POST['tarifa'] ?? '') === 'socio');
+        if ($nombre === '' || $rut === false || $direccion === '' || $motivo === '') {
+            $_SESSION['error_msg'] = 'Complete nombre, un RUT válido, la dirección y el motivo.';
+            $this->redirect('/admin/certificado_ver/' . $id);
+            return;
+        }
+        $model->corregir($id, $juntaId, $nombre, $rut, $direccion, $motivo, $esSocio);
+        $_SESSION['success_msg'] = 'Datos actualizados. El valor quedó en $' . number_format($model->montoPara($esSocio), 0, ',', '.') . '.';
+        $this->redirect('/admin/certificado_ver/' . $id);
+    }
+
+    public function certificado_rechazar() {
+        $model = $this->certificadoModel();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $id = (int)($_POST['id'] ?? 0);
+        $nota = trim((string)($_POST['motivo_rechazo'] ?? ''));
+        $model->rechazar($id, (int)$_SESSION['user_junta_id'], (int)$_SESSION['user_id'], mb_substr($nota, 0, 300));
+        $_SESSION['success_msg'] = 'Solicitud rechazada.';
+        $this->redirect('/admin/certificados');
+    }
+
+    public function certificado_emitir() {
+        $model = $this->certificadoModel();
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $id = (int)($_POST['id'] ?? 0);
+        $cert = $model->getByIdJunta($id, $juntaId);
+        if (!$cert || $cert->estado !== 'pendiente') {
+            $_SESSION['error_msg'] = 'Esta solicitud ya fue resuelta.';
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $fecha = trim((string)($_POST['fecha_certificado'] ?? ''));
+        $metodo = (string)($_POST['metodo_pago'] ?? '');
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || $fecha > date('Y-m-d')) {
+            $_SESSION['error_msg'] = 'La fecha del certificado es hoy o una fecha anterior. No puede ser futura.';
+            $this->redirect('/admin/certificado_ver/' . $id);
+            return;
+        }
+        if (!in_array($metodo, ['efectivo', 'transferencia'], true)) {
+            $_SESSION['error_msg'] = 'Indique si el pago fue en efectivo o por transferencia.';
+            $this->redirect('/admin/certificado_ver/' . $id);
+            return;
+        }
+        $folio = $model->emitir($id, $juntaId, (int)$_SESSION['user_id'], $fecha, $metodo);
+        if ($folio <= 0) {
+            $_SESSION['error_msg'] = 'No se pudo emitir el certificado.';
+            $this->redirect('/admin/certificado_ver/' . $id);
+            return;
+        }
+        $this->transaccionModel->createTransaccion([
+            'junta_id' => $juntaId,
+            'tipo' => 'ingreso',
+            'categoria' => 'Certificado de residencia',
+            'monto' => (int)$cert->monto,
+            'descripcion' => 'Folio ' . $folio . ' · ' . $cert->beneficiario_nombre . ' · ' . ($metodo === 'transferencia' ? 'Transferencia' : 'Efectivo'),
+            'fecha' => $fecha,
+            'socio_id' => !empty($cert->solicitante_usuario_id) ? (int)$cert->solicitante_usuario_id : null,
+            'registrado_por' => (int)$_SESSION['user_id'],
+        ]);
+        $this->redirect('/admin/certificado_imprimir/' . $id);
+    }
+
+    public function certificado_imprimir($id = 0) {
+        $model = $this->certificadoModel();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $cert = $model->getByIdJunta((int)$id, $juntaId);
+        if (!$cert || $cert->estado !== 'emitido') {
+            $_SESSION['error_msg'] = 'El certificado se imprime después de registrar el pago.';
+            $this->redirect('/admin/certificados');
+            return;
+        }
+        $junta = $this->juntaModel->getJuntaById($juntaId);
+        $this->view('admin/certificado_imprimir', [
+            'title' => 'Certificado de residencia',
+            'public_layout' => true,
+            'skip_chartjs' => true,
+            'cert' => $cert,
+            'junta' => $junta,
+            'presidente' => $model->presidente($juntaId),
+            'fecha' => CertificadoResidencia::fechaLarga((string)$cert->fecha_certificado),
+        ]);
+    }
 }

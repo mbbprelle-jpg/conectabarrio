@@ -60,6 +60,17 @@ class AuthContext {
         return ($_SESSION['user_rol'] ?? '') === 'admin';
     }
 
+    /** Emitir, corregir e imprimir certificados de residencia. */
+    public static function canEmitirCertificado(): bool {
+        if (self::isFullAdmin()) {
+            return true;
+        }
+        if (!empty($_SESSION['permiso_todos'])) {
+            return true;
+        }
+        return in_array(self::sessionCargo(), ['PRESIDENTE', 'SECRETARIO'], true);
+    }
+
     public static function canManageSocios() {
         // Incluye padrón de socios, calles de jurisdicción, cuotas e invitaciones.
         if (self::isFullAdmin()) return true;
@@ -372,6 +383,12 @@ class AuthContext {
         }
         if (self::isDirectivo() || self::canManageReuniones()) {
             $methods[] = 'calendario';
+        }
+        if (self::canEmitirCertificado()) {
+            $methods = array_merge($methods, [
+                'certificados', 'certificado_ver', 'certificado_corregir', 'certificado_emitir',
+                'certificado_rechazar', 'certificado_imprimir', 'certificado_folio',
+            ]);
         }
         if (self::isDirectivo()) {
             $methods = array_merge($methods, [

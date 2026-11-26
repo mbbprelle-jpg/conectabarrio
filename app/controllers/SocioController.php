@@ -576,4 +576,124 @@ class SocioController extends Controller {
         $_SESSION['success_msg'] = $estado === 'confirmado' ? 'Asistencia confirmada.' : 'Respuesta registrada.';
         $this->redirect('/socio/reuniones');
     }
+
+    public function certificados() {
+        require_once APPROOT . '/models/CertificadoResidencia.php';
+        require_once APPROOT . '/core/RutChile.php';
+        $model = new CertificadoResidencia();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $uid = (int)$_SESSION['user_id'];
+        if (!$model->ready()) {
+            $_SESSION['error_msg'] = 'El módulo de certificados no está disponible.';
+            $this->redirect('/socio/dashboard');
+            return;
+        }
+        $socio = $this->userModel->getSocioById($uid) ?: $this->userModel->getUserById($uid);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'No se encontró su ficha.';
+            $this->redirect('/socio/dashboard');
+            return;
+        }
+        $socio = $this->membresiaModel->overlayDomicilioOnUser($socio, $juntaId);
+        $direccion = CertificadoResidencia::armarDireccion((string)($socio->calle_nombre ?? ''), (string)($socio->numero_casa ?? ''));
+        if ($direccion === '' && !empty($socio->direccion_texto)) {
+            $direccion = trim((string)$socio->direccion_texto);
+        }
+        $this->view('socio/certificados', [
+            'title' => 'Certificado de residencia',
+            'header_title' => 'Certificado de residencia',
+            'header_subtitle' => 'Solicítelo para usted o para una persona de su domicilio',
+            'active_menu' => 'certificado_socio',
+            'solicitudes' => $model->listarDeSocio($juntaId, $uid),
+            'socio' => $socio,
+            'nombre' => CertificadoResidencia::nombreCompleto($socio),
+            'rut' => RutChile::format((string)($socio->rut ?? '')),
+            'direccion' => $direccion,
+            'success' => $_SESSION['success_msg'] ?? '',
+            'error' => $_SESSION['error_msg'] ?? '',
+        ]);
+        unset($_SESSION['success_msg'], $_SESSION['error_msg']);
+    }
+
+    public function certificado_solicitar() {
+        require_once APPROOT . '/models/CertificadoResidencia.php';
+        require_once APPROOT . '/core/RutChile.php';
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/socio/certificados');
+            return;
+        }
+        $model = new CertificadoResidencia();
+        $juntaId = (int)$_SESSION['user_junta_id'];
+        $uid = (int)$_SESSION['user_id'];
+        $socio = $this->userModel->getSocioById($uid) ?: $this->userModel->getUserById($uid);
+        if (!$socio) {
+            $_SESSION['error_msg'] = 'No se encontró su ficha.';
+            $this->redirect('/socio/dashboard');
+            return;
+        }
+        $socio = $this->membresiaModel->overlayDomicilioOnUser($socio, $juntaId);
+        $direccion = CertificadoResidencia::armarDireccion((string)($socio->calle_nombre ?? ''), (string)($socio->numero_casa ?? ''));
+        if ($direccion === '' && !empty($socio->direccion_texto)) {
+            $direccion = trim((string)$socio->direccion_texto);
+        }
+        if ($direccion === '') {
+            $_SESSION['error_msg'] = 'Su ficha no tiene dirección. Actualice sus datos antes de solicitar el certificado.';
+            $this->redirect('/socio/certificados');
+            return;
+        }
+        $motivo = trim((string)($_POST['motivo'] ?? ''));
+        if ($motivo === '' || mb_strlen($motivo) > 500) {
+            $_SESSION['error_msg'] = 'Escriba para qué necesita presentar el certificado.';
+            $this->redirect('/socio/certificados');
+            return;
+        }
+        $para = (($_POST['para'] ?? '') === 'domicilio') ? 'domicilio' : 'si_mismo';
+        if ($para === 'si_mismo') {
+            $rut = RutChile::normalize((string)($socio->rut ?? ''));
+            $nombre = CertificadoResidencia::nombreCompleto($socio);
+            if ($rut === false || $nombre === '') {
+                $_SESSION['error_msg'] = 'Su ficha no tiene un nombre y RUT válidos para el certificado.';
+                $this->redirect('/socio/certificados');
+                return;
+            }
+            $esSocio = true;
+        } else {
+            $nombre = trim((string)($_POST['nombre'] ?? ''));
+            $partes = preg_split('/\s+/', $nombre) ?: [];
+            $rut = RutChile::normalize((string)($_POST['rut'] ?? ''));
+            if (count($partes) < 2) {
+                $_SESSION['error_msg'] = 'Escriba el nombre y los apellidos de la persona del domicilio.';
+                $this->redirect('/socio/certificados');
+                return;
+            }
+            if ($rut === false) {
+                $_SESSION['error_msg'] = 'El RUT no es válido. Revise el dígito verificador.';
+                $this->redirect('/socio/certificados');
+                return;
+            }
+            $esSocio = $model->rutEsSocio($juntaId, $rut);
+        }
+        $id = $model->crear([
+            'junta_id' => $juntaId,
+            'origen' => 'socio',
+            'para' => $para,
+            'solicitante_usuario_id' => $uid,
+            'beneficiario_nombre' => $nombre,
+            'beneficiario_rut' => $rut,
+            'calle_id' => (int)($socio->calle_id ?? 0),
+            'numero_casa' => (string)($socio->numero_casa ?? ''),
+            'direccion' => $direccion,
+            'motivo' => $motivo,
+            'es_tarifa_socio' => $esSocio,
+            'monto' => $model->montoPara($esSocio),
+        ]);
+        $_SESSION['success_msg'] = $id > 0
+            ? 'Solicitud enviada. Presidencia o secretaría la revisará antes de imprimir el certificado.'
+            : 'No se pudo registrar la solicitud.';
+        if ($id <= 0) {
+            $_SESSION['error_msg'] = $_SESSION['success_msg'];
+            unset($_SESSION['success_msg']);
+        }
+        $this->redirect('/socio/certificados');
+    }
 }

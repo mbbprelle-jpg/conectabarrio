@@ -370,6 +370,104 @@ class PublicoController extends Controller {
         ]);
     }
 
+    /** GET /publico/certificado/{token} */
+    public function certificado($token = '') {
+        require_once APPROOT . '/models/CertificadoResidencia.php';
+        $model = new CertificadoResidencia();
+        $junta = $model->juntaPorToken((string)$token);
+        if (!$junta) {
+            $this->view('publico/certificado', [
+                'title' => 'Certificado de residencia',
+                'public_layout' => true,
+                'junta' => null,
+                'calles' => [],
+                'error' => 'Este enlace no está disponible. Pida uno nuevo a la directiva.',
+                'ok' => false,
+            ]);
+            return;
+        }
+        $this->view('publico/certificado', [
+            'title' => 'Certificado de residencia',
+            'public_layout' => true,
+            'junta' => $junta,
+            'calles' => $this->getCalles((int)$junta->id),
+            'error' => (string)($_SESSION['certificado_error'] ?? ''),
+            'ok' => !empty($_SESSION['certificado_ok']),
+            'old' => $_SESSION['certificado_old'] ?? [],
+        ]);
+        unset($_SESSION['certificado_error'], $_SESSION['certificado_ok'], $_SESSION['certificado_old']);
+    }
+
+    public function certificado_guardar() {
+        require_once APPROOT . '/models/CertificadoResidencia.php';
+        require_once APPROOT . '/core/RutChile.php';
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            $this->redirect('/');
+            return;
+        }
+        $model = new CertificadoResidencia();
+        $token = trim((string)($_POST['token'] ?? ''));
+        $junta = $model->juntaPorToken($token);
+        $volver = URLROOT . '/publico/certificado/' . rawurlencode($token);
+        if (!$junta) {
+            $this->redirect('/');
+            return;
+        }
+        $nombre = trim((string)($_POST['nombre'] ?? ''));
+        $partes = preg_split('/\s+/', $nombre) ?: [];
+        $rut = RutChile::normalize((string)($_POST['rut'] ?? ''));
+        $calleId = (int)($_POST['calle_id'] ?? 0);
+        $numero = trim((string)($_POST['numero'] ?? ''));
+        $motivo = trim((string)($_POST['motivo'] ?? ''));
+        $calles = $this->getCalles((int)$junta->id);
+        $calleNombre = '';
+        foreach ($calles as $calle) {
+            if ((int)$calle->id === $calleId) {
+                $calleNombre = (string)$calle->nombre;
+                break;
+            }
+        }
+        $error = '';
+        if (count($partes) < 2) {
+            $error = 'Escriba el nombre y los apellidos.';
+        } elseif ($rut === false) {
+            $error = 'El RUT no es válido. Revise el dígito verificador.';
+        } elseif ($calleNombre === '' || $numero === '') {
+            $error = 'Elija la calle e indique el número del domicilio.';
+        } elseif ($motivo === '' || mb_strlen($motivo) > 500) {
+            $error = 'Escriba el motivo por el que necesita el certificado.';
+        }
+        if ($error !== '') {
+            $_SESSION['certificado_error'] = $error;
+            $_SESSION['certificado_old'] = $_POST;
+            header('Location: ' . $volver);
+            exit;
+        }
+        $esSocio = $model->rutEsSocio((int)$junta->id, $rut);
+        $id = $model->crear([
+            'junta_id' => (int)$junta->id,
+            'origen' => 'publico',
+            'para' => 'externo',
+            'solicitante_usuario_id' => null,
+            'beneficiario_nombre' => $nombre,
+            'beneficiario_rut' => $rut,
+            'calle_id' => $calleId,
+            'numero_casa' => $numero,
+            'direccion' => CertificadoResidencia::armarDireccion($calleNombre, $numero),
+            'motivo' => $motivo,
+            'es_tarifa_socio' => $esSocio,
+            'monto' => $model->montoPara($esSocio),
+        ]);
+        if ($id <= 0) {
+            $_SESSION['certificado_error'] = 'No se pudo enviar la solicitud. Intente de nuevo.';
+            $_SESSION['certificado_old'] = $_POST;
+        } else {
+            $_SESSION['certificado_ok'] = 1;
+        }
+        header('Location: ' . $volver);
+        exit;
+    }
+
     private function getCalles(int $juntaId): array {
         $this->db->query('SELECT * FROM calles WHERE junta_id = :junta_id ORDER BY nombre ASC');
         $this->db->bind(':junta_id', $juntaId);

@@ -21,7 +21,8 @@ $resolvedUrl = '';
 if (strpos($_SERVER['REQUEST_URI'] ?? '', '/CONECTABARRIO') === 0 || strpos($_SERVER['SCRIPT_NAME'] ?? '', '/CONECTABARRIO') === 0) {
     $resolvedUrl = '/CONECTABARRIO';
 }
-define('URLROOT', 'https://conectabarrio.cl');
+$envUrl = getenv('URLROOT');
+define('URLROOT', (is_string($envUrl) && $envUrl !== '') ? rtrim($envUrl, '/') : 'https://conectabarrio.cl');
 
 // Nombre del sitio
 define('SITENAME', 'CONECTABARRIO');
